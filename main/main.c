@@ -50,7 +50,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-
+#include <assert.h>
 
 
 
@@ -216,28 +216,29 @@ int main(int argc, const char * argv[]) {
     if ((argc < 2) || (argc > 3)) {
         _print_usage(argv[0]);
     }
+    
     // Prepare the baud-rate of the MPipe TTY
     if (argc == 3)  mpipe_ctl.baudrate = atoi(argv[2]);
     else            mpipe_ctl.baudrate = 115200;
     
     
-    /// 2. Open DTerm interface & Setup DTerm threads
-    ///    The dterm thread will deal with all other aspects, such as command
-    ///    entry and history initialization.
-    ///@todo "STDIN_FILENO" and "STDOUT_FILENO" could be made dynamic
-    _dtputs_dterm           = &dterm;
-    dterm.fd_in             = STDIN_FILENO;
-    dterm.fd_out            = STDOUT_FILENO;
-    dterm_args.ch           = ch_init(&cmd_history);
-    dterm_args.dt           = &dterm;
-    dterm_args.kill_mutex   = &cli.kill_mutex;
-    dterm_args.kill_cond    = &cli.kill_cond;
-    if (dterm_open(&dterm) < 0) {
-        return -1;
-    }
+    /// 2. Initialize Thread Mutexes & Conds.  This is finnicky and it must be
+    ///    done before assignment into the argument containers, possibly due to 
+    ///    C-compiler foolishly optimizing.
+    
+    assert( pthread_mutex_init(&dtwrite_mutex, NULL) == 0 );
+    assert( pthread_mutex_init(&rlist_mutex, NULL) == 0 );
+    assert( pthread_mutex_init(&tlist_mutex, NULL) == 0 );
+    
+    assert( pthread_mutex_init(&cli.kill_mutex, NULL) == 0 );
+    pthread_cond_init(&cli.kill_cond, NULL);
+    assert( pthread_mutex_init(&tlist_cond_mutex, NULL) == 0 );
+    pthread_cond_init(&tlist_cond, NULL);
+    assert( pthread_mutex_init(&pktrx_mutex, NULL) == 0 );
+    pthread_cond_init(&pktrx_cond, NULL);
     
     
-    /// 3. Open the mpipe TTY & Setup MPipe threads
+    /// 2. Open the mpipe TTY & Setup MPipe threads
     ///    The MPipe Filename (e.g. /dev/ttyACMx) is sent as the first argument
     mpipe_args.mpctl            = &mpipe_ctl;
     mpipe_args.rlist            = &mpipe_tlist;
@@ -252,7 +253,30 @@ int main(int argc, const char * argv[]) {
     mpipe_args.pktrx_cond       = &pktrx_cond;
     mpipe_args.kill_mutex       = &cli.kill_mutex;
     mpipe_args.kill_cond        = &cli.kill_cond;
+    
+    
     if (mpipe_open(&mpipe_ctl, argv[1], mpipe_ctl.baudrate, 8, 'N', 1, 0, 0, 0) < 0) {
+        return -1;
+    }
+    // Test only: set to known dev/tty
+    //if (mpipe_open(&mpipe_ctl, "/dev/tty.usbserial-A603B2F1", mpipe_ctl.baudrate, 8, 'N', 1, 0, 0, 0) < 0) {
+    //    return -1;
+    //}
+    
+    
+    /// 3. Open DTerm interface & Setup DTerm threads
+    ///    The dterm thread will deal with all other aspects, such as command
+    ///    entry and history initialization.
+    ///@todo "STDIN_FILENO" and "STDOUT_FILENO" could be made dynamic
+    _dtputs_dterm               = &dterm;
+    dterm.fd_in                 = STDIN_FILENO;
+    dterm.fd_out                = STDOUT_FILENO;
+    dterm_args.ch               = ch_init(&cmd_history);
+    dterm_args.dt               = &dterm;
+    dterm_args.dtwrite_mutex    = &dtwrite_mutex;
+    dterm_args.kill_mutex       = &cli.kill_mutex;
+    dterm_args.kill_cond        = &cli.kill_cond;
+    if (dterm_open(&dterm) < 0) {
         return -1;
     }
     
@@ -271,23 +295,10 @@ int main(int argc, const char * argv[]) {
     /// be via Ctl+C or Ctl+\, or potentially also through a dterm command.  
     /// Each thread must be be implemented to raise SIGQUIT or SIGINT on exit
     /// i.e. raise(SIGQUIT).
-    
-    pthread_mutex_init(&dtwrite_mutex, NULL);
-    pthread_mutex_init(&rlist_mutex, NULL);
-    pthread_mutex_init(&tlist_mutex, NULL);
-    
-    pthread_mutex_init(&cli.kill_mutex, NULL);
-    pthread_cond_init(&cli.kill_cond, NULL);
-    pthread_mutex_init(&tlist_cond_mutex, NULL);
-    pthread_cond_init(&tlist_cond, NULL);
-    pthread_mutex_init(&pktrx_mutex, NULL);
-    pthread_cond_init(&pktrx_cond, NULL);
-
     pthread_create(&thr_mpreader, NULL, &mpipe_reader, (void*)&mpipe_args);
     pthread_create(&thr_mpwriter, NULL, &mpipe_writer, (void*)&mpipe_args);
     pthread_create(&thr_mpparser, NULL, &mpipe_parser, (void*)&mpipe_args);
     pthread_create(&thr_dtprompter, NULL, &dterm_prompter, (void*)&dterm_args);
-    
     
     /// 6. Threads are now running.  The rest of the main() code, below, is 
     ///    blocked by pthread_cond_wait() until the kill_cond is sent by one of 
@@ -326,121 +337,11 @@ int main(int argc, const char * argv[]) {
     mpipe_freelists(&mpipe_rlist, &mpipe_tlist);
     ch_free(&cmd_history);
     
+    
     // cli.exitcode is set to 0, unless sigint is raised.
+    fprintf(stderr, "Exiting Cleanly\n");                   // Helpful for testing
     return cli.exitcode;
 }
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-/* Original dterm Function by Sasha 
- 
-// This is for shell-like behavior
-int tty_dterm(void) {
-    dterm_t dt;
-    
-    if (dterm_setnoncan(&dt) < 0)
-        return -1;
-    
-    cmdhist ch;
-    ch_start(&ch);
-    
-    dterm_reset(&dt);
-    dterm_puts(&dt, NAME);
-    dterm_puts(&dt, INV);
-    
-    int pi;
-    int ci;
-    char *chp;
-    char cmdname[CMD_NAMESIZE + 1];
-    
-    ///@todo have this use signals instead of endless read loop, or at least
-    ///      some sort of thread blocking/waiting
-    while(1) {
-        switch (dterm_readcmd(&dt)) {
-            case ct_simple:
-                
-                // track history
-                if (*(dt.cmdbuf) && !ch_contains(&ch, dt.cmdbuf)) {
-                    ch_add(&ch, dt.cmdbuf);
-                }
-                
-                // search and try to execute cmd
-                if ((pi = parsecmd(dt.cmdbuf, cmdname)) > -1 &&
-                    (ci = srccmd(cmdname)) > -1) {
-                    switch (commands[ci].method(dt.cmdbuf + pi)) {
-                        case -1: dterm_puts(&dt, "command failed\n");    break;
-                        case  1: dterm_puts(&dt, "command completed\n"); break;
-                    }
-                }
-                else {
-                    dterm_puts(&dt, "command not found\n");
-                    dterm_puts(&dt, ASCII_BEL);
-                }
-                
-                dterm_reset(&dt);
-                dterm_puts(&dt, INV);
-                break;
-                
-            case ct_autofill:
-                
-                // check whether command has entered w/o prms
-                if ((pi = parsecmd(dt.cmdbuf, cmdname)) > -1 &&
-                    *(dt.cmdbuf + pi) == 0 &&
-                    (ci = srccmds(cmdname)) > -1) {
-                    dterm_remln(&dt);
-                    dterm_puts(&dt, INV);
-                    dterm_putsc(&dt, commands[ci].name);
-                    dterm_puts(&dt, commands[ci].name);
-                }
-                else {
-                    dterm_puts(&dt, ASCII_BEL);
-                }
-                break;
-                
-            case ct_histnext:
-                if (ch.count &&
-                    (chp = ch_next(&ch))) {
-                    dterm_remln(&dt);
-                    dterm_puts(&dt, INV);
-                    dterm_putsc(&dt, chp);
-                    dterm_puts(&dt, chp);
-                }
-                break;
-                
-            case ct_histprev:
-                if (ch.count &&
-                    (chp = ch_prev(&ch))) {
-                    dterm_remln(&dt);
-                    dterm_puts(&dt, INV);
-                    dterm_putsc(&dt, chp);
-                    dterm_puts(&dt, chp);
-                }
-                break;
-                
-            case ct_eof:
-                dterm_reset(&dt);
-                dterm_puts(&dt, "eof\n");
-                break;
-                
-            case ct_error:
-                dterm_reset(&dt);
-                dterm_puts(&dt, "error\n");
-                break;
-        }
-    }
-    
-    return dterm_setcan(&dt);
-}
-*/
  

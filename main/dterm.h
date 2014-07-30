@@ -36,7 +36,10 @@
 #define READSIZE            3
 
 #define NAME                "otter v0.0\n"
-#define PROMPT              "otter $ "
+#define PROMPT_ROOT         "otter# "
+#define PROMPT_USER         "otter$ "
+#define PROMPT_GUEST        "otter~ "
+#define PROMPT              PROMPT_GUEST
 #define INV                 PROMPT
 
 #define ASCII_TAB           '\t'

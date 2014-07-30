@@ -77,7 +77,7 @@ int mpipe_open( mpipe_ctl_t* mpctl,
     
     // See if the dev file input is resembling a serial line filename
     // This routine could be made more thorough
-    if (!strncmp(dev, "/dev/", 5)) {
+    if (strncmp(dev, "/dev/", 5) < 0) {
         fprintf( stderr, "File %s is not a suitable device file\n", dev );
         return -1;
     }
@@ -343,8 +343,6 @@ void* mpipe_writer(void* args) {
 ///          been added to mpipe.tlist, via a cond-signal. </LI>
 /// <LI> Sends the packet over the TTY. </LI>
 ///
-    
-    
     mpipe_ctl_t mpctl                   = *((mpipe_arg_t*)args)->mpctl;
     pktlist_t* tlist                    = ((mpipe_arg_t*)args)->tlist;
     pthread_cond_t* tlist_cond          = ((mpipe_arg_t*)args)->tlist_cond;

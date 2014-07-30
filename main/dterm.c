@@ -38,6 +38,13 @@
 
 
 
+// Dterm variables
+const char prompt_guest[]   = PROMPT_GUEST;
+const char prompt_user[]    = PROMPT_USER;
+const char prompt_root[]    = PROMPT_ROOT;
+const char* prompt_str;
+
+
 
 
 
@@ -202,6 +209,9 @@ void* dterm_prompter(void* args) {
     // Initial state = off
     dt->state = prompt_off;
     
+    // Initial prompt = Guest
+    prompt_str = prompt_guest;
+    
     /// Get each keystroke.
     /// A keystoke is reported either as a single character or as three.
     /// triple-char keystrokes are for special keys like arrows and control
@@ -296,8 +306,9 @@ void* dterm_prompter(void* args) {
         // the effect of blocking printout of received messages while the 
         // prompt is up
         else {
-            int pi, ci;
-            char* cmdstr;
+            int             cmdlen;
+            const cmd_t*    cmdptr;
+            char*           cmdstr;
         
             switch (cmd) {
                 // A printable key is used
@@ -306,7 +317,7 @@ void* dterm_prompter(void* args) {
                                     break;
                                     
                 // Prompt-Escape is pressed, 
-                case ct_prompt:     dterm_puts(dt, PROMPT);
+                case ct_prompt:     dterm_puts(dt, (char*)prompt_str);
                                     dt->state = prompt_on;
                                     break;
             
@@ -324,28 +335,23 @@ void* dterm_prompter(void* args) {
                                         ch_add(ch, dt->cmdbuf);
                                     }
                                     
-                                    pi = cmd_parse(cmdname, dt->cmdbuf);
-                                    ci = cmd_search(cmdname);
-                                    if ((pi < 0) || (ci < 0)) {
+                                    cmdlen = cmd_getname(cmdname, dt->cmdbuf, 256);
+                                    cmdptr = cmd_search(cmdname);
+                                    if (cmdptr == NULL) {
                                         ///@todo build a nicer way to show where the error is,
                                         ///      possibly by using pi or ci (sign reversing)
                                         dterm_puts(dt, "--> command not found\n");
                                     }
                                     else {
                                         int retval;
+                                        char* putstr;
+                                        uint8_t* cursor = (uint8_t*)&dt->cmdbuf[cmdlen];
+                                        static const char strfail[]     = "--> command failed\n";
+                                        static const char strcomplete[] = "--> command completed\n";
                                         ///@todo change 1024 to a configured value
-                                        retval = commands[ci].method( \
-                                                        protocol_buf, 
-                                                        (uint8_t*)(dt->cmdbuf + pi),
-                                                        1024, 
-                                                        CMDSIZE   );
-                                        if (retval != 0) {
-                                            dterm_puts(dt, "--> command failed\n");
-                                        }
-                                        else {
-                                            dterm_puts(dt, "--> command completed\n");
-                                            
-                                        }
+                                        retval  = cmdptr->action(protocol_buf, cursor, 1024, CMDSIZE);
+                                        putstr  = (retval != 0) ? (char*)strfail : (char*)strcomplete;
+                                        dterm_puts(dt, putstr);
                                     }
                                     
                                     dterm_reset(dt);
@@ -354,13 +360,13 @@ void* dterm_prompter(void* args) {
                 
                 // TAB presses cause the autofill operation (a common feature)
                 // autofill will try to finish the command input
-                case ct_autofill:   pi = cmd_parse(dt->cmdbuf, cmdname);
-                                    ci = cmd_subsearch(cmdname);
-                                    if ((pi > -1) && (ci > -1) && (*(dt->cmdbuf + pi) == 0)) {
+                case ct_autofill:   cmdlen = cmd_getname(cmdname, dt->cmdbuf, 256);
+                                    cmdptr = cmd_subsearch(cmdname);
+                                    if ((cmdptr != NULL) && (dt->cmdbuf[cmdlen] == 0)) {
                                         dterm_remln(dt);
-                                        dterm_puts(dt, PROMPT);
-                                        dterm_putsc(dt, commands[ci].name);
-                                        dterm_puts(dt, commands[ci].name);
+                                        dterm_puts(dt, (char*)prompt_str);
+                                        dterm_putsc(dt, cmdptr->name);
+                                        dterm_puts(dt, cmdptr->name);
                                     }
                                     else {
                                         dterm_puts(dt, ASCII_BEL);
@@ -372,7 +378,7 @@ void* dterm_prompter(void* args) {
                 case ct_histnext:   cmdstr = ch_next(ch);
                                     if (ch->count && cmdstr) {
                                         dterm_remln(dt);
-                                        dterm_puts(dt, PROMPT);
+                                        dterm_puts(dt, (char*)prompt_str);
                                         dterm_putsc(dt, cmdstr);
                                         dterm_puts(dt, cmdstr);
                                     }
@@ -383,7 +389,7 @@ void* dterm_prompter(void* args) {
                 case ct_histprev:   cmdstr = ch_prev(ch);
                                     if (ch->count && cmdstr) {
                                         dterm_remln(dt);
-                                        dterm_puts(dt, PROMPT);
+                                        dterm_puts(dt, (char*)prompt_str);
                                         dterm_putsc(dt, cmdstr);
                                         dterm_puts(dt, cmdstr);
                                     }
@@ -399,10 +405,7 @@ void* dterm_prompter(void* args) {
                 // Every other command is ignored here.
                 default:            dt->state = prompt_close;
                                     break;
-            
             }
-            
-
         }
         
         // Unlock Mutex
@@ -432,59 +435,6 @@ void* dterm_prompter(void* args) {
 /** Subroutines for reading & writing
   * ========================================================================<BR>
   */
-/*
-cmdtype dterm_readcmd(dterm_t *dt) {
-///@todo make this use
-    char c = 0;
-    int rr = 0;
-    
-    while ((rr = (int)read(dt->fd_in, dt->readbuf, READSIZE)) > 0) {
-        switch (rr) {
-            case 1:
-                c = dt->readbuf[0];
-            
-                // enter
-                if (c == ASCII_NEWLN) {
-                    dterm_put(dt, (char[]){ASCII_NEWLN}, 2);
-                    return ct_simple;
-                }
-            
-                // tab
-                if (c == ASCII_TAB)
-                    return ct_autocomplete;
-            
-                // delete
-                if (c == ASCII_DEL && dt->cmdlen > 0) {
-                    dterm_remc(dt, 1);
-                    dterm_put(dt, VT100_CLEAR_CH, 4);
-                }
-            
-                // character
-                if (c > 0x1F && c < 0x7F) {
-                    dterm_put(dt, &c, 1);
-                    dterm_putcmd(dt, &c, 1);
-                }
-                break;
-            
-            case 3:
-        
-                // up/down arrows                
-                if (dt->readbuf[0] == VT100_UPARR[0] &&
-                    dt->readbuf[1] == VT100_UPARR[1]) {
-                
-                    c = dt->readbuf[2];
-                    if (dt->readbuf[2] == VT100_UPARR[2])
-                        return ct_histnext;
-                    else if (dt->readbuf[2] == VT100_DWARR[2])
-                        return ct_histprev;
-                }
-                break;
-        }
-    }  
-    
-    return (rr == 0) ? ct_eof : ct_error;
-}
-*/
 
 
 int dterm_read(dterm_t *dt) {

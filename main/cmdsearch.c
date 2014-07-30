@@ -14,77 +14,185 @@
   *
   */
 
+// Local Headers
+#include "cmds.h"
 #include "cmdsearch.h"
 
 
-int cmd_parse(char* cmdname, char *cmdstr) {
-	int i = 0;
-    
-	while( (i < CMD_NAMESIZE) && (cmdstr[i] != 0) && (cmdstr[i] != ' ') ) {
-		cmdname[i] = cmdstr[i];
-        i++;
-    }
-    cmdname[i] = 0;
+#include <string.h>
 
-    return (i > 0) ? i+1 : -1;
+
+
+
+
+
+/// Binary Search Table for Commands
+
+// sorted list of supported commands
+static const cmd_t commands[CMD_COUNT] = {
+    { "asapi",  &app_asapi },
+    { "bye",    &cmd_quit },
+    { "confit", &app_confit },
+    { "dforth", &app_dforth },
+    { "file",   &app_file },
+    { "log",    &app_log },
+    { "null",   &app_null },
+    { "quit",   &cmd_quit },
+    { "raw",    &app_raw },
+    { "sec",    &app_sec },
+    { "sensor", &app_sensor }
+};
+
+
+
+
+
+
+
+
+
+
+
+
+// comapres two strings by alphabet,
+// returns 0 - if equal, -1 - first one bigger, 1 - 2nd one bigger.
+int local_strcmp(char *s1, char *s2);
+
+
+// comapres first x characters of two strings by alphabet,
+// returns 0 - if equal, -1 - first one bigger, 1 - 2nd one bigger.
+int local_strcmpc(char *s1, char *s2, int x);
+
+
+
+
+
+///@todo Consider refactoring: this function is ugly, slow, and most likely
+///      un-necessary in its present state
+//int cmd_parse(char* cmdname, char *cmdstr) {
+//	int i = 0;
+//    
+//	while( (i < CMD_NAMESIZE) && (cmdstr[i] != 0) && (cmdstr[i] != ' ') ) {
+//		cmdname[i] = cmdstr[i];
+//        i++;
+//    }
+//    cmdname[i] = 0;
+//
+//    return (i > 0) ? i+1 : -1;
+//}
+
+
+int cmd_getname(char* cmdname, char* cmdline, size_t max_cmdname) {
+	size_t diff = max_cmdname;
+    
+    // Copy command into cmdname, stopping when whitspace is detected, or
+    // the command line (string) is ended.
+    while ((diff != 0) && (*cmdline != 0) && (*cmdline != ' ')) {
+        diff--;
+        *cmdname++ = *cmdline++;
+    }
+    
+    // Add command string terminator & determine command string length (diff)
+    *cmdname    = 0;
+    diff        = max_cmdname - diff;
+    return (int)diff;
+    
+    // Go past spaces after the command, being mindful of condition with no
+    // command parameters
+//    while (*cmdline != 0) {
+//        if (*cmdline != ' ') {
+//            break;
+//        }
+//        cmdline++;
+//        diff++;
+//    }
+    
+    // Return position of parameters, or length of command if no parameters.
+//    return (int)diff;
 }
 
 
-int cmd_search(char *name) {
-	int l = 0;
-	int r = CMD_COUNT - 1;
-    int cci;
-	int csc;
 
-    while (r >= l) {
-        cci = (l + r) >> 1;
-		csc = local_strcmp(commands[cci].name, name);
-        
-        switch (csc) {
-            case -1: r = cci - 1; break;
-            case  1: l = cci + 1; break;
-            default: return cci;
+///@todo Probably a good idea to make the command list a ternary search tree,
+///      or at least a binary tree that can be added-to
+
+
+
+
+
+
+const cmd_t* cmd_search(char *cmdname) {
+/// Verify that cmdname is not a zero-length string, then search for it in the
+/// list of available commands
+    
+    if (*cmdname != 0) {
+    
+        // This is a binary search across the static array
+        int l           = 0;
+        int r           = CMD_COUNT - 1;
+        int cci;
+        int csc;
+    
+        while (r >= l) {
+            cci = (l + r) >> 1;
+            csc = local_strcmp((char*)commands[cci].name, cmdname);
+            
+            switch (csc) {
+                case -1: r = cci - 1; break;
+                case  1: l = cci + 1; break;
+                default: return &commands[cci];
+            }
         }
-    }
-    
-	return -1;
-}
-
-
-int cmd_subsearch(char *namepart) {
-    // get name part length
-    int x = 0;
-    while (*namepart++ != 0) x++;
-    namepart -= x + 1;
-    
-    // try to find single match
-	int l = 0;
-	int r = CMD_COUNT - 1;
-    int cci;
-	int csc;
-    int lr = -1;
-    int rr = -1;
-    
-    while(r >= l) {
-        cci = (l + r) >> 1;
-		csc = local_strcmpc(commands[cci].name, namepart, x);
+        // End of binary search implementation
         
-        switch (csc) {
-            case -1: r = cci - 1; break;
-            case  1: l = cci + 1; break;
-                
-            // check for matches left and right
-            default:
-                if (cci > 0)
-                    lr = local_strcmpc(commands[cci - 1].name, namepart, x);
-                if (cci < CMD_COUNT - 1)
-                    rr = local_strcmpc(commands[cci + 1].name, namepart, x);
-                return lr & rr ? cci : -1;
-        }
     }
     
-	return -1;
+	return NULL;
 }
+
+
+
+const cmd_t* cmd_subsearch(char *namepart) {
+
+    if (*namepart != 0) {
+        int len = (int)strlen(namepart);
+
+        // try to find single match
+        int l   = 0;
+        int r   = CMD_COUNT - 1;
+        int lr  = -1;
+        int rr  = -1;
+        int cci;
+        int csc;
+        
+        while(r >= l) {
+            cci = (l + r) >> 1;
+            csc = local_strcmpc((char*)commands[cci].name, namepart, len);
+            
+            switch (csc) {
+                case -1: r = cci - 1; break;
+                case  1: l = cci + 1; break;
+                    
+                // check for matches left and right
+                default:
+                    if (cci > 0) {
+                        lr = local_strcmpc((char*)commands[cci - 1].name, namepart, len);
+                    }
+                    if (cci < (CMD_COUNT - 1)) {
+                        rr = local_strcmpc((char*)commands[cci + 1].name, namepart, len);
+                    }
+                    return (lr & rr) ? &commands[cci] : NULL;
+            }
+        }
+    
+    }
+        
+	return NULL;
+}
+
+
+
+
 
 
 int local_strcmp(char *s1, char *s2) {

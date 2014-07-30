@@ -14,35 +14,92 @@
   *
   */
 
-#include <stdio.h>
+// Local Headers
 #include "cmds.h"
 
+// Standard C & POSIX Libraries
+#include <signal.h>
+#include <stdio.h>
 
-int searchCmd(uint8_t* dst, uint8_t* src, size_t dstmax, size_t srcmax) {
-	fprintf(stderr, "echo: search %s\n", src);
-	return 0;
+
+
+
+int cmd_quit(uint8_t* dst, uint8_t* src, size_t dstmax, size_t srcmax) {
+    raise(SIGQUIT);
+    return 0;
 }
 
 
-int buildCmd(uint8_t* dst, uint8_t* src, size_t dstmax, size_t srcmax) {
-	fprintf(stderr, "echo: build %s\n", src);
-	return 0;
+
+
+
+
+
+
+///@todo these commands are simply for test purposes right now. 
+
+
+
+// Raw Protocol Entry
+int app_raw(uint8_t* dst, uint8_t* src, size_t dstmax, size_t srcmax) {
+    fprintf(stderr, "raw invoked %s\n", src);
+    return 0;
 }
 
 
-int saveCmd(uint8_t* dst, uint8_t* src, size_t dstmax, size_t srcmax) {
-	fprintf(stderr, "echo: save %s\n", src);
-	return 0;
+// ID = 0
+int app_null(uint8_t* dst, uint8_t* src, size_t dstmax, size_t srcmax) {
+    fprintf(stderr, "null invoked %s\n", src);
+    return 0;
 }
 
 
-int runCmd(uint8_t* dst, uint8_t* src, size_t dstmax, size_t srcmax) {
-	fprintf(stderr, "echo: run %s\n", src);
-	return 0;
+// ID = 1
+int app_file(uint8_t* dst, uint8_t* src, size_t dstmax, size_t srcmax) {
+    fprintf(stderr, "file invoked %s\n", src);
+    return 0;
 }
 
 
-int logCmd(uint8_t* dst, uint8_t* src, size_t dstmax, size_t srcmax) {
-	fprintf(stderr, "echo: log %s\n", src);
-	return 0;
+// ID = 2
+int app_sensor(uint8_t* dst, uint8_t* src, size_t dstmax, size_t srcmax) {
+    fprintf(stderr, "sensor invoked %s\n", src);
+    return 0;
 }
+
+
+// ID = 3
+int app_sec(uint8_t* dst, uint8_t* src, size_t dstmax, size_t srcmax) {
+    fprintf(stderr, "sec invoked %s\n", src);
+    return 0;
+}
+
+
+// ID = 4
+int app_log(uint8_t* dst, uint8_t* src, size_t dstmax, size_t srcmax) {
+    fprintf(stderr, "logger invoked %s\n", src);
+    return 0;
+}
+
+
+// ID = 5
+int app_dforth(uint8_t* dst, uint8_t* src, size_t dstmax, size_t srcmax) {
+    fprintf(stderr, "dforth invoked %s\n", src);
+    return 0;
+}
+
+
+// ID = 6
+int app_confit(uint8_t* dst, uint8_t* src, size_t dstmax, size_t srcmax) {
+    fprintf(stderr, "confit invoked %s\n", src);
+    return 0;
+}
+
+
+// ID = 7
+int app_asapi(uint8_t* dst, uint8_t* src, size_t dstmax, size_t srcmax) {
+    fprintf(stderr, "asapi invoked %s\n", src);
+    return 0;
+}
+
+

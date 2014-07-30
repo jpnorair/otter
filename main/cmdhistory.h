@@ -14,8 +14,8 @@
   *
   */
   
-#ifndef dash_cmdhist_h
-#define dash_cmdhist_h
+#ifndef cmdhistory_h
+#define cmdhistory_h
 
 #define CMD_HISTSIZE 1024
 
