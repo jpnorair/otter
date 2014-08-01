@@ -20,6 +20,8 @@
 #include "cmds.h"
 
 
+int cmdsearch_init(cmd_t* init_table);
+
 
 
 /** @brief Extracts command name from command line, returns command name length

@@ -55,8 +55,9 @@
 
 
 
-
-
+//Comment-out if not testing: this should ideally be passed into the compiler
+//params, but with XCode that's a mystery.
+#define __TEST__
 
 
 
@@ -212,20 +213,27 @@ int main(int argc, const char * argv[]) {
     
     
     /// 1. Load Arguments from Command-Line
+#   ifndef __TEST__
     // Usage Error
     if ((argc < 2) || (argc > 3)) {
         _print_usage(argv[0]);
     }
+#   endif
     
     // Prepare the baud-rate of the MPipe TTY
     if (argc == 3)  mpipe_ctl.baudrate = atoi(argv[2]);
     else            mpipe_ctl.baudrate = 115200;
     
+
+    /// 2. Initialize command search table.  
+    ///@todo in the future, let's pull this from an initialization file or
+    ///      something dynamic as such.
+    cmdsearch_init(NULL);
     
-    /// 2. Initialize Thread Mutexes & Conds.  This is finnicky and it must be
+    
+    /// 3. Initialize Thread Mutexes & Conds.  This is finnicky and it must be
     ///    done before assignment into the argument containers, possibly due to 
     ///    C-compiler foolishly optimizing.
-    
     assert( pthread_mutex_init(&dtwrite_mutex, NULL) == 0 );
     assert( pthread_mutex_init(&rlist_mutex, NULL) == 0 );
     assert( pthread_mutex_init(&tlist_mutex, NULL) == 0 );
@@ -238,7 +246,7 @@ int main(int argc, const char * argv[]) {
     pthread_cond_init(&pktrx_cond, NULL);
     
     
-    /// 2. Open the mpipe TTY & Setup MPipe threads
+    /// 4. Open the mpipe TTY & Setup MPipe threads
     ///    The MPipe Filename (e.g. /dev/ttyACMx) is sent as the first argument
     mpipe_args.mpctl            = &mpipe_ctl;
     mpipe_args.rlist            = &mpipe_tlist;
@@ -254,14 +262,16 @@ int main(int argc, const char * argv[]) {
     mpipe_args.kill_mutex       = &cli.kill_mutex;
     mpipe_args.kill_cond        = &cli.kill_cond;
     
-    
+#   ifndef __TEST__
     if (mpipe_open(&mpipe_ctl, argv[1], mpipe_ctl.baudrate, 8, 'N', 1, 0, 0, 0) < 0) {
         return -1;
     }
+#   else
     // Test only: set to known dev/tty
-    //if (mpipe_open(&mpipe_ctl, "/dev/tty.usbserial-A603B2F1", mpipe_ctl.baudrate, 8, 'N', 1, 0, 0, 0) < 0) {
-    //    return -1;
-    //}
+    if (mpipe_open(&mpipe_ctl, "/dev/tty.usbserial-A603B2F1", mpipe_ctl.baudrate, 8, 'N', 1, 0, 0, 0) < 0) {
+        return -1;
+    }
+#   endif
     
     
     /// 3. Open DTerm interface & Setup DTerm threads
@@ -273,7 +283,10 @@ int main(int argc, const char * argv[]) {
     dterm.fd_out                = STDOUT_FILENO;
     dterm_args.ch               = ch_init(&cmd_history);
     dterm_args.dt               = &dterm;
+    dterm_args.tlist            = &mpipe_tlist;
     dterm_args.dtwrite_mutex    = &dtwrite_mutex;
+    dterm_args.tlist_mutex      = &tlist_mutex;
+    dterm_args.tlist_cond       = &tlist_cond;
     dterm_args.kill_mutex       = &cli.kill_mutex;
     dterm_args.kill_cond        = &cli.kill_cond;
     if (dterm_open(&dterm) < 0) {
@@ -339,7 +352,10 @@ int main(int argc, const char * argv[]) {
     
     
     // cli.exitcode is set to 0, unless sigint is raised.
-    fprintf(stderr, "Exiting Cleanly\n");                   // Helpful for testing
+#   ifdef __TEST__
+    fprintf(stderr, "Exiting Cleanly\n"); 
+#   endif
+
     return cli.exitcode;
 }
 

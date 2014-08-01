@@ -42,9 +42,7 @@
 /// Internal Subroutine Prototypes
 void mpipe_flush(mpipe_ctl_t* mpctl, size_t est_rembytes, int queue_selector);
 int _get_baudrate(int native_baud);
-int mpipe_add(pktlist_t* rlist, uint8_t* data, size_t size);
-int mpipe_del(pkt_t* pkt);
-int mpipe_getnew();
+
 
 // Formatting functions that I suspect are internal to mpipe, but which could
 // certainly be stuck into their own module.
@@ -308,7 +306,7 @@ void* mpipe_reader(void* args) {
 
     /// Copy the packet to the rlist and signal mpipe_parser()
     pthread_mutex_lock(rlist_mutex);
-    mpipe_add(rlist, rbuf, (size_t)(header_length + payload_length));
+    pktlist_add(rlist, rbuf, (size_t)(header_length + payload_length));
     pthread_mutex_unlock(rlist_mutex);
     
     /// Error Handler: wait a few milliseconds, then handle the error.
@@ -363,7 +361,7 @@ void* mpipe_writer(void* args) {
             // This is a never-before transmitted packet (not a re-transmit)
             // Move to the next in the list.
             if (tlist->cursor == tlist->marker) {
-                pkt_t* next_pkt     = tlist->marker->next;
+                pkt_t* next_pkt = tlist->marker->next;
                 tlist->cursor   = next_pkt;
                 tlist->marker   = next_pkt;
             }
@@ -452,7 +450,7 @@ void* mpipe_parser(void* args) {
             // - It returns -1 if the list is empty
             // - It returns a positive error code if there is some packet error
             // - rlist->cursor points to the working packet
-            pkt_condition = mpipe_getnew(rlist);
+            pkt_condition = pktlist_getnew(rlist);
             if (pkt_condition < 0) {
                 break;
             }
@@ -463,7 +461,7 @@ void* mpipe_parser(void* args) {
             // internal protocol, and it can result in responses being queued.
             if (pkt_condition > 0) {
                 ///@todo some sort of error code
-                mpipe_del(rlist->cursor);
+                pktlist_del(rlist->cursor);
             }
             else {
                 pkt_t*      tpkt;
@@ -539,7 +537,7 @@ void* mpipe_parser(void* args) {
                 if (clear_rpkt) {
                     pkt_t*  scratch = rlist->cursor;
                     rlist->cursor   = rlist->cursor->next;
-                    mpipe_del(scratch);
+                    pktlist_del(scratch);
                 }
                 
                 // Clear the tpkt if it is matched with an rpkt
@@ -556,7 +554,7 @@ void* mpipe_parser(void* args) {
                     if (tpkt == tlist->cursor) {
                         tlist->cursor = tlist->cursor->next;
                     }
-                    mpipe_del(tpkt);
+                    pktlist_del(tpkt);
                 }
             } 
         } // END OF WHILE()
@@ -586,32 +584,89 @@ void* mpipe_parser(void* args) {
 /// mpipe_add():    Adds a packet to the RX List (rlist) or TX List (tlist)
 /// mpipe_del():    Deletes a packet from some place in the rlist or tlist
 
-int mpipe_add(pktlist_t* rlist, uint8_t* data, size_t size) {
-
-    // Allocate a new PKT onto the rlist (received list)
-    rlist->last->next       = malloc(sizeof(pkt_t));
-    if (rlist->last->next == NULL) {
-        return -1;
-    }
-    rlist->last->next->prev = rlist->last;
-    rlist->last->next->next = NULL;
-    rlist->last             = rlist->last->next;
-    rlist->size++;
-    
-    // Allocate the buffer of the new packet, and copy it over.
-    rlist->last->buffer     = malloc(size);
-    if (rlist->last->buffer == NULL) {
-        return -1;
-    }
-    rlist->last->size       = size;
-    memcpy(rlist->last->buffer, data, size);
+int pktlist_init(pktlist_t* plist) {
+    plist->front    = NULL;
+    plist->last     = NULL;
+    plist->cursor   = NULL;
+    plist->marker   = NULL;
+    plist->size     = 0;
     
     return 0;
 }
 
 
 
-int mpipe_del(pkt_t* pkt) {
+
+int pktlist_add(pktlist_t* plist, uint8_t* data, size_t size) {
+    pkt_t* newpkt;
+    
+    if (plist == NULL) {
+        return -1;
+    }
+    
+    newpkt = malloc(sizeof(pkt_t));
+    if (newpkt == NULL) {
+        return -2;
+    }
+    
+    // Setup list connections for the new packet
+    // Also allocate the buffer of the new packet
+    ///@todo Change the hardcoded +8 to a dynamic detection of the header
+    ///      length, which depends on current mode settings in the "cli".
+    ///      Dynamic header isn't implemented yet, so no rush.
+    newpkt->prev    = plist->last;
+    newpkt->next    = NULL;
+    newpkt->size    = size+8;
+    newpkt->buffer  = malloc(newpkt->size);
+    if (newpkt->buffer == NULL) {
+        return -3;
+    }
+    
+    // Copy Payload into Packet buffer, leaving room for header
+    memcpy(&newpkt->buffer[8], data, newpkt->size);
+    newpkt->buffer[0]   = 0xff;
+    newpkt->buffer[1]   = 0x55;
+    newpkt->buffer[2]   = 0;
+    newpkt->buffer[3]   = 0;
+    newpkt->buffer[4]   = size >> 8;
+    newpkt->buffer[5]   = size & 0xff;
+    newpkt->buffer[6]   = 0;
+    newpkt->buffer[7]   = 0;            ///@todo Set Control Field here based on Cli.
+    
+    // List is empty, so start the list
+    if (plist->last == NULL) {
+        newpkt->sequence    = 0;
+        plist->size         = 0;
+        plist->front        = newpkt;
+        plist->last         = newpkt;
+        plist->cursor       = newpkt;
+        plist->marker       = newpkt;
+    }
+    // List is not empty, so simply extend the list
+    else {
+        newpkt->sequence    = plist->last->sequence + 1;
+        plist->last->next   = newpkt;
+        plist->last         = plist->last->next;
+    }
+    
+    ///@todo Move Sequence Number entry and CRC entry to somewhere in writer
+    ///      thread, so that it can be retransmitted with new sequence
+    {   uint16_t crcval;
+        newpkt->buffer[6]   = newpkt->sequence;
+        crcval              = crc_calc_block(&newpkt->buffer[4], newpkt->size - 4);
+        newpkt->buffer[2]   = crcval >> 8;
+        newpkt->buffer[3]   = crcval & 0xff;
+    }
+    
+    // Increment the list size to account for new packet
+    plist->size++;
+    
+    return (int)plist->size;
+}
+
+
+
+int pktlist_del(pkt_t* pkt) {
     pkt_t* prev;
     pkt_t* next;
     
@@ -637,7 +692,7 @@ int mpipe_del(pkt_t* pkt) {
 
 
 
-int mpipe_getnew(pktlist_t* pktlist) {
+int pktlist_getnew(pktlist_t* plist) {
     uint16_t    crc_val;
     uint16_t    crc_comp;
     //time_t      seconds;
@@ -645,13 +700,13 @@ int mpipe_getnew(pktlist_t* pktlist) {
     ///@todo Is it needed to do mpipe_add() here?  I don't think so
     
     // Save Timestamp and Sequence ID parameters
-    pktlist->cursor->tstamp   = time(NULL);   //;localtime(&seconds);
-    pktlist->cursor->sequence = pktlist->cursor->buffer[4];
+    plist->cursor->tstamp   = time(NULL);   //;localtime(&seconds);
+    plist->cursor->sequence = plist->cursor->buffer[4];
     
     // Determine CRC quality of the received packet
-    crc_val                     = (pktlist->cursor->buffer[0] << 8) + pktlist->cursor->buffer[1];
-    crc_comp                    = crc_calc_block(&pktlist->cursor->buffer[2], pktlist->cursor->size-2);
-    pktlist->cursor->crcqual  = (crc_comp - crc_val);
+    crc_val                 = (plist->cursor->buffer[0] << 8) + plist->cursor->buffer[1];
+    crc_comp                = crc_calc_block(&plist->cursor->buffer[2], plist->cursor->size-2);
+    plist->cursor->crcqual  = (crc_comp - crc_val);
     
     // return 0 on account that nothing went wrong.  So far, no checks.
     return 0;

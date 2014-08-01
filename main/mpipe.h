@@ -85,7 +85,15 @@ int mpipe_open( mpipe_ctl_t* mpctl,
                 const char *dev, int baud, 
                 int data_bits, char parity, int stop_bits, 
                 int flowctrl, int dtr, int rts    );
-                
+
+
+// Packet List Manipulation Functions
+int pktlist_init(pktlist_t* plist);
+int pktlist_add(pktlist_t* list, uint8_t* data, size_t size);
+int pktlist_del(pkt_t* pkt);
+int pktlist_getnew(pktlist_t* plist);
+
+
 // Thread Functions
 void* mpipe_reader(void* args);
 void* mpipe_writer(void* args);

@@ -204,7 +204,11 @@ void* dterm_prompter(void* args) {
     int                 keychars    = 0;
     dterm_t*            dt          = ((dterm_arg_t*)args)->dt;
     cmdhist*            ch          = ((dterm_arg_t*)args)->ch;
+    pktlist_t*          tlist       = ((dterm_arg_t*)args)->tlist;
     pthread_mutex_t*    write_mutex = ((dterm_arg_t*)args)->dtwrite_mutex;
+    pthread_mutex_t*    tlist_mutex = ((dterm_arg_t*)args)->tlist_mutex;
+    pthread_cond_t*     tlist_cond  = ((dterm_arg_t*)args)->tlist_cond;
+    
     
     // Initial state = off
     dt->state = prompt_off;
@@ -343,15 +347,29 @@ void* dterm_prompter(void* args) {
                                         dterm_puts(dt, "--> command not found\n");
                                     }
                                     else {
-                                        int retval;
-                                        char* putstr;
+                                        int rawbytes;
                                         uint8_t* cursor = (uint8_t*)&dt->cmdbuf[cmdlen];
-                                        static const char strfail[]     = "--> command failed\n";
-                                        static const char strcomplete[] = "--> command completed\n";
+                                        
                                         ///@todo change 1024 to a configured value
-                                        retval  = cmdptr->action(protocol_buf, cursor, 1024, CMDSIZE);
-                                        putstr  = (retval != 0) ? (char*)strfail : (char*)strcomplete;
-                                        dterm_puts(dt, putstr);
+                                        rawbytes = cmdptr->action(protocol_buf, cursor, 1024);
+                                        
+                                        // Error, print-out protocol_buf as an error message
+                                        ///@todo spruce-up the command error reporting, maybe even with
+                                        ///      a cursor showing where the first error was found.
+                                        if (rawbytes < 0) {
+                                            dterm_puts(dt, "--> command error\n");
+                                        }
+                                        
+                                        // Success, forward protocol_buf to MPipe
+                                        else {
+                                            int list_size;
+                                            pthread_mutex_lock(tlist_mutex);
+                                            list_size = pktlist_add(tlist, protocol_buf, rawbytes);
+                                            pthread_mutex_unlock(tlist_mutex);
+                                            if (list_size > 0) {
+                                                pthread_cond_signal(tlist_cond);
+                                            }
+                                        }
                                     }
                                     
                                     dterm_reset(dt);
@@ -360,13 +378,13 @@ void* dterm_prompter(void* args) {
                 
                 // TAB presses cause the autofill operation (a common feature)
                 // autofill will try to finish the command input
-                case ct_autofill:   cmdlen = cmd_getname(cmdname, dt->cmdbuf, 256);
-                                    cmdptr = cmd_subsearch(cmdname);
+                case ct_autofill:   cmdlen = cmd_getname((char*)cmdname, dt->cmdbuf, 256);
+                                    cmdptr = cmd_subsearch((char*)cmdname);
                                     if ((cmdptr != NULL) && (dt->cmdbuf[cmdlen] == 0)) {
                                         dterm_remln(dt);
                                         dterm_puts(dt, (char*)prompt_str);
-                                        dterm_putsc(dt, cmdptr->name);
-                                        dterm_puts(dt, cmdptr->name);
+                                        dterm_putsc(dt, (char*)cmdptr->name);
+                                        dterm_puts(dt, (char*)cmdptr->name);
                                     }
                                     else {
                                         dterm_puts(dt, ASCII_BEL);

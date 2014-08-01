@@ -29,18 +29,22 @@
 /// Binary Search Table for Commands
 
 // sorted list of supported commands
+
+///@todo this will need to be dynamic and build during startup based on an 
+///      initialization file and plug-in libraries stored with the app.
+///
 static const cmd_t commands[CMD_COUNT] = {
-    { "asapi",  &app_asapi },
-    { "bye",    &cmd_quit },
-    { "confit", &app_confit },
-    { "dforth", &app_dforth },
-    { "file",   &app_file },
-    { "log",    &app_log },
-    { "null",   &app_null },
-    { "quit",   &cmd_quit },
-    { "raw",    &app_raw },
-    { "sec",    &app_sec },
-    { "sensor", &app_sensor }
+    { "asapi",  &app_asapi,     NULL, NULL },
+    { "bye",    &cmd_quit,      NULL, NULL },
+    { "confit", &app_confit,    NULL, NULL },
+    { "dforth", &app_dforth,    NULL, NULL },
+    { "file",   &app_file,      NULL, NULL },
+    { "log",    &app_log,       NULL, NULL },
+    { "null",   &app_null,      NULL, NULL },
+    { "quit",   &cmd_quit,      NULL, NULL },
+    { "raw",    &app_raw,       NULL, NULL },
+    { "sec",    &app_sec,       NULL, NULL },
+    { "sensor", &app_sensor,    NULL, NULL }
 };
 
 
@@ -62,6 +66,27 @@ int local_strcmp(char *s1, char *s2);
 // comapres first x characters of two strings by alphabet,
 // returns 0 - if equal, -1 - first one bigger, 1 - 2nd one bigger.
 int local_strcmpc(char *s1, char *s2, int x);
+
+
+
+
+
+
+
+int cmdsearch_init(cmd_t* init_table) {
+    
+    ///@todo loading a cmd_table from memory
+    if (init_table != NULL) {
+        
+    }
+    
+    return 0;
+}
+
+
+
+
+
 
 
 
