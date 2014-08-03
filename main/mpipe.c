@@ -485,7 +485,6 @@ void* mpipe_parser(void* args) {
                 }
                 
                 
-                
                 // If Verbose, Print received header in real language
                 // If not Verbose, just print the encoded packet status
                 ///@todo integrate CLI options

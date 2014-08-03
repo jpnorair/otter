@@ -133,6 +133,10 @@ void* dterm_prompter(void* args);
 
 
 
+
+int dterm_putc(dterm_t *dt, char c);
+
+
 // writes c string to stdout
 // retunrns number of bytes written
 int dterm_puts(dterm_t *dt, char *s);

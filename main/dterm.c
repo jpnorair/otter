@@ -351,7 +351,7 @@ void* dterm_prompter(void* args) {
                                         uint8_t* cursor = (uint8_t*)&dt->cmdbuf[cmdlen];
                                         
                                         ///@todo change 1024 to a configured value
-                                        rawbytes = cmdptr->action(protocol_buf, cursor, 1024);
+                                        rawbytes = cmdptr->action(dt, protocol_buf, cursor, 1024);
                                         
                                         // Error, print-out protocol_buf as an error message
                                         ///@todo spruce-up the command error reporting, maybe even with
@@ -360,7 +360,9 @@ void* dterm_prompter(void* args) {
                                             dterm_puts(dt, "--> command error\n");
                                         }
                                         
-                                        // Success, forward protocol_buf to MPipe
+                                        // If there are bytes to send to MPipe, do that.
+                                        // If rawbytes == 0, there is no error, but also nothing
+                                        // to send to MPipe.
                                         else {
                                             int list_size;
                                             pthread_mutex_lock(tlist_mutex);
@@ -469,6 +471,10 @@ int dterm_puts(dterm_t *dt, char *s) {
     while (*(++end) != 0);
         
     return (int)write(dt->fd_out, s, end-s);
+}
+
+int dterm_putc(dterm_t *dt, char c) {        
+    return (int)write(dt->fd_out, &c, 1);
 }
 
 int dterm_puts2(dterm_t *dt, char *s) {
