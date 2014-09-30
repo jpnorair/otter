@@ -27,8 +27,8 @@
 
 
 
-#define CMD_NAMESIZE 8
-#define CMD_COUNT 11
+#define CMD_NAMESIZE    8
+#define CMD_COUNT       14
 
 // arg1: dst buffer
 // arg2: src buffer
@@ -48,19 +48,19 @@ typedef struct cmd_s {
 
 int cmd_quit(dterm_t* dt, uint8_t* dst, uint8_t* src, size_t dstmax);
 
+int cmd_sethome(dterm_t* dt, uint8_t* dst, uint8_t* src, size_t dstmax);
 
+int cmd_su(dterm_t* dt, uint8_t* dst, uint8_t* src, size_t dstmax);
 
+int cmd_whoami(dterm_t* dt, uint8_t* dst, uint8_t* src, size_t dstmax);
+
+// Raw Protocol Entry: 
+int cmd_raw(dterm_t* dt, uint8_t* dst, uint8_t* src, size_t dstmax);
 
 
 
 /// Application protocol commands sent over the MPipe
 ///@todo These could probably be moved into m2def or something else.
-
-
-// Raw Protocol Entry: Only command presently implemented completely
-int app_raw(dterm_t* dt, uint8_t* dst, uint8_t* src, size_t dstmax);
-
-
 
 
 // ID = 0

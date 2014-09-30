@@ -32,8 +32,8 @@
 
 
 
-
-#define CMDSIZE             1024
+#define LINESIZE            1024
+#define CMDSIZE             LINESIZE        //CMDSIZE is deprecated
 #define READSIZE            3
 
 #define NAME                "otter v0.0\n"
@@ -83,9 +83,10 @@ typedef struct {
     int fd_in;                  // file descriptor for the terminal input
     int fd_out;                 // file descriptor for the terminal output
     
-    int cmdlen;                 // command length
-    char *ccmd;                 // pointer to current position in cmdbuf
-    char cmdbuf[CMDSIZE];       // command read buffer
+    int linelen;                 // line length
+    char *cline;                 // pointer to current position in linebuf
+    
+    char linebuf[LINESIZE];      // command read buffer
     char readbuf[READSIZE];     // character read buffer
 } dterm_t;
 
@@ -150,6 +151,13 @@ int dterm_put(dterm_t *dt, char *s, int size);
 // writes c string to command buffer
 // retunrns number of bytes written
 int dterm_putsc(dterm_t *dt, char *s);
+
+
+// printf for dterm.
+int dterm_printf(dterm_t* dt, const char* format, ...);
+
+// scanf for dterm.  Scans a line
+int dterm_scanf(dterm_t* dt, const char* format, ...);
 
 
 

@@ -34,17 +34,20 @@
 ///      initialization file and plug-in libraries stored with the app.
 ///
 static const cmd_t commands[CMD_COUNT] = {
-    { "asapi",  &app_asapi,     NULL, NULL },
-    { "bye",    &cmd_quit,      NULL, NULL },
-    { "confit", &app_confit,    NULL, NULL },
-    { "dforth", &app_dforth,    NULL, NULL },
-    { "file",   &app_file,      NULL, NULL },
-    { "log",    &app_log,       NULL, NULL },
-    { "null",   &app_null,      NULL, NULL },
-    { "quit",   &cmd_quit,      NULL, NULL },
-    { "raw",    &app_raw,       NULL, NULL },
-    { "sec",    &app_sec,       NULL, NULL },
-    { "sensor", &app_sensor,    NULL, NULL }
+    { "asapi",      &app_asapi,     NULL, NULL },
+    { "bye",        &cmd_quit,      NULL, NULL },
+    { "confit",     &app_confit,    NULL, NULL },
+    { "dforth",     &app_dforth,    NULL, NULL },
+    { "file",       &app_file,      NULL, NULL },
+    { "log",        &app_log,       NULL, NULL },
+    { "null",       &app_null,      NULL, NULL },
+    { "quit",       &cmd_quit,      NULL, NULL },
+    { "raw",        &cmd_raw,       NULL, NULL },
+    { "sec",        &app_sec,       NULL, NULL },
+    { "sensor",     &app_sensor,    NULL, NULL },
+    { "sethome",    &cmd_sethome,   NULL, NULL },
+    { "su",         &cmd_su,        NULL, NULL },
+    { "whoami",     &cmd_whoami,    NULL, NULL },
 };
 
 

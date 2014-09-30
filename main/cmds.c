@@ -47,6 +47,10 @@ const char *user_str_lookup[3]  = { user_str_root, user_str_admin, user_str_gues
 const char *user_prompt         = user_prompt_guest;
 const char *user_prompt_lookup[3] = { user_prompt_root, user_prompt_admin, user_prompt_guest };
 
+#define HOME_PATH_MAX           1024
+char home_path[HOME_PATH_MAX]   = "~/";
+int home_path_len               = 2;
+
 
 /// This key is hardcoded for AES128
 ///@todo have a way to make this dynamic based on cli parameters, or mode params
@@ -62,6 +66,30 @@ int cmd_quit(dterm_t* dt, uint8_t* dst, uint8_t* src, size_t dstmax) {
     raise(SIGQUIT);
     return 0;
 }
+
+
+
+int cmd_sethome(dterm_t* dt, uint8_t* dst, uint8_t* src, size_t dstmax) {
+    unsigned int srclen;
+    srclen = strlen((char*)src);
+    
+    if (srclen >= 1023) {
+        dterm_puts(dt, "Error: supplied home-path is too long, must be < 1023 chars.\n");
+        return 0;
+    }
+    
+    strcpy(home_path, (char*)src);
+    if (home_path[srclen]  != '/') {
+        home_path[srclen]   = '/';
+        home_path[++srclen] = 0;
+    }
+    home_path_len = srclen;
+    
+    // No bytes out, just stores into home_path
+    return 0;
+}
+
+
 
 
 int cmd_su(dterm_t* dt, uint8_t* dst, uint8_t* src, size_t dstmax) {
@@ -102,14 +130,30 @@ int cmd_su(dterm_t* dt, uint8_t* dst, uint8_t* src, size_t dstmax) {
     /// of a hex AES128 key for that user.  It will be authenticated on the 
     /// target, as well, via the M2DEF Auth protocol. 
     if (test_id < 2) {
-        ssize_t keychars;
-        char    char_in;
-        uint8_t aes128_key[16]  = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
-        int     hex_chars       = 0;
+        int     i;
+        char    aes128_key[40];
+        char*   key_ptr;
         
         dterm_puts(dt, "Key [AES128]: ");
         
         // Read in the 16-byte hex key for AES128
+        
+        ///@todo Implement a readline function for dterm
+        dterm_scanf(dt, "%32s", aes128_key);
+        
+        key_ptr = aes128_key;
+        for (i=0; i<16; i++) {
+            user_key[i] = 0;
+        
+            if (*key_ptr != 0) {
+                user_key[i] = (*key_ptr++);
+                
+                key_ptr++;
+            }
+        }
+        
+        
+        /*
         while ((keychars = read(dt->fd_in, &char_in, 1)) > 0) {
             int hexval = -1;
                 
@@ -141,8 +185,8 @@ int cmd_su(dterm_t* dt, uint8_t* dst, uint8_t* src, size_t dstmax) {
                 }
             }
         }
-        
         dterm_putc(dt, '\n');
+        */
         
         /// Load aes128 key into actual user_key buffer.
         ///@todo store this in CLI object
@@ -195,20 +239,56 @@ int cmd_whoami(dterm_t* dt, uint8_t* dst, uint8_t* src, size_t dstmax) {
 
 
 
+// Raw Protocol Entry: This is implemented fully and it takes a Bintex
+// expression as input, with no special keywords or arguments.
+int cmd_raw(dterm_t* dt, uint8_t* dst, uint8_t* src, size_t dstmax) {
+    const char* filepath;
+    FILE*       fp;
+    int         bytesout;
+    
+    // Consider absolute path
+    if (src[0] == '/') {
+        filepath = (const char*)src;
+    }
+    
+    // Build path from relative path, co-opting packet buffer temporarily
+    else {
+        int bytes_left;
+        bytes_left = (HOME_PATH_MAX - home_path_len);
+        strncat((char*)home_path, (char*)src, bytes_left);
+        filepath = (const char*)home_path;
+    }
+    
+    // Try opening the file.  If it doesn't work, then assume the input is a
+    // bintex string and not a file string
+    fp = fopen(filepath, "r");
+    if (fp != NULL) {
+        bytesout = bintex_fs(fp, (unsigned char*)dst, (int)dstmax);
+        fclose(fp);
+    }
+    else {
+        bytesout = bintex_ss((unsigned char*)src, (unsigned char*)dst, (int)dstmax);
+    }
+    
+    // Undo whatever was done to the home_path
+    home_path[home_path_len] = 0;
+    
+    ///@todo convert the character number into a line and character number
+    if (bytesout < 0) {
+        bytesout = -bytesout;
+        dterm_printf(dt, "Bintex error on character %d.\n", bytesout);
+        return 0;
+    }
+
+    return bytesout;
+}
+
+
+
 
 
 
 ///@todo these commands are simply for test purposes right now. 
-
-
-
-// Raw Protocol Entry: This is implemented fully and it takes a Bintex
-// expression as input, with no special keywords or arguments.
-int app_raw(dterm_t* dt, uint8_t* dst, uint8_t* src, size_t dstmax) {
-    int bytes_written;
-    bytes_written = bintex_ss((unsigned char*)src, (unsigned char*)dst, (int)dstmax);
-    return bytes_written;
-}
 
 
 // ID = 0

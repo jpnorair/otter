@@ -231,7 +231,12 @@ int main(int argc, const char * argv[]) {
     cmdsearch_init(NULL);
     
     
-    /// 3. Initialize Thread Mutexes & Conds.  This is finnicky and it must be
+    /// 3. Initialize packet lists for transmitted packets and received packets
+    pktlist_init(&mpipe_rlist);
+    pktlist_init(&mpipe_tlist);
+    
+    
+    /// 4. Initialize Thread Mutexes & Conds.  This is finnicky and it must be
     ///    done before assignment into the argument containers, possibly due to 
     ///    C-compiler foolishly optimizing.
     assert( pthread_mutex_init(&dtwrite_mutex, NULL) == 0 );
@@ -246,7 +251,7 @@ int main(int argc, const char * argv[]) {
     pthread_cond_init(&pktrx_cond, NULL);
     
     
-    /// 4. Open the mpipe TTY & Setup MPipe threads
+    /// 5. Open the mpipe TTY & Setup MPipe threads
     ///    The MPipe Filename (e.g. /dev/ttyACMx) is sent as the first argument
     mpipe_args.mpctl            = &mpipe_ctl;
     mpipe_args.rlist            = &mpipe_tlist;
@@ -268,13 +273,15 @@ int main(int argc, const char * argv[]) {
     }
 #   else
     // Test only: set to known dev/tty
-    if (mpipe_open(&mpipe_ctl, "/dev/tty.usbserial-A603B2F1", mpipe_ctl.baudrate, 8, 'N', 1, 0, 0, 0) < 0) {
+    // /dev/tty.usbserial-A901JWAY
+    // /dev/tty.usbserial-A603B2F1
+    if (mpipe_open(&mpipe_ctl, "/dev/tty.usbserial-A901JWAY", mpipe_ctl.baudrate, 8, 'N', 1, 0, 0, 0) < 0) {
         return -1;
     }
 #   endif
     
     
-    /// 3. Open DTerm interface & Setup DTerm threads
+    /// 6. Open DTerm interface & Setup DTerm threads
     ///    The dterm thread will deal with all other aspects, such as command
     ///    entry and history initialization.
     ///@todo "STDIN_FILENO" and "STDOUT_FILENO" could be made dynamic
@@ -294,7 +301,7 @@ int main(int argc, const char * argv[]) {
     }
     
     
-    /// 4. Initialize the signal handlers for this process.
+    /// 7. Initialize the signal handlers for this process.
     ///    These are activated by Ctl+C (SIGINT) and Ctl+\ (SIGQUIT) as is
     ///    typical in POSIX apps.  When activated, the threads are halted and
     ///    Otter is shutdown.
@@ -303,7 +310,7 @@ int main(int argc, const char * argv[]) {
     _assign_signal(SIGQUIT, &sigquit_handler);
     
     
-    /// 5. Invoke the child threads below.  All of the child threads run 
+    /// 8. Invoke the child threads below.  All of the child threads run
     /// indefinitely until an error occurs or until the user quits.  Quit can 
     /// be via Ctl+C or Ctl+\, or potentially also through a dterm command.  
     /// Each thread must be be implemented to raise SIGQUIT or SIGINT on exit
@@ -313,7 +320,8 @@ int main(int argc, const char * argv[]) {
     pthread_create(&thr_mpparser, NULL, &mpipe_parser, (void*)&mpipe_args);
     pthread_create(&thr_dtprompter, NULL, &dterm_prompter, (void*)&dterm_args);
     
-    /// 6. Threads are now running.  The rest of the main() code, below, is 
+    
+    /// 9. Threads are now running.  The rest of the main() code, below, is
     ///    blocked by pthread_cond_wait() until the kill_cond is sent by one of 
     /// the child threads.  This will cause the program to quit.
     pthread_cond_wait(&cli.kill_cond, &cli.kill_mutex);
@@ -342,8 +350,8 @@ int main(int argc, const char * argv[]) {
     pthread_cond_destroy(&cli.kill_cond);
     
     
-    /// 7. Close the drivers/files and free all allocated data objects 
-    ///    (primarily in mpipe).
+    /// 10. Close the drivers/files and free all allocated data objects
+    ///     (primarily in mpipe).
     dterm_close(&dterm);
     mpipe_close(&mpipe_ctl);
     dterm_free(&dterm);

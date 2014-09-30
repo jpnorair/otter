@@ -90,7 +90,7 @@ int mpipe_open( mpipe_ctl_t* mpctl,
 // Packet List Manipulation Functions
 int pktlist_init(pktlist_t* plist);
 int pktlist_add(pktlist_t* list, uint8_t* data, size_t size);
-int pktlist_del(pkt_t* pkt);
+int pktlist_del(pktlist_t* plist, pkt_t* pkt);
 int pktlist_getnew(pktlist_t* plist);
 
 

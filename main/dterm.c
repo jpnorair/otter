@@ -27,6 +27,7 @@
 // Standard C & POSIX Libraries
 #include <pthread.h>
 #include <signal.h>
+#include <stdarg.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -63,12 +64,18 @@ int dterm_setcan(dterm_t *dt);
 cmdtype dterm_readcmd(dterm_t *dt);
 
 
+
+
+
+int dterm_putlinec(dterm_t *dt, char c);
+
+
 // writes size bytes to command buffer
 // retunrns number of bytes written
 int dterm_putcmd(dterm_t *dt, char *s, int size);
 
 
-// removes count characters from cmdbuf
+// removes count characters from linebuf
 int dterm_remc(dterm_t *dt, int count);
 
 
@@ -317,7 +324,8 @@ void* dterm_prompter(void* args) {
             switch (cmd) {
                 // A printable key is used
                 case ct_key:        dterm_putcmd(dt, &c, 1);
-                                    dterm_put(dt, &c, 1);
+                                    //dterm_put(dt, &c, 1);
+                                    dterm_putc(dt, c);
                                     break;
                                     
                 // Prompt-Escape is pressed, 
@@ -333,13 +341,14 @@ void* dterm_prompter(void* args) {
                 // 2. Add line-entry into the  history
                 // 3. Search and try to execute cmd
                 // 4. Reset prompt, change to OFF State, unlock mutex on dterm
-                case ct_enter:      dterm_put(dt, (char[]){ASCII_NEWLN}, 2);
+                case ct_enter:      //dterm_put(dt, (char[]){ASCII_NEWLN}, 2);
+                                    dterm_putc(dt, '\n');
 
-                                    if (*(dt->cmdbuf) && !ch_contains(ch, dt->cmdbuf)) {
-                                        ch_add(ch, dt->cmdbuf);
+                                    if (*(dt->linebuf) && !ch_contains(ch, dt->linebuf)) {
+                                        ch_add(ch, dt->linebuf);
                                     }
                                     
-                                    cmdlen = cmd_getname(cmdname, dt->cmdbuf, 256);
+                                    cmdlen = cmd_getname(cmdname, dt->linebuf, 256);
                                     cmdptr = cmd_search(cmdname);
                                     if (cmdptr == NULL) {
                                         ///@todo build a nicer way to show where the error is,
@@ -348,7 +357,7 @@ void* dterm_prompter(void* args) {
                                     }
                                     else {
                                         int rawbytes;
-                                        uint8_t* cursor = (uint8_t*)&dt->cmdbuf[cmdlen];
+                                        uint8_t* cursor = (uint8_t*)&dt->linebuf[cmdlen];
                                         
                                         ///@todo change 1024 to a configured value
                                         rawbytes = cmdptr->action(dt, protocol_buf, cursor, 1024);
@@ -357,7 +366,7 @@ void* dterm_prompter(void* args) {
                                         ///@todo spruce-up the command error reporting, maybe even with
                                         ///      a cursor showing where the first error was found.
                                         if (rawbytes < 0) {
-                                            dterm_puts(dt, "--> command error\n");
+                                            dterm_puts(dt, "--> unknown command error\n");
                                         }
                                         
                                         // If there are bytes to send to MPipe, do that.
@@ -380,9 +389,9 @@ void* dterm_prompter(void* args) {
                 
                 // TAB presses cause the autofill operation (a common feature)
                 // autofill will try to finish the command input
-                case ct_autofill:   cmdlen = cmd_getname((char*)cmdname, dt->cmdbuf, 256);
+                case ct_autofill:   cmdlen = cmd_getname((char*)cmdname, dt->linebuf, 256);
                                     cmdptr = cmd_subsearch((char*)cmdname);
-                                    if ((cmdptr != NULL) && (dt->cmdbuf[cmdlen] == 0)) {
+                                    if ((cmdptr != NULL) && (dt->linebuf[cmdlen] == 0)) {
                                         dterm_remln(dt);
                                         dterm_puts(dt, (char*)prompt_str);
                                         dterm_putsc(dt, (char*)cmdptr->name);
@@ -416,7 +425,7 @@ void* dterm_prompter(void* args) {
                                     break;
                 
                 // DELETE presses issue a forward-DELETE
-                case ct_delete:     if (dt->cmdlen > 0) {
+                case ct_delete:     if (dt->linelen > 0) {
                                         dterm_remc(dt, 1);
                                         dterm_put(dt, VT100_CLEAR_CH, 4);
                                     }
@@ -462,6 +471,63 @@ int dterm_read(dterm_t *dt) {
 }
 
 
+
+int dterm_scanf(dterm_t* dt, const char* format, ...) {
+    int retval;
+    size_t keychars;
+    va_list args;
+    
+    /// Clear linebuf without actually clearing the line, which is probably a
+    /// prompt or similar.  linebuf will hold the rest of the line only
+    dterm_reset(dt);
+    
+    /// Read in a line.  All non-printable characters are ignored.
+    while ((keychars = read(dt->fd_in, dt->readbuf, READSIZE)) > 0) {
+        if (keychars == 1) {
+            if (dt->readbuf[0] == ASCII_NEWLN) {
+                dterm_putc(dt, ASCII_NEWLN);
+                dterm_putlinec(dt, 0);
+            }
+            else if ((dt->linelen < LINESIZE) \
+            && (dt->readbuf[0] > 0x1f) \
+            && (dt->readbuf[0] < 0x7f)) {
+                dterm_putc(dt, dt->readbuf[0]);
+                dterm_putlinec(dt, dt->readbuf[0]);
+            }
+        }
+    }
+    
+    /// Run the line through scanf, wrapping the variadic args
+    va_start(args, format);
+    retval = vsscanf(dt->linebuf, format, args);
+    va_end(args);
+    
+    return retval;
+}
+
+
+
+
+int dterm_printf(dterm_t* dt, const char* format, ...) {
+    FILE* fp;
+    int retval;
+    va_list args;
+    
+    fp = fdopen(dt->fd_out, "w");   //don't close this!  Merely fd --> fp conversion
+    if (fp == NULL) {
+        return -1;
+    }
+    
+    va_start(args, format);
+    retval = vfprintf(fp, format, args);
+    va_end(args);
+    
+    return retval;
+}
+
+
+
+
 int dterm_put(dterm_t *dt, char *s, int size) {
     return (int)write(dt->fd_out, s, size);    
 }
@@ -488,17 +554,52 @@ int dterm_putsc(dterm_t *dt, char *s) {
     return dterm_putcmd(dt, s, end - (uint8_t*)s);
 }
 
+
+
+int dterm_putlinec(dterm_t *dt, char c) {
+    int i;
+    int line_delta;
+    
+    if (c == ASCII_BACKSPC) {
+        line_delta = -1;
+    }
+    
+    else if (c == ASCII_DEL) {
+        size_t line_remnant;
+        line_remnant = dt->linelen - 1 - (dt->cline - dt->linebuf);
+        
+        if (line_remnant > 0) {
+            memcpy(dt->cline, dt->cline+1, line_remnant);
+            line_delta = -1;
+        }
+    }
+    
+    else if (dt->linelen > (LINESIZE-1) ) {
+        return 0;
+    }
+    
+    else {
+        *dt->cline++    = c;
+        line_delta      = 1;
+    }
+    
+    dt->linelen += line_delta;
+    return line_delta;
+}
+
+
+
 int dterm_putcmd(dterm_t *dt, char *s, int size) {
     int i;
     
-    if ((dt->cmdlen + size) > CMDSIZE) {
+    if ((dt->linelen + size) > CMDSIZE) {
         return 0;
     }
         
-    dt->cmdlen += size;
+    dt->linelen += size;
     
     for (i=0; i<size; i++) {
-        *dt->ccmd++ = *s++;
+        *dt->cline++ = *s++;
     }
         
     return size;
@@ -508,12 +609,12 @@ int dterm_putcmd(dterm_t *dt, char *s, int size) {
 
 
 int dterm_remc(dterm_t *dt, int count) {
-    int cl = dt->cmdlen;
+    int cl = dt->linelen;
     while (count-- > 0) {
-        *dt->ccmd-- = 0;
-        dt->cmdlen--;
+        *dt->cline-- = 0;
+        dt->linelen--;
     }
-    return cl - dt->cmdlen;
+    return cl - dt->linelen;
 }
 
 
@@ -526,16 +627,16 @@ void dterm_remln(dterm_t *dt) {
 
 
 void dterm_reset(dterm_t *dt) {
-    dt->ccmd = dt->cmdbuf;
+    dt->cline = dt->linebuf;
     
     //int i = CMDSIZE;
     //while (--i >= 0) {                            ///@todo this way is the preferred way
-    while (dt->ccmd < (dt->cmdbuf + CMDSIZE)) {
-        *dt->ccmd++ = 0;  
+    while (dt->cline < (dt->linebuf + CMDSIZE)) {
+        *dt->cline++ = 0;  
     }
     
-    dt->ccmd    = dt->cmdbuf;
-    dt->cmdlen  = 0;
+    dt->cline    = dt->linebuf;
+    dt->linelen  = 0;
 }
 
 

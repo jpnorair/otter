@@ -46,7 +46,7 @@ int _get_baudrate(int native_baud);
 
 // Formatting functions that I suspect are internal to mpipe, but which could
 // certainly be stuck into their own module.
-void _fprinthex(mpipe_printer_t puts_fn, uint8_t* src, size_t src_bytes, size_t cols);
+void _printhex(mpipe_printer_t puts_fn, uint8_t* src, size_t src_bytes, size_t cols);
 void _fprintalp(mpipe_printer_t puts_fn, uint8_t* src, size_t src_bytes);
 
 void _hexdump_raw(char* dst, uint8_t* src, size_t src_bytes);
@@ -461,7 +461,7 @@ void* mpipe_parser(void* args) {
             // internal protocol, and it can result in responses being queued.
             if (pkt_condition > 0) {
                 ///@todo some sort of error code
-                pktlist_del(rlist->cursor);
+                pktlist_del(rlist, rlist->cursor);
             }
             else {
                 pkt_t*      tpkt;
@@ -529,14 +529,14 @@ void* mpipe_parser(void* args) {
                     //_PUTS(putsbuf);
                 //}
                 //else {
-                    _fprinthex(_PUTS, payload_front, payload_bytes, 16);
+                    _printhex(_PUTS, payload_front, payload_bytes, 16);
                 //}
 
                 // Clear the rpkt if required, and move the cursor to the next
                 if (clear_rpkt) {
                     pkt_t*  scratch = rlist->cursor;
                     rlist->cursor   = rlist->cursor->next;
-                    pktlist_del(scratch);
+                    pktlist_del(rlist, scratch);
                 }
                 
                 // Clear the tpkt if it is matched with an rpkt
@@ -553,7 +553,7 @@ void* mpipe_parser(void* args) {
                     if (tpkt == tlist->cursor) {
                         tlist->cursor = tlist->cursor->next;
                     }
-                    pktlist_del(tpkt);
+                    pktlist_del(tlist, tpkt);
                 }
             } 
         } // END OF WHILE()
@@ -641,11 +641,16 @@ int pktlist_add(pktlist_t* plist, uint8_t* data, size_t size) {
         plist->cursor       = newpkt;
         plist->marker       = newpkt;
     }
-    // List is not empty, so simply extend the list
+    // List is not empty, so simply extend the list.
+    // set the cursor to the new packet if it points to NULL (end)
     else {
         newpkt->sequence    = plist->last->sequence + 1;
         plist->last->next   = newpkt;
         plist->last         = plist->last->next;
+        
+        if (plist->cursor == NULL) {
+            plist->cursor   = plist->last;
+        }
     }
     
     ///@todo Move Sequence Number entry and CRC entry to somewhere in writer
@@ -665,7 +670,7 @@ int pktlist_add(pktlist_t* plist, uint8_t* data, size_t size) {
 
 
 
-int pktlist_del(pkt_t* pkt) {
+int pktlist_del(pktlist_t* plist, pkt_t* pkt) {
     pkt_t* prev;
     pkt_t* next;
     
@@ -676,7 +681,18 @@ int pktlist_del(pkt_t* pkt) {
     prev = pkt->prev;
     next = pkt->next;
     
-    // Delete this packet
+    // Move the cursor to the next, if it is on the packet to be deleted.  Do
+    // the same for the marker
+    if (plist->cursor == pkt) {
+        plist->cursor = next;
+    }
+    if (plist->marker == pkt) {
+        plist->marker = next;
+    }
+    
+    // Delete this packet from the list, freeing its buffer memory as well as
+    // its packet memory.  Downside the list.
+    plist->size--;
     if (pkt->buffer != NULL) {
         free(pkt->buffer);
     }
@@ -761,7 +777,7 @@ int _get_baudrate(int native_baud) {
 
 
 
-void _fprinthex(mpipe_printer_t puts_fn, uint8_t* src, size_t src_bytes, size_t cols) {
+void _printhex(mpipe_printer_t puts_fn, uint8_t* src, size_t src_bytes, size_t cols) {
     const char convert[] = "0123456789ABCDEF";
     size_t i = cols;
     
@@ -784,7 +800,7 @@ void _fprinthex(mpipe_printer_t puts_fn, uint8_t* src, size_t src_bytes, size_t 
 
 void _fprintalp(mpipe_printer_t puts_fn, uint8_t* src, size_t src_bytes) {
     ///@todo Build an output formatter
-    _fprinthex(puts_fn, src, src_bytes, 16);
+    _printhex(puts_fn, src, src_bytes, 16);
 }
 
 
