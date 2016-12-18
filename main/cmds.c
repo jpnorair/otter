@@ -71,7 +71,7 @@ int cmd_quit(dterm_t* dt, uint8_t* dst, uint8_t* src, size_t dstmax) {
 
 int cmd_sethome(dterm_t* dt, uint8_t* dst, uint8_t* src, size_t dstmax) {
     unsigned int srclen;
-    srclen = strlen((char*)src);
+    srclen = (unsigned int)strlen((char*)src);
     
     if (srclen >= 1023) {
         dterm_puts(dt, "Error: supplied home-path is too long, must be < 1023 chars.\n");
@@ -223,7 +223,7 @@ int cmd_whoami(dterm_t* dt, uint8_t* dst, uint8_t* src, size_t dstmax) {
         dterm_puts(dt, "Indicates the current user, and if it has been authenticated on the target.\n");
     }
     else {
-        dterm_puts(dt, user_str);
+        dterm_puts(dt, (char*)user_str);
         
         /// @todo indicate if authentication response has been successfully
         ///       received from the target.

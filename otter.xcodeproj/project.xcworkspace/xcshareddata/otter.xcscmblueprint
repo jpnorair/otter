@@ -1,0 +1,30 @@
+{
+  "DVTSourceControlWorkspaceBlueprintPrimaryRemoteRepositoryKey" : "45ED57313E36C334DB2EFB6602A481385A6DC4DD",
+  "DVTSourceControlWorkspaceBlueprintWorkingCopyRepositoryLocationsKey" : {
+
+  },
+  "DVTSourceControlWorkspaceBlueprintWorkingCopyStatesKey" : {
+    "45ED57313E36C334DB2EFB6602A481385A6DC4DD" : 0,
+    "19164D598116418DD441E1620AB55D9E43F347C6" : 0
+  },
+  "DVTSourceControlWorkspaceBlueprintIdentifierKey" : "9F77541A-70E5-4952-B88A-B39FE00BAB1C",
+  "DVTSourceControlWorkspaceBlueprintWorkingCopyPathsKey" : {
+    "45ED57313E36C334DB2EFB6602A481385A6DC4DD" : "otter\/",
+    "19164D598116418DD441E1620AB55D9E43F347C6" : "bintex\/"
+  },
+  "DVTSourceControlWorkspaceBlueprintNameKey" : "otter",
+  "DVTSourceControlWorkspaceBlueprintVersion" : 204,
+  "DVTSourceControlWorkspaceBlueprintRelativePathToProjectKey" : "otter.xcodeproj",
+  "DVTSourceControlWorkspaceBlueprintRemoteRepositoriesKey" : [
+    {
+      "DVTSourceControlWorkspaceBlueprintRemoteRepositoryURLKey" : "https:\/\/github.com\/jpnorair\/bintex.git",
+      "DVTSourceControlWorkspaceBlueprintRemoteRepositorySystemKey" : "com.apple.dt.Xcode.sourcecontrol.Git",
+      "DVTSourceControlWorkspaceBlueprintRemoteRepositoryIdentifierKey" : "19164D598116418DD441E1620AB55D9E43F347C6"
+    },
+    {
+      "DVTSourceControlWorkspaceBlueprintRemoteRepositoryURLKey" : "https:\/\/github.com\/jpnorair\/otter.git",
+      "DVTSourceControlWorkspaceBlueprintRemoteRepositorySystemKey" : "com.apple.dt.Xcode.sourcecontrol.Git",
+      "DVTSourceControlWorkspaceBlueprintRemoteRepositoryIdentifierKey" : "45ED57313E36C334DB2EFB6602A481385A6DC4DD"
+    }
+  ]
+}

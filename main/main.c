@@ -44,6 +44,7 @@
 // Standard C & POSIX Libraries
 #include <pthread.h>
 #include <signal.h>
+#include <stdarg.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -57,7 +58,7 @@
 
 //Comment-out if not testing: this should ideally be passed into the compiler
 //params, but with XCode that's a mystery.
-#define __TEST__
+//#define __TEST__
 
 
 
@@ -219,6 +220,9 @@ int main(int argc, const char * argv[]) {
         _print_usage(argv[0]);
     }
 #   endif
+    
+    // Validate that we're looking at something like "/dev/tty.usb..."
+    
     
     // Prepare the baud-rate of the MPipe TTY
     if (argc == 3)  mpipe_ctl.baudrate = atoi(argv[2]);

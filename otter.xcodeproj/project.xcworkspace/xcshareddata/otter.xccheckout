@@ -10,33 +10,33 @@
 	<string>otter</string>
 	<key>IDESourceControlProjectOriginsDictionary</key>
 	<dict>
-		<key>495720A6-418E-447E-8BDA-4301771E7F9F</key>
+		<key>19164D598116418DD441E1620AB55D9E43F347C6</key>
 		<string>https://github.com/jpnorair/bintex.git</string>
-		<key>6C93F455-28FB-4ADF-B2B6-8DD363375508</key>
+		<key>45ED57313E36C334DB2EFB6602A481385A6DC4DD</key>
 		<string>https://github.com/jpnorair/otter.git</string>
 	</dict>
 	<key>IDESourceControlProjectPath</key>
-	<string>otter.xcodeproj/project.xcworkspace</string>
+	<string>otter.xcodeproj</string>
 	<key>IDESourceControlProjectRelativeInstallPathDictionary</key>
 	<dict>
-		<key>495720A6-418E-447E-8BDA-4301771E7F9F</key>
+		<key>19164D598116418DD441E1620AB55D9E43F347C6</key>
 		<string>../../../bintex</string>
-		<key>6C93F455-28FB-4ADF-B2B6-8DD363375508</key>
+		<key>45ED57313E36C334DB2EFB6602A481385A6DC4DD</key>
 		<string>../..</string>
 	</dict>
 	<key>IDESourceControlProjectURL</key>
 	<string>https://github.com/jpnorair/otter.git</string>
 	<key>IDESourceControlProjectVersion</key>
-	<integer>110</integer>
+	<integer>111</integer>
 	<key>IDESourceControlProjectWCCIdentifier</key>
-	<string>6C93F455-28FB-4ADF-B2B6-8DD363375508</string>
+	<string>45ED57313E36C334DB2EFB6602A481385A6DC4DD</string>
 	<key>IDESourceControlProjectWCConfigurations</key>
 	<array>
 		<dict>
 			<key>IDESourceControlRepositoryExtensionIdentifierKey</key>
 			<string>public.vcs.git</string>
 			<key>IDESourceControlWCCIdentifierKey</key>
-			<string>495720A6-418E-447E-8BDA-4301771E7F9F</string>
+			<string>19164D598116418DD441E1620AB55D9E43F347C6</string>
 			<key>IDESourceControlWCCName</key>
 			<string>bintex</string>
 		</dict>
@@ -44,7 +44,7 @@
 			<key>IDESourceControlRepositoryExtensionIdentifierKey</key>
 			<string>public.vcs.git</string>
 			<key>IDESourceControlWCCIdentifierKey</key>
-			<string>6C93F455-28FB-4ADF-B2B6-8DD363375508</string>
+			<string>45ED57313E36C334DB2EFB6602A481385A6DC4DD</string>
 			<key>IDESourceControlWCCName</key>
 			<string>otter</string>
 		</dict>

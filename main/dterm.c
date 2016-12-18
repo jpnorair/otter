@@ -208,7 +208,7 @@ void* dterm_prompter(void* args) {
     cmdtype             cmd;
     char                cmdname[256];
     char                c           = 0;
-    int                 keychars    = 0;
+    ssize_t             keychars    = 0;
     dterm_t*            dt          = ((dterm_arg_t*)args)->dt;
     cmdhist*            ch          = ((dterm_arg_t*)args)->ch;
     pktlist_t*          tlist       = ((dterm_arg_t*)args)->tlist;
@@ -557,7 +557,6 @@ int dterm_putsc(dterm_t *dt, char *s) {
 
 
 int dterm_putlinec(dterm_t *dt, char c) {
-    int i;
     int line_delta;
     
     if (c == ASCII_BACKSPC) {
