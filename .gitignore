@@ -1,4 +1,7 @@
+*.xcuserstate
 xcuserdata
 *xcuserdata*
 project.xcworkspace
 .DS_Store
+
+legacy_code*

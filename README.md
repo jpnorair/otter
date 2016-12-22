@@ -3,7 +3,18 @@ Otter (otter)
 
 "otter" is for "OpenTag TERminal."  It is a POSIX-C app that provides a client-side terminal shell for communication between a TTY device (typically a PC) and a binary target (typically an embedded device).  The implemented binary packet protocol is called MPipe, which is released with OpenTag.  It is similar in nature to projects like Bitlash and Pinnoc.io in that it is a client-side shell, but it differs because it is for OpenTag, and OpenTag has a much more powerful, extensible, and generic data language than any of these projects have.  This also means that OpenTag is harder to use, but I'm making Otter to fix that.
 
-Otter is presently in Alpha.
+Otter is presently in Beta.
+
+Building Otter
+--------------
+At present you can build it most easily through XCode.  A makefile will be made available in the near future (possibly by the time you read this).  There are some dependencies, which can be downloaded from jpnorair's GitHub.  All of these repositories should be cloned or copied to the same directory for building to work.
+
+1. Bintex ()
+2. M2DEF ()
+
+Downloading Binaries
+--------------------
+By the time you read this, binaries may be available for Mac OS X.  They are likely hosted on indigresso.com, at least.  Search for "otter binaries" in your favorite search engine.
 
 Otter Functional Synopsis
 =========================
