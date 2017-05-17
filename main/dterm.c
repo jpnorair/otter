@@ -375,7 +375,7 @@ void* dterm_prompter(void* args) {
                                         else {
                                             int list_size;
                                             pthread_mutex_lock(tlist_mutex);
-                                            list_size = pktlist_add(tlist, protocol_buf, rawbytes);
+                                            list_size = pktlist_add(tlist, true, protocol_buf, rawbytes);
                                             pthread_mutex_unlock(tlist_mutex);
                                             if (list_size > 0) {
                                                 pthread_cond_signal(tlist_cond);
