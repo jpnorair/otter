@@ -60,7 +60,7 @@
 //params, but with XCode that's a mystery.
 //#define __TEST__
 
-
+#define _DEFAULT_BAUDRATE   115200
 
 
 
@@ -169,12 +169,14 @@ bool _cli_is_blocked(void) {
 // 2. delete and remove line do not work for multiline command
 
 static dterm_t* _dtputs_dterm;
+
 int _dtputs(char* str) {
     return dterm_puts(_dtputs_dterm, str);
 }
 
 void _print_usage(const char* program_name) {
-    fprintf(stderr, "usage: %s tty_file [baudrate]\n", program_name);
+    fprintf(stderr, "Usage: %s tty_file [baudrate]\n", program_name);
+    fprintf(stderr, "       (Default Baudrate is %d baud)\n", _DEFAULT_BAUDRATE);
 }
 
 
@@ -214,19 +216,18 @@ int main(int argc, const char * argv[]) {
     
     
     /// 1. Load Arguments from Command-Line
-#   ifndef __TEST__
     // Usage Error
     if ((argc < 2) || (argc > 3)) {
         _print_usage(argv[0]);
+        return 0;
     }
-#   endif
     
     // Validate that we're looking at something like "/dev/tty.usb..."
     
     
     // Prepare the baud-rate of the MPipe TTY
     if (argc == 3)  mpipe_ctl.baudrate = atoi(argv[2]);
-    else            mpipe_ctl.baudrate = 115200;
+    else            mpipe_ctl.baudrate = _DEFAULT_BAUDRATE;
     
 
     /// 2. Initialize command search table.  
@@ -258,7 +259,7 @@ int main(int argc, const char * argv[]) {
     /// 5. Open the mpipe TTY & Setup MPipe threads
     ///    The MPipe Filename (e.g. /dev/ttyACMx) is sent as the first argument
     mpipe_args.mpctl            = &mpipe_ctl;
-    mpipe_args.rlist            = &mpipe_tlist;
+    mpipe_args.rlist            = &mpipe_rlist;
     mpipe_args.tlist            = &mpipe_tlist;
     mpipe_args.puts_fn          = &_dtputs;
     mpipe_args.dtwrite_mutex    = &dtwrite_mutex;
@@ -271,19 +272,9 @@ int main(int argc, const char * argv[]) {
     mpipe_args.kill_mutex       = &cli.kill_mutex;
     mpipe_args.kill_cond        = &cli.kill_cond;
     
-#   ifndef __TEST__
     if (mpipe_open(&mpipe_ctl, argv[1], mpipe_ctl.baudrate, 8, 'N', 1, 0, 0, 0) < 0) {
         return -1;
     }
-#   else
-    // Test only: set to known dev/tty
-    // /dev/tty.usbserial-A901JWAY
-    // /dev/tty.usbserial-A603B2F1
-    if (mpipe_open(&mpipe_ctl, "/dev/tty.usbserial-A901JWAY", mpipe_ctl.baudrate, 8, 'N', 1, 0, 0, 0) < 0) {
-        return -1;
-    }
-#   endif
-    
     
     /// 6. Open DTerm interface & Setup DTerm threads
     ///    The dterm thread will deal with all other aspects, such as command
