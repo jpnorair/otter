@@ -169,8 +169,14 @@ void mpipe_freelists(pktlist_t* rlist, pktlist_t* tlist) {
     pkt = rlist->front;
     while (pkt != NULL) {
         pkt_t* next_pkt = pkt->next;
-        free(pkt->buffer);
+        if (pkt->buffer != NULL) {
+            fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
+            free(pkt->buffer);
+            fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
+        }
+        fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
         free(pkt);
+        fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
         pkt = next_pkt;
     }
     
@@ -222,12 +228,12 @@ void* mpipe_reader(void* args) {
 /// <LI> Assembles the packet from TTY data. </LI>
 /// <LI> Adds packet into mpipe.rlist, sends cond-sig to mpipe_parser. </LI>
 ///
-    uint8_t sync;
     uint8_t syncinput;
     uint8_t rbuf[1024];
     uint8_t* rbuf_cursor;
     int header_length;
     int payload_length;
+    int payload_left;
     int errcode;
     int new_bytes;
     
@@ -244,29 +250,43 @@ void* mpipe_reader(void* args) {
     //fnctl(dt->fd_in, F_SETFL, 0);  
     
     mpipe_reader_START:
-    errcode     = 0;
-    sync        = 0xff;
+    mpipe_flush(&mpctl, 0, TCIFLUSH);
+    errcode = 0;
     
-    /// Look for the first two words of SYNC: FF55.
-    mpipe_reader_SYNC:
+    /// Wait until an FF comes
+    mpipe_reader_SYNC0:
     new_bytes = (int)read(mpctl.tty_fd, &syncinput, 1);
     if (new_bytes < 1) {
         errcode = 1;
         goto mpipe_reader_ERR;
     }
-    if (syncinput != sync) {
-        goto mpipe_reader_START;
+    if (syncinput != 0xFF) {
+        goto mpipe_reader_SYNC0;
     }
-    if (sync == 0xff) {
-        sync = 0x55;
-        goto mpipe_reader_SYNC;
+    
+    /// Now wait for a 55, ignoring FFs
+    mpipe_reader_SYNC1:
+    new_bytes = (int)read(mpctl.tty_fd, &syncinput, 1);
+    if (new_bytes < 1) {
+        errcode = 1;
+        goto mpipe_reader_ERR;
     }
+    if (syncinput == 0xFF) {
+        goto mpipe_reader_SYNC1;
+    }
+    if (syncinput != 0x55) {
+        goto mpipe_reader_SYNC0;
+    }
+    
     
     /// At this point, FF55 was detected.  We get the next 6 bytes of the 
     /// header, which is the rest of the header.  
     /// @todo Add a timeout mechanism here.
     /// @todo Make header length dynamic based on control field (last byte).
     ///           However, control field is not yet defined.
+    
+    ///@todo Set kill timer for receiving header bytes
+    
     new_bytes   = 0;
     rbuf_cursor = rbuf;
     do {
@@ -291,22 +311,25 @@ void* mpipe_reader(void* args) {
     /// expand the header.  That logic would go below (currently trivial).
     header_length = 6 + 0;
     
-    /// Now do some checks to prevent malformed packets and to receive the 
-    /// payload, then receive the payload.
+    /// Now do some checks to prevent malformed packets.
     if (((unsigned int)payload_length == 0) \
     || ((unsigned int)payload_length > (1024-header_length))) {
         errcode = 2;
         goto mpipe_reader_ERR;
     }
-    do { 
-        new_bytes       = (int)read(mpctl.tty_fd, rbuf_cursor, payload_length);
+    
+    /// Receive the remaining payload bytes
+    ///@todo Re-set kill timer for receiving payload bytes
+    payload_left = payload_length;
+    while (payload_left > 0) { 
+        new_bytes       = (int)read(mpctl.tty_fd, rbuf_cursor, payload_left);
         rbuf_cursor    += new_bytes;
-        payload_length -= new_bytes;
-    } while (payload_length > 0);
+        payload_left   -= new_bytes;
+    };
 
     /// Copy the packet to the rlist and signal mpipe_parser()
     pthread_mutex_lock(rlist_mutex);
-    pktlist_add(rlist, rbuf, (size_t)(header_length + payload_length));
+    pktlist_add(rlist, false, rbuf, (size_t)(header_length + payload_length));
     pthread_mutex_unlock(rlist_mutex);
     
     /// Error Handler: wait a few milliseconds, then handle the error.
@@ -317,11 +340,11 @@ void* mpipe_reader(void* args) {
                 goto mpipe_reader_START;
         
         case 1: // send error "MPipe Packet Sync could not be retrieved."
-                mpipe_flush(&mpctl, 0, TCIFLUSH);
+                //mpipe_flush(&mpctl, 0, TCIFLUSH);
                 goto mpipe_reader_START;
         
         case 2: // send error "Mpipe Packet Payload Length is out of bounds."
-                mpipe_flush(&mpctl, 0, TCIFLUSH);
+                //mpipe_flush(&mpctl, 0, TCIFLUSH);
                 goto mpipe_reader_START;
     }
     
@@ -431,6 +454,8 @@ void* mpipe_parser(void* args) {
     
 
     while (1) {
+        int pkt_condition;  // tracks some error conditions
+    
         pthread_cond_wait(pktrx_cond, pktrx_mutex);
         pthread_mutex_lock(dtwrite_mutex);
         pthread_mutex_lock(rlist_mutex);
@@ -440,10 +465,8 @@ void* mpipe_parser(void* args) {
         // variable will break the loop if the rlist has no new packets.
         // Otherwise it will parse all new packets, one at a time, until there
         // are none remaining.
-        while (1) {
-            
+        //while (1) {
             // ===================LOOP CONDITION LOGIC==========================
-            int pkt_condition;
             
             // mpipe_getnew will validate and decrypt the packet:
             // - It returns 0 if all is well
@@ -452,7 +475,7 @@ void* mpipe_parser(void* args) {
             // - rlist->cursor points to the working packet
             pkt_condition = pktlist_getnew(rlist);
             if (pkt_condition < 0) {
-                break;
+                goto mpipe_parser_END;
             }
             // =================================================================
             
@@ -461,6 +484,7 @@ void* mpipe_parser(void* args) {
             // internal protocol, and it can result in responses being queued.
             if (pkt_condition > 0) {
                 ///@todo some sort of error code
+                fprintf(stderr, "A malformed packet was sent for parsing\n");
                 pktlist_del(rlist, rlist->cursor);
             }
             else {
@@ -484,7 +508,6 @@ void* mpipe_parser(void* args) {
                     tpkt = tpkt->next;
                 }
                 
-                
                 // If Verbose, Print received header in real language
                 // If not Verbose, just print the encoded packet status
                 ///@todo integrate CLI options
@@ -502,10 +525,21 @@ void* mpipe_parser(void* args) {
                 }
                 _PUTS(putsbuf);
                 
+                /// If CRC is bad, discard the packet now
+                if (rlist->cursor->crcqual != 0) {
+                    pktlist_del(rlist, rlist->cursor);
+                    goto mpipe_parser_END;
+                }
                 
                 // Here is where decryption would go
                 if (rlist->cursor->buffer[5] & (3<<5)) {
-                    payload_front = &rlist->cursor->buffer[6];  ///@todo deal with encryption
+                    ///@todo Deal with encryption here.  When implemented, there
+                    /// should be an encryption header at this offset (6), 
+                    /// followed by the payload, and then the real data payload.
+                    /// The real data payload is followed by a 4 byte Message
+                    /// Authentication Check (Crypto-MAC) value.  AES128 EAX
+                    /// is the cryptography and cipher used.
+                    payload_front = &rlist->cursor->buffer[6];  
                 }
                 else {
                     payload_front = &rlist->cursor->buffer[6];
@@ -523,19 +557,29 @@ void* mpipe_parser(void* args) {
                 // If it is a M2DEF payload, the print-out can be formatted in different ways
                 payload_bytes   = rlist->cursor->buffer[2] * 256;
                 payload_bytes  += rlist->cursor->buffer[3];
+
+                // Send an error if payload bytes is too big
+                if (payload_bytes > rlist->cursor->size) {
+                    sprintf(putsbuf, "... Reported Payload Length (%zu) is larger than buffer (%zu).\n" \
+                                     "... Possible transmission error.\n",
+                                    payload_bytes, rlist->cursor->size
+                            );
+                    _PUTS(putsbuf);
+                }
                 ///@todo implement m2def library
-                //if (rpkt_is_valid)  {
+                else if (rpkt_is_valid)  {
                     //m2def_sprintf(putsbuf, &rlist->cursor->buffer[6], 2048, "");
                     //_PUTS(putsbuf);
-                //}
-                //else {
+                    _fprintalp(_PUTS, payload_front, payload_bytes);
+                }
+                else {
                     _printhex(_PUTS, payload_front, payload_bytes, 16);
-                //}
+                }
 
                 // Clear the rpkt if required, and move the cursor to the next
                 if (clear_rpkt) {
                     pkt_t*  scratch = rlist->cursor;
-                    rlist->cursor   = rlist->cursor->next;
+                    //rlist->cursor   = rlist->cursor->next;
                     pktlist_del(rlist, scratch);
                 }
                 
@@ -543,25 +587,32 @@ void* mpipe_parser(void* args) {
                 // Also, clear the oldest tpkt if it's timestamp is of a certain amout.
                 ///@todo Change timestamp so that it is not hardcoded
                 if (rpkt_is_resp == false) {
-                    if (rlist->front->tstamp == 0) {    ///@todo check if old
-                        tpkt = tlist->front;
-                        goto mpipe_parse_DELTPKT;
-                    }
+                    ///@todo check if old
+                    //if (rlist->front->tstamp == 0) {    
+                    //    tpkt = tlist->front;
+                    //    ---> do routine in else if below
+                    //}
                 }
-                else {
-                mpipe_parse_DELTPKT:
-                    if (tpkt == tlist->cursor) {
-                        tlist->cursor = tlist->cursor->next;
-                    }
+                else if (tpkt != NULL) {
+                    //if (tpkt == tlist->cursor) {
+                    //    tlist->cursor = tlist->cursor->next;
+                    //}
                     pktlist_del(tlist, tpkt);
                 }
             } 
-        } // END OF WHILE()
+            
+            
         
-        pthread_mutex_unlock(tlist_mutex);
-        pthread_mutex_unlock(rlist_mutex);
-        pthread_mutex_unlock(dtwrite_mutex);
-        pthread_mutex_unlock(pktrx_mutex); 
+        //} // END OF WHILE()
+        mpipe_parser_END:
+        pthread_mutex_unlock(tlist_mutex); 
+        pthread_mutex_unlock(rlist_mutex); ;
+        pthread_mutex_unlock(dtwrite_mutex); 
+        pthread_mutex_unlock(pktrx_mutex);
+        
+        ///@todo Can check for major error in pkt_condition
+        ///      Major errors are integers less than -1
+        
     } // END OF WHILE()
     
     /// This code should never occur, given the while(1) loop.
@@ -596,8 +647,9 @@ int pktlist_init(pktlist_t* plist) {
 
 
 
-int pktlist_add(pktlist_t* plist, uint8_t* data, size_t size) {
+int pktlist_add(pktlist_t* plist, bool write_header, uint8_t* data, size_t size) {
     pkt_t* newpkt;
+    size_t offset;
     
     if (plist == NULL) {
         return -1;
@@ -608,6 +660,9 @@ int pktlist_add(pktlist_t* plist, uint8_t* data, size_t size) {
         return -2;
     }
     
+    // Offset is dependent if we are writing a header (8 bytes) or not.
+    offset = (write_header) ? 8 : 0;
+    
     // Setup list connections for the new packet
     // Also allocate the buffer of the new packet
     ///@todo Change the hardcoded +8 to a dynamic detection of the header
@@ -615,23 +670,27 @@ int pktlist_add(pktlist_t* plist, uint8_t* data, size_t size) {
     ///      Dynamic header isn't implemented yet, so no rush.
     newpkt->prev    = plist->last;
     newpkt->next    = NULL;
-    newpkt->size    = size+8;
+    newpkt->size    = size + offset;
     newpkt->buffer  = malloc(newpkt->size);
     if (newpkt->buffer == NULL) {
         return -3;
     }
     
-    // Copy Payload into Packet buffer, leaving room for header
-    memcpy(&newpkt->buffer[8], data, newpkt->size);
-    newpkt->buffer[0]   = 0xff;
-    newpkt->buffer[1]   = 0x55;
-    newpkt->buffer[2]   = 0;
-    newpkt->buffer[3]   = 0;
-    newpkt->buffer[4]   = size >> 8;
-    newpkt->buffer[5]   = size & 0xff;
-    newpkt->buffer[6]   = 0;
-    newpkt->buffer[7]   = 0;            ///@todo Set Control Field here based on Cli.
-    
+    // Copy Payload into Packet buffer
+    // If "write_header" is set, then we need to write our own header (e.g. for
+    // TX'ing).  If not, we copy the data directly.
+    memcpy(&newpkt->buffer[offset], data, newpkt->size);
+    if (write_header) {
+        newpkt->buffer[0]   = 0xff;
+        newpkt->buffer[1]   = 0x55;
+        newpkt->buffer[2]   = 0;
+        newpkt->buffer[3]   = 0;
+        newpkt->buffer[4]   = size >> 8;
+        newpkt->buffer[5]   = size & 0xff;
+        newpkt->buffer[6]   = 0;
+        newpkt->buffer[7]   = 0;            ///@todo Set Control Field here based on Cli.
+    }
+
     // List is empty, so start the list
     if (plist->last == NULL) {
         newpkt->sequence    = 0;
@@ -644,6 +703,7 @@ int pktlist_add(pktlist_t* plist, uint8_t* data, size_t size) {
     // List is not empty, so simply extend the list.
     // set the cursor to the new packet if it points to NULL (end)
     else {
+        //fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
         newpkt->sequence    = plist->last->sequence + 1;
         plist->last->next   = newpkt;
         plist->last         = plist->last->next;
@@ -655,7 +715,8 @@ int pktlist_add(pktlist_t* plist, uint8_t* data, size_t size) {
     
     ///@todo Move Sequence Number entry and CRC entry to somewhere in writer
     ///      thread, so that it can be retransmitted with new sequence
-    {   uint16_t crcval;
+    if (write_header) {
+        uint16_t crcval;
         newpkt->buffer[6]   = newpkt->sequence;
         crcval              = crc_calc_block(&newpkt->buffer[4], newpkt->size - 4);
         newpkt->buffer[2]   = crcval >> 8;
@@ -674,6 +735,9 @@ int pktlist_del(pktlist_t* plist, pkt_t* pkt) {
     pkt_t* prev;
     pkt_t* next;
     
+    if (plist == NULL) {
+        return -11;
+    }
     if (pkt == NULL) {
         return -1;
     }
@@ -694,13 +758,22 @@ int pktlist_del(pktlist_t* plist, pkt_t* pkt) {
     // its packet memory.  Downside the list.
     plist->size--;
     if (pkt->buffer != NULL) {
+        //fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
         free(pkt->buffer);
+        //fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
     }
+    //fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
     free(pkt);
+    //fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
     
     // Stitch the list back together
-    prev->next  = next;
-    next->prev  = prev;
+    // Packets at the beginning or end of the list need to be accomodated, too.
+    if (prev != NULL) {
+        prev->next = next;
+    }
+    if (next != NULL) {
+        next->prev = prev;
+    }
     
     return 0;
 }
@@ -713,6 +786,16 @@ int pktlist_getnew(pktlist_t* plist) {
     //time_t      seconds;
 
     ///@todo Is it needed to do mpipe_add() here?  I don't think so
+    
+    // packet list is not allocated -- that's a serious error
+    if (plist == NULL) {
+        return -11;
+    }
+    
+    // packet list is empty
+    if (plist->cursor == NULL) {
+        return -1;
+    }
     
     // Save Timestamp and Sequence ID parameters
     plist->cursor->tstamp   = time(NULL);   //;localtime(&seconds);
@@ -779,7 +862,12 @@ int _get_baudrate(int native_baud) {
 
 void _printhex(mpipe_printer_t puts_fn, uint8_t* src, size_t src_bytes, size_t cols) {
     const char convert[] = "0123456789ABCDEF";
-    size_t i = cols;
+    size_t i;
+    
+    if (cols < 1)
+        cols = 1;
+    
+    i = cols;
     
     while (src_bytes-- != 0) {
         char hexstr[4] = {0, 0, 0, 0};
@@ -789,18 +877,161 @@ void _printhex(mpipe_printer_t puts_fn, uint8_t* src, size_t src_bytes, size_t c
         hexstr[2] = ' ';
         src++;
         puts_fn(hexstr);
+        i--;
         
         if ((i == 0) || (src_bytes == 0)) {
             i = cols;
             puts_fn("\n");
         }
+        
     }
 }
 
 
+
+char* _loggermsg_findbreak(char* msg, size_t limit) {
+    char* pos;
+    long  span;
+    
+    pos     = strchr(msg, 0);
+    span    = (pos-msg);
+    
+    if ((pos == NULL) || (span >= (long)limit)) {
+        pos     = strchr(msg, ' ');
+        span    = (pos-msg);
+    }
+    
+    if ((pos == NULL) || (span >= (long)limit)) {
+        return NULL;
+    }
+    
+    return pos;
+}
+
 void _fprintalp(mpipe_printer_t puts_fn, uint8_t* src, size_t src_bytes) {
-    ///@todo Build an output formatter
-    _printhex(puts_fn, src, src_bytes, 16);
+    uint8_t* payload;
+    int flags;
+    int length;
+    int cmd;
+    int id;
+
+    /// Early exit condition
+    if (src_bytes < 4) {
+        return;
+    }
+    
+    fprintf(stderr, "src_bytes=%zu\n", src_bytes);
+
+    /// Null Terminate the end
+    /// @note this is safe due to the way src buffer is allocated
+    src[src_bytes] = 0;
+
+    /// Look at ALP header
+    flags   = src[0];
+    length  = src[1];
+    id      = src[2];
+    cmd     = src[3];
+    
+    payload     = &src[4];
+    src_bytes  -= 4;
+    
+    fprintf(stderr, "flags=%02x length=%02x cmd=%02x id=%02x\n", flags, length, cmd, id);
+    
+    
+    ///@note could squelch output for mismatched length
+    if (length > src_bytes) {
+        length = (int)src_bytes;
+    }
+    
+    /// If length is 0, print out the ALP header only
+    if (length == 0) {
+        _printhex(puts_fn, src, src_bytes, 16);
+        return;
+    }
+    
+    
+    ///@todo deal with multiframe ALPs
+    
+    ///@todo deal with anything other than logger
+    if (id == 0x04) {
+        uint8_t* msgbreak;
+    
+        switch (cmd) {
+            // UTF-8 Unstructured Data
+            case 0x01: 
+                puts_fn((char*)payload);
+                break;
+                    
+            // Unicode (UTF-16) unstructured Data
+            // Not presently supported
+            case 0x02: 
+                _printhex(puts_fn, src, src_bytes, 16);
+                break;
+            
+            // UTF-8 Hex-encoded data
+            ///@todo have this print out hex in similar output to _printhex
+            case 0x03: 
+                puts_fn((char*)payload);
+                break;
+            
+            // Message with binary data
+            case 0x04: 
+                msgbreak = (uint8_t*)_loggermsg_findbreak((char*)payload, (size_t)length);
+                if (msgbreak != NULL) {
+                    *msgbreak++ = 0;
+                    puts_fn((char*)payload);
+                    length -= (msgbreak - payload);
+                    if (length > 0) {
+                        _printhex(puts_fn, msgbreak, length, 16);
+                    }
+                }
+                break;
+                    
+            // Message with UTF-8 data
+            case 0x05: 
+                msgbreak = (uint8_t*)_loggermsg_findbreak((char*)payload, (size_t)length);
+                if (msgbreak != NULL) {
+                    *msgbreak++ = 0;
+                    puts_fn((char*)payload);
+                    puts_fn((char*)msgbreak);
+                }
+                break;
+            
+            // Message with Unicode (UTF-16) data
+            // Not presently supported
+            case 0x06: 
+                msgbreak = (uint8_t*)_loggermsg_findbreak((char*)payload, (size_t)length);
+                if (msgbreak != NULL) {
+                    *msgbreak++ = 0;
+                    puts_fn((char*)payload);
+                    length -= (msgbreak - payload);
+                    if (length > 0) {
+                        _printhex(puts_fn, msgbreak, length, 16);
+                    }
+                }
+                break;
+                
+            // Message with UTF-8 encoded Hex data
+            ///@todo have this print out hex in similar output to _printhex
+            case 0x07: 
+                msgbreak = (uint8_t*)_loggermsg_findbreak((char*)payload, (size_t)length);
+                if (msgbreak != NULL) {
+                    *msgbreak++ = 0;
+                    puts_fn((char*)payload);
+                    puts_fn((char*)msgbreak);
+                }
+                break;
+            
+            default: 
+                _printhex(puts_fn, payload, length, 16);
+                break;
+        }
+    }
+    
+    
+    else {
+        _printhex(puts_fn, src, src_bytes, 16);
+    }
 }
 
 
@@ -816,7 +1047,7 @@ void _hexdump_raw(char* dst, uint8_t* src, size_t src_bytes) {
         src++;
     }
     dst--;              // clip last "space" character
-    *dst = 0;           // add termination character to string
+    *dst = 0;           // convert "space" to string terminator
 }
 
 
