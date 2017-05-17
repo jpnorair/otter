@@ -371,6 +371,8 @@ void* mpipe_writer(void* args) {
     pthread_mutex_t* tlist_mutex        = ((mpipe_arg_t*)args)->tlist_mutex;
     
     while (1) {
+        
+        pthread_mutex_lock(tlist_cond_mutex);
         pthread_cond_wait(tlist_cond, tlist_cond_mutex);
         pthread_mutex_lock(tlist_mutex);
         
@@ -416,7 +418,6 @@ void* mpipe_writer(void* args) {
         }
         
         pthread_mutex_unlock(tlist_mutex);
-        pthread_mutex_unlock(tlist_cond_mutex);
     }
     
     /// This code should never occur, given the while(1) loop.
@@ -456,6 +457,7 @@ void* mpipe_parser(void* args) {
     while (1) {
         int pkt_condition;  // tracks some error conditions
     
+        pthread_mutex_lock(pktrx_mutex);
         pthread_cond_wait(pktrx_cond, pktrx_mutex);
         pthread_mutex_lock(dtwrite_mutex);
         pthread_mutex_lock(rlist_mutex);
@@ -608,7 +610,6 @@ void* mpipe_parser(void* args) {
         pthread_mutex_unlock(tlist_mutex); 
         pthread_mutex_unlock(rlist_mutex); ;
         pthread_mutex_unlock(dtwrite_mutex); 
-        pthread_mutex_unlock(pktrx_mutex);
         
         ///@todo Can check for major error in pkt_condition
         ///      Major errors are integers less than -1
@@ -705,11 +706,11 @@ int pktlist_add(pktlist_t* plist, bool write_header, uint8_t* data, size_t size)
     else {
         //fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
         newpkt->sequence    = plist->last->sequence + 1;
-        plist->last->next   = newpkt;
-        plist->last         = plist->last->next;
+        newpkt->prev->next  = newpkt;
+        plist->last         = newpkt;
         
         if (plist->cursor == NULL) {
-            plist->cursor   = plist->last;
+            plist->cursor   = newpkt;
         }
     }
     
@@ -732,31 +733,16 @@ int pktlist_add(pktlist_t* plist, bool write_header, uint8_t* data, size_t size)
 
 
 int pktlist_del(pktlist_t* plist, pkt_t* pkt) {
-    pkt_t* prev;
-    pkt_t* next;
+    pkt_t*  ref;
+    pkt_t   copy; 
     
-    if (plist == NULL) {
-        return -11;
-    }
+    /// First thing is to free the packet even if it's not in the list
+    /// We make a local copy in order to stitch the list back together.
     if (pkt == NULL) {
         return -1;
     }
-    
-    prev = pkt->prev;
-    next = pkt->next;
-    
-    // Move the cursor to the next, if it is on the packet to be deleted.  Do
-    // the same for the marker
-    if (plist->cursor == pkt) {
-        plist->cursor = next;
-    }
-    if (plist->marker == pkt) {
-        plist->marker = next;
-    }
-    
-    // Delete this packet from the list, freeing its buffer memory as well as
-    // its packet memory.  Downside the list.
-    plist->size--;
+    ref     = pkt;
+    copy    = *pkt;
     if (pkt->buffer != NULL) {
         //fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
         free(pkt->buffer);
@@ -766,15 +752,45 @@ int pktlist_del(pktlist_t* plist, pkt_t* pkt) {
     free(pkt);
     //fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
     
-    // Stitch the list back together
-    // Packets at the beginning or end of the list need to be accomodated, too.
-    if (prev != NULL) {
-        prev->next = next;
+    
+    /// If there's no plist.  It isn't fatal but it's weird
+    if (plist == NULL) {
+        return 1;
     }
-    if (next != NULL) {
-        next->prev = prev;
+
+    /// Downsize the list.  Re-init list if size == 0;
+    plist->size--;
+    if (plist->size <= 0) {
+        pktlist_init(plist);
+        return 0;
     }
     
+    /// If packet was front of list, move front to next,
+    if (plist->front == ref) {
+        plist->front = copy.next;
+    }
+    
+    /// If packet was last of list, move last to prev
+    if (plist->last == ref) {
+        plist->last = copy.prev;
+    }
+    
+    /// Likewise, if the cursor and marker were on the packet, advance them
+    if (plist->cursor == pkt) {
+        plist->cursor = copy.next;
+    }
+    if (plist->marker == pkt) {
+        plist->marker = copy.next;
+    }
+    
+    /// Stitch the list back together
+    if (copy.next != NULL) {
+        copy.next->prev = copy.prev;
+    }
+    if (copy.prev != NULL) {
+        copy.prev->next = copy.next;
+    }
+
     return 0;
 }
 
