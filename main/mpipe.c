@@ -170,13 +170,13 @@ void mpipe_freelists(pktlist_t* rlist, pktlist_t* tlist) {
     while (pkt != NULL) {
         pkt_t* next_pkt = pkt->next;
         if (pkt->buffer != NULL) {
-            fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
+            //fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
             free(pkt->buffer);
-            fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
+            //fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
         }
-        fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
+        //fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
         free(pkt);
-        fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
+        //fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
         pkt = next_pkt;
     }
     
@@ -336,7 +336,8 @@ void* mpipe_reader(void* args) {
     /// @todo supply estimated bytes remaining into mpipe_flush()
     mpipe_reader_ERR:
     switch (errcode) {
-        case 0: pthread_cond_signal(pktrx_cond);
+        case 0: //fprintf(stderr, "sending packet rx signal\n");
+                pthread_cond_signal(pktrx_cond);
                 goto mpipe_reader_START;
         
         case 1: // send error "MPipe Packet Sync could not be retrieved."
@@ -372,7 +373,7 @@ void* mpipe_writer(void* args) {
     
     while (1) {
         
-        pthread_mutex_lock(tlist_cond_mutex);
+        //pthread_mutex_lock(tlist_cond_mutex);
         pthread_cond_wait(tlist_cond, tlist_cond_mutex);
         pthread_mutex_lock(tlist_mutex);
         
@@ -457,7 +458,7 @@ void* mpipe_parser(void* args) {
     while (1) {
         int pkt_condition;  // tracks some error conditions
     
-        pthread_mutex_lock(pktrx_mutex);
+        //pthread_mutex_lock(pktrx_mutex);
         pthread_cond_wait(pktrx_cond, pktrx_mutex);
         pthread_mutex_lock(dtwrite_mutex);
         pthread_mutex_lock(rlist_mutex);
@@ -527,8 +528,13 @@ void* mpipe_parser(void* args) {
                 }
                 _PUTS(putsbuf);
                 
-                /// If CRC is bad, discard the packet now
+                /// If CRC is bad, dump hex of buffer-size and discard the 
+                /// packet now.
+                ///@note in present versions there is some unreliability with
+                ///      CRC: possibly data alignment or something, or might be
+                ///      a problem on the test sender.
                 if (rlist->cursor->crcqual != 0) {
+                    _printhex(_PUTS, &rlist->cursor->buffer[6], rlist->cursor->size-6, 16);
                     pktlist_del(rlist, rlist->cursor);
                     goto mpipe_parser_END;
                 }
@@ -596,9 +602,6 @@ void* mpipe_parser(void* args) {
                     //}
                 }
                 else if (tpkt != NULL) {
-                    //if (tpkt == tlist->cursor) {
-                    //    tlist->cursor = tlist->cursor->next;
-                    //}
                     pktlist_del(tlist, tpkt);
                 }
             } 
@@ -936,7 +939,7 @@ void _fprintalp(mpipe_printer_t puts_fn, uint8_t* src, size_t src_bytes) {
         return;
     }
     
-    fprintf(stderr, "src_bytes=%zu\n", src_bytes);
+    //fprintf(stderr, "src_bytes=%zu\n", src_bytes);
 
     /// Null Terminate the end
     /// @note this is safe due to the way src buffer is allocated
@@ -951,7 +954,7 @@ void _fprintalp(mpipe_printer_t puts_fn, uint8_t* src, size_t src_bytes) {
     payload     = &src[4];
     src_bytes  -= 4;
     
-    fprintf(stderr, "flags=%02x length=%02x cmd=%02x id=%02x\n", flags, length, cmd, id);
+    //fprintf(stderr, "flags=%02x length=%02x cmd=%02x id=%02x\n", flags, length, cmd, id);
     
     
     ///@note could squelch output for mismatched length

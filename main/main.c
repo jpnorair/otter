@@ -319,6 +319,7 @@ int main(int argc, const char * argv[]) {
     /// 9. Threads are now running.  The rest of the main() code, below, is
     ///    blocked by pthread_cond_wait() until the kill_cond is sent by one of 
     /// the child threads.  This will cause the program to quit.
+    pthread_mutex_lock(&cli.kill_mutex);
     pthread_cond_wait(&cli.kill_cond, &cli.kill_mutex);
     pthread_cancel(thr_mpreader);
     pthread_cancel(thr_mpwriter);
