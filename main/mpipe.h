@@ -61,6 +61,7 @@ typedef struct {
     pktlist_t*      tlist;           // should be used only by...
     pktlist_t*      rlist;           // should be used only by...
     mpipe_printer_t puts_fn;
+    const char*     external_call;
 
     pthread_mutex_t*    dtwrite_mutex;
     pthread_mutex_t*    rlist_mutex;

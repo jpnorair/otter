@@ -92,6 +92,9 @@ typedef struct {
     int             exitcode;
     pthread_mutex_t kill_mutex;
     pthread_cond_t  kill_cond;
+    
+    char*           call_path;
+    
 } cli_struct;
 
 cli_struct cli;
@@ -217,7 +220,7 @@ int main(int argc, const char * argv[]) {
     
     /// 1. Load Arguments from Command-Line
     // Usage Error
-    if ((argc < 2) || (argc > 3)) {
+    if ((argc < 2) || (argc > 4)) {
         _print_usage(argv[0]);
         return 0;
     }
@@ -226,8 +229,16 @@ int main(int argc, const char * argv[]) {
     
     
     // Prepare the baud-rate of the MPipe TTY
-    if (argc == 3)  mpipe_ctl.baudrate = atoi(argv[2]);
+    if (argc >= 3)  mpipe_ctl.baudrate = atoi(argv[2]);
     else            mpipe_ctl.baudrate = _DEFAULT_BAUDRATE;
+    
+    // final argument [optional] is external call string
+    if (argc >= 4) {
+        mpipe_args.external_call = argv[3];
+    }
+    else {
+        mpipe_args.external_call = NULL;
+    }
     
 
     /// 2. Initialize command search table.  
