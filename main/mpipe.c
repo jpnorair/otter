@@ -47,14 +47,14 @@ int _get_baudrate(int native_baud);
 // Formatting functions that I suspect are internal to mpipe, but which could
 // certainly be stuck into their own module.
 void _printhex(mpipe_printer_t puts_fn, uint8_t* src, size_t src_bytes, size_t cols);
-void _fprintalp(mpipe_printer_t puts_fn, uint8_t* src, size_t src_bytes);
+void _fprintalp(mpipe_printer_t puts_fn, const char* raw_call, uint8_t* src, size_t src_bytes);
 
 void _hexdump_raw(char* dst, uint8_t* src, size_t src_bytes);
 char* _hexdump_header(uint8_t* data);
 char* _format_crc(unsigned int crcqual);
 char* _format_time(time_t* tstamp);
 void _print_usage(const char* program_name);
-
+int _fprint_external(mpipe_printer_t puts_fn, const char* external_call, uint8_t* src, size_t size);
 
 
 
@@ -320,12 +320,29 @@ void* mpipe_reader(void* args) {
     
     /// Receive the remaining payload bytes
     ///@todo Re-set kill timer for receiving payload bytes
-    payload_left = payload_length;
+    ///@note Commented-out parts are buffer printouts for data alignment 
+    ///      validation.
+    ///      
+    payload_left    = payload_length;
+    rbuf_cursor     = &rbuf[6];
     while (payload_left > 0) { 
         new_bytes       = (int)read(mpctl.tty_fd, rbuf_cursor, payload_left);
+        
+//        fprintf(stderr, "read(): ");
+//        for (int i=0; i<new_bytes; i++) {
+//            fprintf(stderr, "%02X ", rbuf_cursor[i]);
+//        }
+//        fprintf(stderr, "\n");
+        
         rbuf_cursor    += new_bytes;
         payload_left   -= new_bytes;
     };
+
+//    fprintf(stderr, "pkt   : ");
+//    for (int i=0; i<payload_length; i++) {
+//        fprintf(stderr, "%02X ", rbuf[6+i]);
+//    }
+//    fprintf(stderr, "\n");
 
     /// Copy the packet to the rlist and signal mpipe_parser()
     pthread_mutex_lock(rlist_mutex);
@@ -453,6 +470,7 @@ void* mpipe_parser(void* args) {
     pthread_mutex_t* tlist_mutex    = ((mpipe_arg_t*)args)->tlist_mutex;
     pthread_cond_t* pktrx_cond      = ((mpipe_arg_t*)args)->pktrx_cond;
     pthread_mutex_t* pktrx_mutex    = ((mpipe_arg_t*)args)->pktrx_mutex;
+    const char* external_call       = ((mpipe_arg_t*)args)->external_call;
     
 
     while (1) {
@@ -574,13 +592,16 @@ void* mpipe_parser(void* args) {
                             );
                     _PUTS(putsbuf);
                 }
+                
                 ///@todo implement m2def library
                 else if (rpkt_is_valid)  {
                     //m2def_sprintf(putsbuf, &rlist->cursor->buffer[6], 2048, "");
-                    //_PUTS(putsbuf);
-                    _fprintalp(_PUTS, payload_front, payload_bytes);
+                    //_PUTS(putsbuf)
+                    _fprintalp(_PUTS, external_call, payload_front, payload_bytes);
                 }
-                else {
+                
+                /// Try to use external handler.  If it isn't available, dump hex
+                else if (_fprint_external(_PUTS, external_call, payload_front, payload_bytes) != 0) {
                     _printhex(_PUTS, payload_front, payload_bytes, 16);
                 }
 
@@ -611,7 +632,7 @@ void* mpipe_parser(void* args) {
         //} // END OF WHILE()
         mpipe_parser_END:
         pthread_mutex_unlock(tlist_mutex); 
-        pthread_mutex_unlock(rlist_mutex); ;
+        pthread_mutex_unlock(rlist_mutex);
         pthread_mutex_unlock(dtwrite_mutex); 
         
         ///@todo Can check for major error in pkt_condition
@@ -927,7 +948,7 @@ char* _loggermsg_findbreak(char* msg, size_t limit) {
     return pos;
 }
 
-void _fprintalp(mpipe_printer_t puts_fn, uint8_t* src, size_t src_bytes) {
+void _fprintalp(mpipe_printer_t puts_fn, const char* raw_call, uint8_t* src, size_t src_bytes) {
     uint8_t* payload;
     int flags;
     int length;
@@ -976,6 +997,13 @@ void _fprintalp(mpipe_printer_t puts_fn, uint8_t* src, size_t src_bytes) {
         uint8_t* msgbreak;
     
         switch (cmd) {
+            // "Raw" Data.  Gets piped-out to the external handler, if defined
+            case 0x00:
+                if (_fprint_external(puts_fn, raw_call, payload, length) != 0) {
+                    _printhex(puts_fn, payload, length, 16);
+                }
+                break;
+        
             // UTF-8 Unstructured Data
             case 0x01: 
                 puts_fn((char*)payload);
@@ -993,7 +1021,7 @@ void _fprintalp(mpipe_printer_t puts_fn, uint8_t* src, size_t src_bytes) {
                 puts_fn((char*)payload);
                 break;
             
-            // Message with binary data
+            // Message with raw data
             case 0x04: 
                 msgbreak = (uint8_t*)_loggermsg_findbreak((char*)payload, (size_t)length);
                 if (msgbreak != NULL) {
@@ -1001,7 +1029,9 @@ void _fprintalp(mpipe_printer_t puts_fn, uint8_t* src, size_t src_bytes) {
                     puts_fn((char*)payload);
                     length -= (msgbreak - payload);
                     if (length > 0) {
-                        _printhex(puts_fn, msgbreak, length, 16);
+                        if (_fprint_external(puts_fn, raw_call, msgbreak, length) != 0) {
+                            _printhex(puts_fn, msgbreak, length, 16);
+                        }
                     }
                 }
                 break;
@@ -1042,6 +1072,7 @@ void _fprintalp(mpipe_printer_t puts_fn, uint8_t* src, size_t src_bytes) {
                 break;
             
             default: 
+                logger_HEXOUT:
                 _printhex(puts_fn, payload, length, 16);
                 break;
         }
@@ -1052,6 +1083,38 @@ void _fprintalp(mpipe_printer_t puts_fn, uint8_t* src, size_t src_bytes) {
         _printhex(puts_fn, src, src_bytes, 16);
     }
 }
+
+
+int _fprint_external(mpipe_printer_t puts_fn, const char* external_call, uint8_t* src, size_t size) {
+    if (external_call != NULL) {
+        FILE *pipe_fp;
+        char readbuf[80];
+        
+        /// Open pipe to external call.
+        /// @note on mac this can be bidirectional, on linux it will need to be
+        /// rewritten with popen() and a separate input pipe.
+        pipe_fp = popen(external_call, "r+");
+        if (pipe_fp != NULL) {
+            //fwrite(src, 1, size, pipe_fp);
+            const char convert[] = "0123456789ABCDEF";
+            for (; size>0; size--, src++) {
+                fputc(convert[*src >> 4], pipe_fp);
+                fputc(convert[*src & 0x0f], pipe_fp);
+            }
+            fputc(0, pipe_fp);
+        
+            while(fgets(readbuf, 80, pipe_fp)) {
+                puts_fn(readbuf);
+            }
+            
+            pclose(pipe_fp);
+            return 0;
+        }
+    }
+
+    return -1;
+}
+
 
 
 
