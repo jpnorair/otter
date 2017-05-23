@@ -287,14 +287,18 @@ void* mpipe_reader(void* args) {
     
     ///@todo Set kill timer for receiving header bytes
     
-    new_bytes   = 0;
-    rbuf_cursor = rbuf;
+    new_bytes       = 0;
+    payload_left    = 6;
+    rbuf_cursor     = rbuf;
     do {
-        new_bytes   += (int)read(mpctl.tty_fd, rbuf_cursor, 6-new_bytes);
-        rbuf_cursor += new_bytes;
-    } while (new_bytes < 6);
+        new_bytes       = (int)read(mpctl.tty_fd, rbuf_cursor, payload_left);
+        //fprintf(stderr, "new_bytes = %d\n", new_bytes);
+        rbuf_cursor    += new_bytes;
+        payload_left   -= new_bytes;
+        
+    } while (payload_left > 0);
     
-    if (new_bytes != 6) {
+    if (payload_left != 0) {
         goto mpipe_reader_START;
     }
     
@@ -327,6 +331,7 @@ void* mpipe_reader(void* args) {
     rbuf_cursor     = &rbuf[6];
     while (payload_left > 0) { 
         new_bytes       = (int)read(mpctl.tty_fd, rbuf_cursor, payload_left);
+        //fprintf(stderr, "new_bytes = %d\n", new_bytes);
         
 //        fprintf(stderr, "read(): ");
 //        for (int i=0; i<new_bytes; i++) {
