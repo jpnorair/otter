@@ -34,7 +34,7 @@
 #include <termios.h>
 #include <time.h>
 #include <unistd.h>
-
+#include <poll.h>
 
 
 
@@ -55,6 +55,7 @@ char* _format_crc(unsigned int crcqual);
 char* _format_time(time_t* tstamp);
 void _print_usage(const char* program_name);
 int _fprint_external(mpipe_printer_t puts_fn, const char* external_call, uint8_t* src, size_t size);
+
 
 
 
@@ -228,7 +229,9 @@ void* mpipe_reader(void* args) {
 /// <LI> Assembles the packet from TTY data. </LI>
 /// <LI> Adds packet into mpipe.rlist, sends cond-sig to mpipe_parser. </LI>
 ///
-    uint8_t syncinput;
+    struct pollfd fds[1];
+    int pollcode;
+    
     uint8_t rbuf[1024];
     uint8_t* rbuf_cursor;
     int header_length;
@@ -236,6 +239,7 @@ void* mpipe_reader(void* args) {
     int payload_left;
     int errcode;
     int new_bytes;
+    uint8_t syncinput;
     
     // Local copy of MPipe Ctl data: it is used in multiple threads without
     // mutexes (it is read-only anyway)
@@ -249,6 +253,11 @@ void* mpipe_reader(void* args) {
     // blocking should be in initialization... Here just as a reminder
     //fnctl(dt->fd_in, F_SETFL, 0);  
     
+    /// Setup for usage of the poll function to flush buffer on read timeouts.
+    fds[0].fd       = mpctl.tty_fd;
+    fds[0].events   = (POLLIN);
+    
+    /// Beginning of read loop
     mpipe_reader_START:
     mpipe_flush(&mpctl, 0, TCIFLUSH);
     errcode = 0;
@@ -266,6 +275,16 @@ void* mpipe_reader(void* args) {
     
     /// Now wait for a 55, ignoring FFs
     mpipe_reader_SYNC1:
+    pollcode = poll(fds, 1, 50);
+    if (pollcode <= 0) {
+        errcode = 3;
+        goto mpipe_reader_ERR;
+    }
+    else if (fds[0].revents & (POLLERR | POLLHUP | POLLNVAL)) {
+        errcode = 4;
+        goto mpipe_reader_ERR;
+    }
+    
     new_bytes = (int)read(mpctl.tty_fd, &syncinput, 1);
     if (new_bytes < 1) {
         errcode = 1;
@@ -291,6 +310,16 @@ void* mpipe_reader(void* args) {
     payload_left    = 6;
     rbuf_cursor     = rbuf;
     do {
+        pollcode = poll(fds, 1, 50);
+        if (pollcode <= 0) {
+            errcode = 3;
+            goto mpipe_reader_ERR;
+        }
+        else if (fds[0].revents & (POLLERR | POLLHUP | POLLNVAL)) {
+            errcode = 4;
+            goto mpipe_reader_ERR;
+        }
+    
         new_bytes       = (int)read(mpctl.tty_fd, rbuf_cursor, payload_left);
         //fprintf(stderr, "new_bytes = %d\n", new_bytes);
         rbuf_cursor    += new_bytes;
@@ -330,6 +359,16 @@ void* mpipe_reader(void* args) {
     payload_left    = payload_length;
     rbuf_cursor     = &rbuf[6];
     while (payload_left > 0) { 
+        pollcode = poll(fds, 1, 50);
+        if (pollcode <= 0) {
+            errcode = 3;
+            goto mpipe_reader_ERR;
+        }
+        else if (fds[0].revents & (POLLERR | POLLHUP | POLLNVAL)) {
+            errcode = 4;
+            goto mpipe_reader_ERR;
+        }
+    
         new_bytes       = (int)read(mpctl.tty_fd, rbuf_cursor, payload_left);
         //fprintf(stderr, "new_bytes = %d\n", new_bytes);
         
@@ -363,17 +402,23 @@ void* mpipe_reader(void* args) {
                 goto mpipe_reader_START;
         
         case 1: // send error "MPipe Packet Sync could not be retrieved."
-                //mpipe_flush(&mpctl, 0, TCIFLUSH);
                 goto mpipe_reader_START;
         
         case 2: // send error "Mpipe Packet Payload Length is out of bounds."
-                //mpipe_flush(&mpctl, 0, TCIFLUSH);
                 goto mpipe_reader_START;
+                
+        case 3: // send error "Mpipe Packet RX timed-out
+                goto mpipe_reader_START;
+                
+        case 4: fprintf(stderr, "Connection dropped, quitting now\n");
+                break;
+                
+       default: fprintf(stderr, "Unknown error, quitting now\n");
+                break;
     }
     
-    /// This code should never occur, given the while(1) loop.
-    /// If it does (possibly a stack fuck-up), we print this "chaotic error."
-    fprintf(stderr, "\n--> Chaotic error: mpipe_reader() thread broke loop.\n");
+    /// This occurs on uncorrected errors, such as case 4 from above, or other 
+    /// unknown errors.
     raise(SIGINT);
     return NULL;
 }
