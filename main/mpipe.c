@@ -255,7 +255,7 @@ void* mpipe_reader(void* args) {
     
     /// Setup for usage of the poll function to flush buffer on read timeouts.
     fds[0].fd       = mpctl.tty_fd;
-    fds[0].events   = (POLLIN);
+    fds[0].events   = (POLLIN | POLLNVAL | POLLHUP);
     
     /// Beginning of read loop
     mpipe_reader_START:
@@ -264,6 +264,12 @@ void* mpipe_reader(void* args) {
     
     /// Wait until an FF comes
     mpipe_reader_SYNC0:
+    pollcode = poll(fds, 1, 0);
+    if (fds[0].revents & (POLLERR | POLLHUP | POLLNVAL)) {
+        errcode = 4;
+        goto mpipe_reader_ERR;
+    }
+    
     new_bytes = (int)read(mpctl.tty_fd, &syncinput, 1);
     if (new_bytes < 1) {
         errcode = 1;
@@ -1077,6 +1083,7 @@ void _fprintalp(mpipe_printer_t puts_fn, const char* raw_call, uint8_t* src, siz
                 if (msgbreak != NULL) {
                     *msgbreak++ = 0;
                     puts_fn((char*)payload);
+                    puts_fn(" ");
                     length -= (msgbreak - payload);
                     if (length > 0) {
                         if (_fprint_external(puts_fn, raw_call, msgbreak, length) != 0) {
@@ -1092,6 +1099,7 @@ void _fprintalp(mpipe_printer_t puts_fn, const char* raw_call, uint8_t* src, siz
                 if (msgbreak != NULL) {
                     *msgbreak++ = 0;
                     puts_fn((char*)payload);
+                    puts_fn(" ");
                     puts_fn((char*)msgbreak);
                 }
                 break;
@@ -1103,6 +1111,7 @@ void _fprintalp(mpipe_printer_t puts_fn, const char* raw_call, uint8_t* src, siz
                 if (msgbreak != NULL) {
                     *msgbreak++ = 0;
                     puts_fn((char*)payload);
+                    puts_fn(" ");
                     length -= (msgbreak - payload);
                     if (length > 0) {
                         _printhex(puts_fn, msgbreak, length, 16);
@@ -1117,6 +1126,7 @@ void _fprintalp(mpipe_printer_t puts_fn, const char* raw_call, uint8_t* src, siz
                 if (msgbreak != NULL) {
                     *msgbreak++ = 0;
                     puts_fn((char*)payload);
+                    puts_fn(" ");
                     puts_fn((char*)msgbreak);
                 }
                 break;

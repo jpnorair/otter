@@ -138,10 +138,12 @@ int dterm_open(dterm_t* dt) {
 
 
 int dterm_close(dterm_t* dt) {
-    int retcode;
+    int retcode = 0;
     
     ///@todo implement dterm_setcan right here
-    retcode = tcsetattr(dt->fd_in, TCSAFLUSH, &(dt->oldter));
+    //if (fcntl(fd, F_GETFD) != -1) { //|| errno != EBADF;
+        retcode = tcsetattr(dt->fd_in, TCSAFLUSH, &(dt->oldter));
+    //}
     return retcode;
 }
 
