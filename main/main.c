@@ -239,7 +239,6 @@ int main(int argc, const char * argv[]) {
     else {
         mpipe_args.external_call = NULL;
     }
-    
 
     /// 2. Initialize command search table.  
     ///@todo in the future, let's pull this from an initialization file or

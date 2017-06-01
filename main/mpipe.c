@@ -303,6 +303,7 @@ void* mpipe_reader(void* args) {
         goto mpipe_reader_SYNC0;
     }
     
+    //fprintf(stderr, "Sync Found\n");
     
     /// At this point, FF55 was detected.  We get the next 6 bytes of the 
     /// header, which is the rest of the header.  
@@ -1083,7 +1084,7 @@ void _fprintalp(mpipe_printer_t puts_fn, const char* raw_call, uint8_t* src, siz
                 if (msgbreak != NULL) {
                     *msgbreak++ = 0;
                     puts_fn((char*)payload);
-                    puts_fn(" ");
+                    puts_fn("\n");
                     length -= (msgbreak - payload);
                     if (length > 0) {
                         if (_fprint_external(puts_fn, raw_call, msgbreak, length) != 0) {
@@ -1099,7 +1100,7 @@ void _fprintalp(mpipe_printer_t puts_fn, const char* raw_call, uint8_t* src, siz
                 if (msgbreak != NULL) {
                     *msgbreak++ = 0;
                     puts_fn((char*)payload);
-                    puts_fn(" ");
+                    puts_fn("\n");
                     puts_fn((char*)msgbreak);
                 }
                 break;
@@ -1111,7 +1112,7 @@ void _fprintalp(mpipe_printer_t puts_fn, const char* raw_call, uint8_t* src, siz
                 if (msgbreak != NULL) {
                     *msgbreak++ = 0;
                     puts_fn((char*)payload);
-                    puts_fn(" ");
+                    puts_fn("\n");
                     length -= (msgbreak - payload);
                     if (length > 0) {
                         _printhex(puts_fn, msgbreak, length, 16);
@@ -1126,7 +1127,7 @@ void _fprintalp(mpipe_printer_t puts_fn, const char* raw_call, uint8_t* src, siz
                 if (msgbreak != NULL) {
                     *msgbreak++ = 0;
                     puts_fn((char*)payload);
-                    puts_fn(" ");
+                    puts_fn("\n");
                     puts_fn((char*)msgbreak);
                 }
                 break;
@@ -1153,7 +1154,9 @@ int _fprint_external(mpipe_printer_t puts_fn, const char* external_call, uint8_t
         /// Open pipe to external call.
         /// @note on mac this can be bidirectional, on linux it will need to be
         /// rewritten with popen() and a separate input pipe.
-        pipe_fp = popen(external_call, "r+");
+        pipe_fp = popen(external_call, "w");
+        //fcntl(pipe_fp, F_SETFL, O_NONBLOCK);
+        
         if (pipe_fp != NULL) {
             //fwrite(src, 1, size, pipe_fp);
             const char convert[] = "0123456789ABCDEF";
@@ -1161,11 +1164,11 @@ int _fprint_external(mpipe_printer_t puts_fn, const char* external_call, uint8_t
                 fputc(convert[*src >> 4], pipe_fp);
                 fputc(convert[*src & 0x0f], pipe_fp);
             }
-            fputc(0, pipe_fp);
+            fprintf(pipe_fp, "\n");
         
-            while(fgets(readbuf, 80, pipe_fp)) {
-                puts_fn(readbuf);
-            }
+            //while(fgets(readbuf, 80, pipe_fp)) {
+            //    puts_fn(readbuf);
+            //}
             
             pclose(pipe_fp);
             return 0;
