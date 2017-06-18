@@ -40,6 +40,9 @@
 #include "cmdsearch.h"
 #include "cmdhistory.h"
 
+// Local Libraries
+#include "argtable3.h"
+#include "cJSON.h"
 
 // Standard C & POSIX Libraries
 #include <pthread.h>
@@ -60,6 +63,8 @@
 //params, but with XCode that's a mystery.
 //#define __TEST__
 
+#define _OTTER_VERSION      "0.2.0"
+#define _OTTER_DATE         "6.2017"
 #define _DEFAULT_BAUDRATE   115200
 
 
@@ -137,6 +142,11 @@ void sigquit_handler(int sigcode) {
 }
 
 
+int otter_main( const char* ttyfile,
+                int baudrate,
+                cJSON* params
+                ); 
+
 
 
 
@@ -177,18 +187,145 @@ int _dtputs(char* str) {
     return dterm_puts(_dtputs_dterm, str);
 }
 
-void _print_usage(const char* program_name) {
-    fprintf(stderr, "Usage: %s tty_file [baudrate]\n", program_name);
-    fprintf(stderr, "       (Default Baudrate is %d baud)\n", _DEFAULT_BAUDRATE);
-}
+
+
+
 
 
 
 
 int main(int argc, const char * argv[]) {
+/// ArgTable params: These define the input argument behavior
+    struct arg_file *ttyfile = arg_filen(NULL,NULL,"<ttyfile>",1,1,     "path to tty file (e.g. /dev/tty.usbmodem)");
+    struct arg_int  *brate   = arg_intn(NULL,NULL,"<baudrate>",0,1,     "baudrate, default is 115200");
+    struct arg_str  *parsers = arg_str1("p", "parsers", "<msg:parser>", "parser call string with comma-separated msg:parser pairs");
+    struct arg_str  *fparse  = arg_str1("P", "parsefile", "<file>",     "file containing comma-separated msg:parser pairs");
+    struct arg_lit  *verbose = arg_lit0("v","verbose",                  "use verbose mode");
+    struct arg_lit  *help    = arg_lit0(NULL,"help",                    "print this help and exit");
+    struct arg_lit  *version = arg_lit0(NULL,"version",                 "print version information and exit");
+    struct arg_end  *end     = arg_end(20);
+    
+    void* argtable[] = {ttyfile,brate,parsers,fparse,verbose,help,version,end};
+    const char* progname = "otter";
+    int nerrors;
+    int exitcode = 0;
+    
+    cJSON* json = NULL;
+    char* buffer = NULL;
+
+    if (arg_nullcheck(argtable) != 0) {
+        /// NULL entries were detected, some allocations must have failed 
+        fprintf(stderr, "%s: insufficient memory\n", progname);
+        exitcode=1;
+        goto main_EXIT;
+    }
+
+    /// set any command line default values prior to parsing
+    brate->ival[0]  = _DEFAULT_BAUDRATE;
+
+    /* Parse the command line as defined by argtable[] */
+    nerrors = arg_parse(argc, argv, argtable);
+
+    /// special case: '--help' takes precedence over error reporting
+    if (help->count > 0) {
+        printf("Usage: %s", progname);
+        arg_print_syntax(stdout, argtable, "\n");
+        
+        arg_print_glossary(stdout, argtable, "  %-25s %s\n");
+        
+        exitcode = 0;
+        goto main_EXIT;
+    }
+
+    /// special case: '--version' takes precedence error reporting 
+    if (version->count > 0) {
+        printf("%s -- %s\n", _OTTER_VERSION, _OTTER_DATE);
+        printf("Designed by JP Norair, Haystack Technologies, Inc.\n");
+        
+        exitcode = 0;
+        goto main_EXIT;
+    }
+
+    /// If the parser returned any errors then display them and exit
+    /// - Display the error details contained in the arg_end struct.
+    if (nerrors > 0) {
+        arg_print_errors(stdout,end,progname);
+        printf("Try '%s --help' for more information.\n", progname);
+        
+        exitcode = 1;
+        goto main_EXIT;
+    }
+
+    /// special case: uname with no command line options induces brief help 
+    if (argc==1) {
+        printf("Try '%s --help' for more information.\n",progname);
+        
+        exitcode = 0;
+        goto main_EXIT;
+    }
+
+    /// Do some final checking of input values
+    ///@todo Validate that we're looking at something like "/dev/tty.usb..."
+    
+    
+    /// Get JSON parser input.  Priority is direct input vs. file input
+    if (parsers->count > 0) {
+        json = cJSON_Parse(parsers->sval[0]);
+    }
+    else if (fparse->count > 0) {
+        FILE* fp;
+        long lSize;
+        
+        fp = fopen(fparse->sval[0], "r");
+        if (fp != NULL) {
+            exitcode = (int)'f';
+            goto main_EXIT;
+        }
+        
+        fseek(fp, 0L, SEEK_END);
+        lSize = ftell(fp);
+        rewind(fp);
+        
+        buffer = calloc(1, lSize+1);
+        if (buffer == NULL) {
+            exitcode = (int)'m';
+            goto main_EXIT;
+        }
+        
+        if(fread(buffer, lSize, 1, fp) == 1) {
+            json = cJSON_Parse(buffer);
+            fclose(fp);
+        }
+        else {
+            fclose(fp);
+            fprintf(stderr, "read to %s fails\n", fparse->sval[0]);
+            exitcode = (int)'r';
+            goto main_EXIT;
+        }
+    }
+    
+    exitcode = otter_main(  (const char*)ttyfile->filename, 
+                            brate->ival[0], 
+                            json);
+                            
+    main_EXIT:
+    if (json != NULL) {
+        cJSON_Delete(json);
+    }
+    if (buffer != NULL) {
+        free(buffer);
+    }
+    arg_freetable(argtable, sizeof(argtable)/sizeof(argtable[0]));
+
+    return exitcode;
+}
+
+
+
+
 /// What this should do is start two threads, one for the character I/O on
 /// the dterm side, and one for the serial I/O.
-    
+int otter_main(const char* ttyfile, int baudrate, cJSON* params) {    
     // MPipe Datastructs
     mpipe_arg_t mpipe_args;
     mpipe_ctl_t mpipe_ctl;
@@ -218,27 +355,11 @@ int main(int argc, const char * argv[]) {
     pthread_mutex_t pktrx_mutex;
     
     
-    /// 1. Load Arguments from Command-Line
-    // Usage Error
-    if ((argc < 2) || (argc > 4)) {
-        _print_usage(argv[0]);
-        return 0;
-    }
-    
-    // Validate that we're looking at something like "/dev/tty.usb..."
-    
-    
-    // Prepare the baud-rate of the MPipe TTY
-    if (argc >= 3)  mpipe_ctl.baudrate = atoi(argv[2]);
-    else            mpipe_ctl.baudrate = _DEFAULT_BAUDRATE;
-    
-    // final argument [optional] is external call string
-    if (argc >= 4) {
-        mpipe_args.external_call = argv[3];
-    }
-    else {
-        mpipe_args.external_call = NULL;
-    }
+    /// 1. JSON params construct should contain the following objects
+    /// - "msgcall": { "msgname1":"call string 1", "msgname2":"call string 2" }
+    /// - TODO "msgpipe": (same as msg call, but call is open at startup and piped-to)
+    mpipe_args.msgcall = cJSON_GetObjectItem(params, "msgcall");
+
 
     /// 2. Initialize command search table.  
     ///@todo in the future, let's pull this from an initialization file or
@@ -282,7 +403,7 @@ int main(int argc, const char * argv[]) {
     mpipe_args.kill_mutex       = &cli.kill_mutex;
     mpipe_args.kill_cond        = &cli.kill_cond;
     
-    if (mpipe_open(&mpipe_ctl, argv[1], mpipe_ctl.baudrate, 8, 'N', 1, 0, 0, 0) < 0) {
+    if (mpipe_open(&mpipe_ctl, ttyfile, baudrate, 8, 'N', 1, 0, 0, 0) < 0) {
         return -1;
     }
     

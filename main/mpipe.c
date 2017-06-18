@@ -47,14 +47,14 @@ int _get_baudrate(int native_baud);
 // Formatting functions that I suspect are internal to mpipe, but which could
 // certainly be stuck into their own module.
 void _printhex(mpipe_printer_t puts_fn, uint8_t* src, size_t src_bytes, size_t cols);
-void _fprintalp(mpipe_printer_t puts_fn, const char* raw_call, uint8_t* src, size_t src_bytes);
+void _fprintalp(mpipe_printer_t puts_fn, cJSON* msgcall, uint8_t* src, size_t src_bytes);
 
 void _hexdump_raw(char* dst, uint8_t* src, size_t src_bytes);
 char* _hexdump_header(uint8_t* data);
 char* _format_crc(unsigned int crcqual);
 char* _format_time(time_t* tstamp);
 void _print_usage(const char* program_name);
-int _fprint_external(mpipe_printer_t puts_fn, const char* external_call, uint8_t* src, size_t size);
+int _fprint_external(mpipe_printer_t puts_fn, const char* msgname, cJSON* msgcall, uint8_t* src, size_t size);
 
 
 
@@ -527,7 +527,7 @@ void* mpipe_parser(void* args) {
     pthread_mutex_t* tlist_mutex    = ((mpipe_arg_t*)args)->tlist_mutex;
     pthread_cond_t* pktrx_cond      = ((mpipe_arg_t*)args)->pktrx_cond;
     pthread_mutex_t* pktrx_mutex    = ((mpipe_arg_t*)args)->pktrx_mutex;
-    const char* external_call       = ((mpipe_arg_t*)args)->external_call;
+    cJSON* msgcall                  = ((mpipe_arg_t*)args)->msgcall;
     
 
     while (1) {
@@ -654,11 +654,11 @@ void* mpipe_parser(void* args) {
                 else if (rpkt_is_valid)  {
                     //m2def_sprintf(putsbuf, &rlist->cursor->buffer[6], 2048, "");
                     //_PUTS(putsbuf)
-                    _fprintalp(_PUTS, external_call, payload_front, payload_bytes);
+                    _fprintalp(_PUTS, msgcall, payload_front, payload_bytes);
                 }
                 
-                /// Try to use external handler.  If it isn't available, dump hex
-                else if (_fprint_external(_PUTS, external_call, payload_front, payload_bytes) != 0) {
+                /// Dump hex if not using ALP
+                else {
                     _printhex(_PUTS, payload_front, payload_bytes, 16);
                 }
 
@@ -1005,7 +1005,7 @@ char* _loggermsg_findbreak(char* msg, size_t limit) {
     return pos;
 }
 
-void _fprintalp(mpipe_printer_t puts_fn, const char* raw_call, uint8_t* src, size_t src_bytes) {
+void _fprintalp(mpipe_printer_t puts_fn, cJSON* msgcall, uint8_t* src, size_t src_bytes) {
     uint8_t* payload;
     int flags;
     int length;
@@ -1054,11 +1054,9 @@ void _fprintalp(mpipe_printer_t puts_fn, const char* raw_call, uint8_t* src, siz
         uint8_t* msgbreak;
     
         switch (cmd) {
-            // "Raw" Data.  Gets piped-out to the external handler, if defined
+            // "Raw" Data.  Print as hex
             case 0x00:
-                if (_fprint_external(puts_fn, raw_call, payload, length) != 0) {
-                    _printhex(puts_fn, payload, length, 16);
-                }
+                _printhex(puts_fn, payload, length, 16);
                 break;
         
             // UTF-8 Unstructured Data
@@ -1079,7 +1077,7 @@ void _fprintalp(mpipe_printer_t puts_fn, const char* raw_call, uint8_t* src, siz
                 break;
             
             // Message with raw data
-            case 0x04: 
+            case 0x04: {
                 msgbreak = (uint8_t*)_loggermsg_findbreak((char*)payload, (size_t)length);
                 if (msgbreak != NULL) {
                     *msgbreak++ = 0;
@@ -1087,12 +1085,12 @@ void _fprintalp(mpipe_printer_t puts_fn, const char* raw_call, uint8_t* src, siz
                     puts_fn("\n");
                     length -= (msgbreak - payload);
                     if (length > 0) {
-                        if (_fprint_external(puts_fn, raw_call, msgbreak, length) != 0) {
+                        if (_fprint_external(puts_fn, (const char*)payload, msgcall, msgbreak, length) != 0) {
                             _printhex(puts_fn, msgbreak, length, 16);
                         }
                     }
                 }
-                break;
+            } break;
                     
             // Message with UTF-8 data
             case 0x05: 
@@ -1146,33 +1144,44 @@ void _fprintalp(mpipe_printer_t puts_fn, const char* raw_call, uint8_t* src, siz
 }
 
 
-int _fprint_external(mpipe_printer_t puts_fn, const char* external_call, uint8_t* src, size_t size) {
-    if (external_call != NULL) {
-        FILE *pipe_fp;
-        char readbuf[80];
+int _fprint_external(mpipe_printer_t puts_fn, const char* msgname, cJSON* msgcall, uint8_t* src, size_t size) {
+    FILE *pipe_fp;
+    char readbuf[80];
+
+    if ((msgcall == NULL) && (msgname == NULL)) {
+        return -1;
+    }
         
-        /// Open pipe to external call.
-        /// @note on mac this can be bidirectional, on linux it will need to be
-        /// rewritten with popen() and a separate input pipe.
-        pipe_fp = popen(external_call, "w");
-        //fcntl(pipe_fp, F_SETFL, O_NONBLOCK);
-        
-        if (pipe_fp != NULL) {
-            //fwrite(src, 1, size, pipe_fp);
-            const char convert[] = "0123456789ABCDEF";
-            for (; size>0; size--, src++) {
-                fputc(convert[*src >> 4], pipe_fp);
-                fputc(convert[*src & 0x0f], pipe_fp);
-            }
-            fprintf(pipe_fp, "\n");
-        
-            //while(fgets(readbuf, 80, pipe_fp)) {
-            //    puts_fn(readbuf);
-            //}
-            
-            pclose(pipe_fp);
-            return 0;
+    msgcall = cJSON_GetObjectItem(msgcall, msgname);
+    if (msgcall == NULL) {
+        return -1;
+    }
+    
+    if (cJSON_IsString(msgcall) != cJSON_True) {
+        return -1;
+    }
+
+    /// Open pipe to the call specified for this message type
+    /// @note on mac this can be bidirectional, on linux it will need to be
+    /// rewritten with popen() and a separate input pipe.
+    pipe_fp = popen(msgcall->valuestring, "w");
+    //fcntl(pipe_fp, F_SETFL, O_NONBLOCK);
+    
+    if (pipe_fp != NULL) {
+        //fwrite(src, 1, size, pipe_fp);
+        const char convert[] = "0123456789ABCDEF";
+        for (; size>0; size--, src++) {
+            fputc(convert[*src >> 4], pipe_fp);
+            fputc(convert[*src & 0x0f], pipe_fp);
         }
+        fprintf(pipe_fp, "\n");
+    
+        //while(fgets(readbuf, 80, pipe_fp)) {
+        //    puts_fn(readbuf);
+        //}
+        
+        pclose(pipe_fp);
+        return 0;
     }
 
     return -1;

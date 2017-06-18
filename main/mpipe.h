@@ -24,6 +24,9 @@
 #include <stdio.h>
 #include <time.h>
 
+// Local Libraries
+#include "cJSON.h"
+
 // MPipe Data Type(s)
 ///@todo bury these in a code module
 
@@ -61,7 +64,7 @@ typedef struct {
     pktlist_t*      tlist;           // should be used only by...
     pktlist_t*      rlist;           // should be used only by...
     mpipe_printer_t puts_fn;
-    const char*     external_call;
+    cJSON*          msgcall;
 
     pthread_mutex_t*    dtwrite_mutex;
     pthread_mutex_t*    rlist_mutex;

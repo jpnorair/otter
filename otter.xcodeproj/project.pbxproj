@@ -7,6 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		2219722C1EEF81B70087598A /* cJSON.c in Sources */ = {isa = PBXBuildFile; fileRef = 2219722A1EEF81B70087598A /* cJSON.c */; };
+		228DF9DA1EE5A9C5004D8D4F /* ppipe.c in Sources */ = {isa = PBXBuildFile; fileRef = 228DF9D81EE5A9C5004D8D4F /* ppipe.c */; };
+		228DF9DF1EE64AC7004D8D4F /* argtable3.c in Sources */ = {isa = PBXBuildFile; fileRef = 228DF9DD1EE64AC7004D8D4F /* argtable3.c */; };
 		22E34F831985D3ED00C19BBB /* otter.1 in CopyFiles */ = {isa = PBXBuildFile; fileRef = 22E34F821985D3ED00C19BBB /* otter.1 */; };
 		22E34F971985D43600C19BBB /* cmdhistory.c in Sources */ = {isa = PBXBuildFile; fileRef = 22E34F8A1985D43600C19BBB /* cmdhistory.c */; };
 		22E34F981985D43600C19BBB /* cmds.c in Sources */ = {isa = PBXBuildFile; fileRef = 22E34F8C1985D43600C19BBB /* cmds.c */; };
@@ -32,6 +35,12 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		2219722A1EEF81B70087598A /* cJSON.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = cJSON.c; sourceTree = "<group>"; };
+		2219722B1EEF81B70087598A /* cJSON.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = cJSON.h; sourceTree = "<group>"; };
+		228DF9D81EE5A9C5004D8D4F /* ppipe.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = ppipe.c; path = main/ppipe.c; sourceTree = "<group>"; };
+		228DF9D91EE5A9C5004D8D4F /* ppipe.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = ppipe.h; path = main/ppipe.h; sourceTree = "<group>"; };
+		228DF9DD1EE64AC7004D8D4F /* argtable3.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = argtable3.c; sourceTree = "<group>"; };
+		228DF9DE1EE64AC7004D8D4F /* argtable3.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = argtable3.h; sourceTree = "<group>"; };
 		22E34F7D1985D3ED00C19BBB /* otter */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = otter; sourceTree = BUILT_PRODUCTS_DIR; };
 		22E34F821985D3ED00C19BBB /* otter.1 */ = {isa = PBXFileReference; lastKnownFileType = text.man; path = otter.1; sourceTree = "<group>"; };
 		22E34F8A1985D43600C19BBB /* cmdhistory.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = cmdhistory.c; path = main/cmdhistory.c; sourceTree = "<group>"; };
@@ -63,9 +72,29 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		221972291EEF81B70087598A /* cJSON */ = {
+			isa = PBXGroup;
+			children = (
+				2219722A1EEF81B70087598A /* cJSON.c */,
+				2219722B1EEF81B70087598A /* cJSON.h */,
+			);
+			path = cJSON;
+			sourceTree = "<group>";
+		};
+		228DF9DC1EE64AC7004D8D4F /* argtable */ = {
+			isa = PBXGroup;
+			children = (
+				228DF9DD1EE64AC7004D8D4F /* argtable3.c */,
+				228DF9DE1EE64AC7004D8D4F /* argtable3.h */,
+			);
+			path = argtable;
+			sourceTree = "<group>";
+		};
 		22E34F741985D3ED00C19BBB = {
 			isa = PBXGroup;
 			children = (
+				228DF9DC1EE64AC7004D8D4F /* argtable */,
+				221972291EEF81B70087598A /* cJSON */,
 				22E34FA21985D48200C19BBB /* m2def */,
 				22E34F9E1985D44500C19BBB /* bintex */,
 				22E34F891985D42C00C19BBB /* main */,
@@ -104,6 +133,8 @@
 				22E34F921985D43600C19BBB /* dterm.c */,
 				22E34F931985D43600C19BBB /* dterm.h */,
 				22E34F941985D43600C19BBB /* main.c */,
+				228DF9D81EE5A9C5004D8D4F /* ppipe.c */,
+				228DF9D91EE5A9C5004D8D4F /* ppipe.h */,
 				22E34F951985D43600C19BBB /* mpipe.c */,
 				22E34F961985D43600C19BBB /* mpipe.h */,
 			);
@@ -178,12 +209,15 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				228DF9DA1EE5A9C5004D8D4F /* ppipe.c in Sources */,
 				22E34F981985D43600C19BBB /* cmds.c in Sources */,
 				22E34F9A1985D43600C19BBB /* crc_calc_block.c in Sources */,
 				22E34F9C1985D43600C19BBB /* main.c in Sources */,
 				22E34FA11985D45600C19BBB /* bintex.c in Sources */,
 				22E34F991985D43600C19BBB /* cmdsearch.c in Sources */,
 				22E34F9B1985D43600C19BBB /* dterm.c in Sources */,
+				2219722C1EEF81B70087598A /* cJSON.c in Sources */,
+				228DF9DF1EE64AC7004D8D4F /* argtable3.c in Sources */,
 				22E34F971985D43600C19BBB /* cmdhistory.c in Sources */,
 				22E34F9D1985D43600C19BBB /* mpipe.c in Sources */,
 			);
@@ -230,7 +264,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 10.9;
+				MACOSX_DEPLOYMENT_TARGET = 10.7;
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = macosx;
 			};
@@ -268,7 +302,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 10.9;
+				MACOSX_DEPLOYMENT_TARGET = 10.7;
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = macosx;
 			};
