@@ -16,56 +16,214 @@
 
 #include "ppipe.h"
 
+#include <string.h>
+#include <stdio.h>
+#include <stdlib.h>
 
-int ppipe_open(char* call, const char* mode, size_t rbuf_size, size_t wbuf_size) {
-    FILE *pipe_fp;
-    int pipe_fd = -1;
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
-    if (call != NULL) {
 
-        /// Open pipe to external call.
-        /// @note on mac this can be bidirectional, on linux it will need to be
-        /// rewritten with popen() and a separate input pipe.
-        pipe_fp = popen(external_call, mode);
-        //fcntl(pipe_fp, F_SETFL, O_NONBLOCK);
+#define PPIPE_GROUP_SIZE    16
+#define PPIPE_BASEPATH      "./"
+
+
+static ppipe_t ppipe = {
+    .basepath   = { 0 },
+    .fifo       = NULL,
+    .num        = 0
+};
+
+
+
+int ppipe_init(const char* basepath) {
+    size_t alloc_size;
+
+    if (ppipe.num != 0) {
+        ppipe_deinit();
+    }
+
+    /// Set basepath
+    if (basepath == NULL) {
+        strcpy(ppipe.basepath, PPIPE_BASEPATH);
+        return 0;
+    }
+    if (strlen(basepath) > 255) {
+        return -1;
+    }
+    strcpy(ppipe.basepath, basepath);
+    
+    /// Malloc the first group of pipe files
+    alloc_size  = PPIPE_GROUP_SIZE * sizeof(ppipe_fifo_t);
+    ppipe.fifo  = malloc(alloc_size);
+    if (ppipe.fifo == NULL) {
+        return -2;
+    }
+    memset(ppipe.fifo, 0, alloc_size);
+    
+    return 0;
+}
+
+
+
+void ppipe_deinit(void) {
+/// Go through all pipes, close, delete, free data, and set data to defaults.
+    
+    for (int i=0; i<ppipe.num; i++) {
+        ppipe_del(i);
+    }
+    
+    ppipe.basepath[0]   = 0;
+    ppipe.fifo          = NULL;
+    ppipe.num           = 0;
+}
+
+
+
+int ppipe_new(const char* prefix, const char* name, const char* fmode) {
+    ppipe_fifo_t* fifo;
+    int     ppd;
+    size_t  alloc_size;
+    FILE* test;
+    int test_fd;
+    struct stat st;
+    int rc;
+    
+    ///@note user and root rw
+    mode_t  mode    = 0x660;
+    
+    if ((ppipe.num != 0) && ((ppipe.num % PPIPE_GROUP_SIZE) == 0)) {
+        ppipe.fifo = realloc(ppipe.fifo, (ppipe.num + PPIPE_GROUP_SIZE));
+    }
+    if (ppipe.fifo == NULL) {
+        ppd = -1;
+        goto ppipe_new_EXIT;
+    }
+    
+    ppd = (int)ppipe.num;
+    ppipe.num++;
+    fifo = &ppipe.fifo[ppd];
+    
+    if (fifo->fpath != NULL) {
+        ppipe_del(ppd);
+    }
+    
+    alloc_size  = strlen(ppipe.basepath) + strlen(prefix) + strlen(name) + 1;
+    fifo->fpath = malloc(alloc_size);
+    if (fifo->fpath == NULL) {
+        ppd = -2;
+        goto ppipe_new_EXIT;
+    }
+    
+    strcpy(fifo->fpath, ppipe.basepath);
+    strcat(fifo->fpath, prefix);
+    strcat(fifo->fpath, name);
+    
+    /// See if FIFO already exists, in which case just open it.  Else, make it.
+    test = fopen(fifo->fpath, fmode);
+    if (test != NULL) {
+        // File already exists
+        test_fd = fileno(test);
+        rc      = fstat(test_fd, &st);
         
-        if (pipe_fp != NULL) {
-            // allocate buffers
-            
-            // increment fd value
-            
-            // spawn rx thread?
+        if ((rc == 0) && S_ISFIFO(st.st_mode)) {
+            // File exists and is fifo
+            //fflush(test);
+            fifo->file  = test;
+            fifo->fd    = test_fd;
+        }
+        
+        else {
+            // File exists, but is not fifo, or some other error
+            ppd = -3;
+            goto ppipe_new_FIFOERR;
         }
     }
     
-    return pipe_fd;
+    else {
+        // File does not exist, make it.
+        if (mkfifo(fifo->fpath, mode) != 0) {
+            ppd = -4;
+            goto ppipe_new_FIFOERR;
+        }
+        
+        // FIFO is now created, and we open it.
+        fifo->file = fopen(fifo->fpath, fmode);
+        if (fifo->file != NULL) {
+            fifo->fd = fileno(fifo->file);
+            return ppd;
+        }
+    }
+    
+    ppipe_new_FIFOERR:
+    free(fifo->fpath);
+    fifo->fpath = NULL;
+    fifo->file  = NULL;
+    fifo->fd    = -1;
+    
+    ppipe_new_EXIT:
+    return ppd;
 }
 
 
-int ppipe_close(int pipe_fd) {
-    // 1. close the pipe with pclose()
-    // 2. terminate rx thread, if exists
-    // 3. clear the line in the table
-    // 4. free the read and write buffers
-
-    return 0;
-}
 
 
-
-int ppipe_send(int pipe_fd, uint8_t* data, size_t data_len) {
+int ppipe_del(int ppd) {
+    ppipe_fifo_t* fifo;
+    size_t i = (size_t)ppd;
+    
+    if (i <= ppipe.num) {
+        return -1;
+    }
+    if (i == (ppipe.num-1)) {
+        ppipe.num = (ppipe.num-1);
+    }
+    
+    fifo = &ppipe.fifo[i];
+    if (fifo == NULL) {
+        return -2;
+    }
+    if (fifo->file != NULL) {
+        fclose(fifo->file);
+        fifo->file  = NULL;
+        fifo->fd    = -1;
+    }
+    if (fifo->fpath != NULL) {
+        remove(fifo->fpath);
+        free(fifo->fpath);
+        fifo->fpath = NULL;
+    }
     
     return 0;
 }
 
 
 
-int ppipe_reader() {
-    // This is a reader thread
-    // It should output to the mpipe output stream
-    // All the data formatters in mpipe.c should be pulled into separate C file.
+FILE* ppipe_getfile(int ppd) {
+    size_t i = (size_t)ppd;
+
+    if (i <= ppipe.num) {
+        return NULL;
+    }
     
-    
-    
-    return 0;
+    return ppipe.fifo[i].file;
 }
+
+
+
+const char* ppipe_getpath(int ppd) {
+    size_t i = (size_t)ppd;
+    
+    if (i <= ppipe.num) {
+        return NULL;
+    }
+    return ppipe.fifo[i].fpath;
+}
+
+
+ppipe_t* ppipe_ref(void) {
+    return &ppipe;
+}
+
+

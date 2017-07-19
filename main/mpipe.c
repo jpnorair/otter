@@ -15,8 +15,9 @@
   */
 
 // Application Includes
-#include "crc_calc_block.h"
+//#include "crc_calc_block.h"
 #include "mpipe.h"
+#include "ppipelist.h"
 
 // Local Libraries/Includes
 #include "bintex.h"
@@ -43,18 +44,6 @@
 void mpipe_flush(mpipe_ctl_t* mpctl, size_t est_rembytes, int queue_selector);
 int _get_baudrate(int native_baud);
 
-
-// Formatting functions that I suspect are internal to mpipe, but which could
-// certainly be stuck into their own module.
-void _printhex(mpipe_printer_t puts_fn, uint8_t* src, size_t src_bytes, size_t cols);
-void _fprintalp(mpipe_printer_t puts_fn, cJSON* msgcall, uint8_t* src, size_t src_bytes);
-
-void _hexdump_raw(char* dst, uint8_t* src, size_t src_bytes);
-char* _hexdump_header(uint8_t* data);
-char* _format_crc(unsigned int crcqual);
-char* _format_time(time_t* tstamp);
-void _print_usage(const char* program_name);
-int _fprint_external(mpipe_printer_t puts_fn, const char* msgname, cJSON* msgcall, uint8_t* src, size_t size);
 
 
 
@@ -592,9 +581,9 @@ void* mpipe_parser(void* args) {
                 if (true) { //(cli.opt.verbose_on) {
                     sprintf(putsbuf, "\nRX'ed %zu bytes at %s, %s CRC: %s\n",
                                 rlist->cursor->size,
-                                _format_time(&rlist->cursor->tstamp),
-                                _format_crc(rlist->cursor->crcqual),
-                                _hexdump_header(rlist->cursor->buffer)
+                                fmt_time(&rlist->cursor->tstamp),
+                                fmt_crc(rlist->cursor->crcqual),
+                                fmt_hexdump_header(rlist->cursor->buffer)
                             );
                 }
                 else {
@@ -609,7 +598,7 @@ void* mpipe_parser(void* args) {
                 ///      CRC: possibly data alignment or something, or might be
                 ///      a problem on the test sender.
                 if (rlist->cursor->crcqual != 0) {
-                    _printhex(_PUTS, &rlist->cursor->buffer[6], rlist->cursor->size-6, 16);
+                    fmt_printhex(_PUTS, &rlist->cursor->buffer[6], rlist->cursor->size-6, 16);
                     pktlist_del(rlist, rlist->cursor);
                     goto mpipe_parser_END;
                 }
@@ -654,12 +643,12 @@ void* mpipe_parser(void* args) {
                 else if (rpkt_is_valid)  {
                     //m2def_sprintf(putsbuf, &rlist->cursor->buffer[6], 2048, "");
                     //_PUTS(putsbuf)
-                    _fprintalp(_PUTS, msgcall, payload_front, payload_bytes);
+                    fmt_fprintalp(_PUTS, msgcall, payload_front, payload_bytes);
                 }
                 
                 /// Dump hex if not using ALP
                 else {
-                    _printhex(_PUTS, payload_front, payload_bytes, 16);
+                    fmt_printhex(_PUTS, payload_front, payload_bytes, 16);
                 }
 
                 // Clear the rpkt if required, and move the cursor to the next
@@ -711,207 +700,6 @@ void* mpipe_parser(void* args) {
 
 
 
-
-/// MPipe Reader & Writer Thread Functions
-/// mpipe_add():    Adds a packet to the RX List (rlist) or TX List (tlist)
-/// mpipe_del():    Deletes a packet from some place in the rlist or tlist
-
-int pktlist_init(pktlist_t* plist) {
-    plist->front    = NULL;
-    plist->last     = NULL;
-    plist->cursor   = NULL;
-    plist->marker   = NULL;
-    plist->size     = 0;
-    
-    return 0;
-}
-
-
-
-
-int pktlist_add(pktlist_t* plist, bool write_header, uint8_t* data, size_t size) {
-    pkt_t* newpkt;
-    size_t offset;
-    
-    if (plist == NULL) {
-        return -1;
-    }
-    
-    newpkt = malloc(sizeof(pkt_t));
-    if (newpkt == NULL) {
-        return -2;
-    }
-    
-    // Offset is dependent if we are writing a header (8 bytes) or not.
-    offset = (write_header) ? 8 : 0;
-    
-    // Setup list connections for the new packet
-    // Also allocate the buffer of the new packet
-    ///@todo Change the hardcoded +8 to a dynamic detection of the header
-    ///      length, which depends on current mode settings in the "cli".
-    ///      Dynamic header isn't implemented yet, so no rush.
-    newpkt->prev    = plist->last;
-    newpkt->next    = NULL;
-    newpkt->size    = size + offset;
-    newpkt->buffer  = malloc(newpkt->size);
-    if (newpkt->buffer == NULL) {
-        return -3;
-    }
-    
-    // Copy Payload into Packet buffer
-    // If "write_header" is set, then we need to write our own header (e.g. for
-    // TX'ing).  If not, we copy the data directly.
-    memcpy(&newpkt->buffer[offset], data, newpkt->size);
-    if (write_header) {
-        newpkt->buffer[0]   = 0xff;
-        newpkt->buffer[1]   = 0x55;
-        newpkt->buffer[2]   = 0;
-        newpkt->buffer[3]   = 0;
-        newpkt->buffer[4]   = size >> 8;
-        newpkt->buffer[5]   = size & 0xff;
-        newpkt->buffer[6]   = 0;
-        newpkt->buffer[7]   = 0;            ///@todo Set Control Field here based on Cli.
-    }
-
-    // List is empty, so start the list
-    if (plist->last == NULL) {
-        newpkt->sequence    = 0;
-        plist->size         = 0;
-        plist->front        = newpkt;
-        plist->last         = newpkt;
-        plist->cursor       = newpkt;
-        plist->marker       = newpkt;
-    }
-    // List is not empty, so simply extend the list.
-    // set the cursor to the new packet if it points to NULL (end)
-    else {
-        //fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
-        newpkt->sequence    = plist->last->sequence + 1;
-        newpkt->prev->next  = newpkt;
-        plist->last         = newpkt;
-        
-        if (plist->cursor == NULL) {
-            plist->cursor   = newpkt;
-        }
-    }
-    
-    ///@todo Move Sequence Number entry and CRC entry to somewhere in writer
-    ///      thread, so that it can be retransmitted with new sequence
-    if (write_header) {
-        uint16_t crcval;
-        newpkt->buffer[6]   = newpkt->sequence;
-        crcval              = crc_calc_block(&newpkt->buffer[4], newpkt->size - 4);
-        newpkt->buffer[2]   = crcval >> 8;
-        newpkt->buffer[3]   = crcval & 0xff;
-    }
-    
-    // Increment the list size to account for new packet
-    plist->size++;
-    
-    return (int)plist->size;
-}
-
-
-
-int pktlist_del(pktlist_t* plist, pkt_t* pkt) {
-    pkt_t*  ref;
-    pkt_t   copy; 
-    
-    /// First thing is to free the packet even if it's not in the list
-    /// We make a local copy in order to stitch the list back together.
-    if (pkt == NULL) {
-        return -1;
-    }
-    ref     = pkt;
-    copy    = *pkt;
-    if (pkt->buffer != NULL) {
-        //fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
-        free(pkt->buffer);
-        //fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
-    }
-    //fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
-    free(pkt);
-    //fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
-    
-    
-    /// If there's no plist.  It isn't fatal but it's weird
-    if (plist == NULL) {
-        return 1;
-    }
-
-    /// Downsize the list.  Re-init list if size == 0;
-    plist->size--;
-    if (plist->size <= 0) {
-        pktlist_init(plist);
-        return 0;
-    }
-    
-    /// If packet was front of list, move front to next,
-    if (plist->front == ref) {
-        plist->front = copy.next;
-    }
-    
-    /// If packet was last of list, move last to prev
-    if (plist->last == ref) {
-        plist->last = copy.prev;
-    }
-    
-    /// Likewise, if the cursor and marker were on the packet, advance them
-    if (plist->cursor == pkt) {
-        plist->cursor = copy.next;
-    }
-    if (plist->marker == pkt) {
-        plist->marker = copy.next;
-    }
-    
-    /// Stitch the list back together
-    if (copy.next != NULL) {
-        copy.next->prev = copy.prev;
-    }
-    if (copy.prev != NULL) {
-        copy.prev->next = copy.next;
-    }
-
-    return 0;
-}
-
-
-
-int pktlist_getnew(pktlist_t* plist) {
-    uint16_t    crc_val;
-    uint16_t    crc_comp;
-    //time_t      seconds;
-
-    ///@todo Is it needed to do mpipe_add() here?  I don't think so
-    
-    // packet list is not allocated -- that's a serious error
-    if (plist == NULL) {
-        return -11;
-    }
-    
-    // packet list is empty
-    if (plist->cursor == NULL) {
-        return -1;
-    }
-    
-    // Save Timestamp and Sequence ID parameters
-    plist->cursor->tstamp   = time(NULL);   //;localtime(&seconds);
-    plist->cursor->sequence = plist->cursor->buffer[4];
-    
-    // Determine CRC quality of the received packet
-    crc_val                 = (plist->cursor->buffer[0] << 8) + plist->cursor->buffer[1];
-    crc_comp                = crc_calc_block(&plist->cursor->buffer[2], plist->cursor->size-2);
-    plist->cursor->crcqual  = (crc_comp - crc_val);
-    
-    // return 0 on account that nothing went wrong.  So far, no checks.
-    return 0;
-}
-
-
-
-
-
-
 int _get_baudrate(int native_baud) {
     int bd;
     
@@ -944,298 +732,6 @@ int _get_baudrate(int native_baud) {
     }
     return bd;
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-void _printhex(mpipe_printer_t puts_fn, uint8_t* src, size_t src_bytes, size_t cols) {
-    const char convert[] = "0123456789ABCDEF";
-    size_t i;
-    
-    if (cols < 1)
-        cols = 1;
-    
-    i = cols;
-    
-    while (src_bytes-- != 0) {
-        char hexstr[4] = {0, 0, 0, 0};
-        
-        hexstr[0] = convert[*src >> 4];
-        hexstr[1] = convert[*src & 0x0f];
-        hexstr[2] = ' ';
-        src++;
-        puts_fn(hexstr);
-        i--;
-        
-        if ((i == 0) || (src_bytes == 0)) {
-            i = cols;
-            puts_fn("\n");
-        }
-        
-    }
-}
-
-
-
-char* _loggermsg_findbreak(char* msg, size_t limit) {
-    char* pos;
-    long  span;
-    
-    pos     = strchr(msg, 0);
-    span    = (pos-msg);
-    
-    if ((pos == NULL) || (span >= (long)limit)) {
-        pos     = strchr(msg, ' ');
-        span    = (pos-msg);
-    }
-    
-    if ((pos == NULL) || (span >= (long)limit)) {
-        return NULL;
-    }
-    
-    return pos;
-}
-
-void _fprintalp(mpipe_printer_t puts_fn, cJSON* msgcall, uint8_t* src, size_t src_bytes) {
-    uint8_t* payload;
-    int flags;
-    int length;
-    int cmd;
-    int id;
-
-    /// Early exit condition
-    if (src_bytes < 4) {
-        return;
-    }
-    
-    //fprintf(stderr, "src_bytes=%zu\n", src_bytes);
-
-    /// Null Terminate the end
-    /// @note this is safe due to the way src buffer is allocated
-    src[src_bytes] = 0;
-
-    /// Look at ALP header
-    flags   = src[0];
-    length  = src[1];
-    id      = src[2];
-    cmd     = src[3];
-    
-    payload     = &src[4];
-    src_bytes  -= 4;
-    
-    //fprintf(stderr, "flags=%02x length=%02x cmd=%02x id=%02x\n", flags, length, cmd, id);
-    
-    
-    ///@note could squelch output for mismatched length
-    if (length > src_bytes) {
-        length = (int)src_bytes;
-    }
-    
-    /// If length is 0, print out the ALP header only
-    if (length == 0) {
-        _printhex(puts_fn, src, src_bytes, 16);
-        return;
-    }
-    
-    
-    ///@todo deal with multiframe ALPs
-    
-    ///@todo deal with anything other than logger
-    if (id == 0x04) {
-        uint8_t* msgbreak;
-    
-        switch (cmd) {
-            // "Raw" Data.  Print as hex
-            case 0x00:
-                _printhex(puts_fn, payload, length, 16);
-                break;
-        
-            // UTF-8 Unstructured Data
-            case 0x01: 
-                puts_fn((char*)payload);
-                break;
-                    
-            // Unicode (UTF-16) unstructured Data
-            // Not presently supported
-            case 0x02: 
-                _printhex(puts_fn, src, src_bytes, 16);
-                break;
-            
-            // UTF-8 Hex-encoded data
-            ///@todo have this print out hex in similar output to _printhex
-            case 0x03: 
-                puts_fn((char*)payload);
-                break;
-            
-            // Message with raw data
-            case 0x04: {
-                msgbreak = (uint8_t*)_loggermsg_findbreak((char*)payload, (size_t)length);
-                if (msgbreak != NULL) {
-                    *msgbreak++ = 0;
-                    puts_fn((char*)payload);
-                    puts_fn("\n");
-                    length -= (msgbreak - payload);
-                    if (length > 0) {
-                        if (_fprint_external(puts_fn, (const char*)payload, msgcall, msgbreak, length) != 0) {
-                            _printhex(puts_fn, msgbreak, length, 16);
-                        }
-                    }
-                }
-            } break;
-                    
-            // Message with UTF-8 data
-            case 0x05: 
-                msgbreak = (uint8_t*)_loggermsg_findbreak((char*)payload, (size_t)length);
-                if (msgbreak != NULL) {
-                    *msgbreak++ = 0;
-                    puts_fn((char*)payload);
-                    puts_fn("\n");
-                    puts_fn((char*)msgbreak);
-                }
-                break;
-            
-            // Message with Unicode (UTF-16) data
-            // Not presently supported
-            case 0x06: 
-                msgbreak = (uint8_t*)_loggermsg_findbreak((char*)payload, (size_t)length);
-                if (msgbreak != NULL) {
-                    *msgbreak++ = 0;
-                    puts_fn((char*)payload);
-                    puts_fn("\n");
-                    length -= (msgbreak - payload);
-                    if (length > 0) {
-                        _printhex(puts_fn, msgbreak, length, 16);
-                    }
-                }
-                break;
-                
-            // Message with UTF-8 encoded Hex data
-            ///@todo have this print out hex in similar output to _printhex
-            case 0x07: 
-                msgbreak = (uint8_t*)_loggermsg_findbreak((char*)payload, (size_t)length);
-                if (msgbreak != NULL) {
-                    *msgbreak++ = 0;
-                    puts_fn((char*)payload);
-                    puts_fn("\n");
-                    puts_fn((char*)msgbreak);
-                }
-                break;
-            
-            default: 
-                logger_HEXOUT:
-                _printhex(puts_fn, payload, length, 16);
-                break;
-        }
-    }
-    
-    
-    else {
-        _printhex(puts_fn, src, src_bytes, 16);
-    }
-}
-
-
-int _fprint_external(mpipe_printer_t puts_fn, const char* msgname, cJSON* msgcall, uint8_t* src, size_t size) {
-    FILE *pipe_fp;
-    char readbuf[80];
-
-    if ((msgcall == NULL) && (msgname == NULL)) {
-        return -1;
-    }
-        
-    msgcall = cJSON_GetObjectItem(msgcall, msgname);
-    if (msgcall == NULL) {
-        return -1;
-    }
-    
-    if (cJSON_IsString(msgcall) != cJSON_True) {
-        return -1;
-    }
-
-    /// Open pipe to the call specified for this message type
-    /// @note on mac this can be bidirectional, on linux it will need to be
-    /// rewritten with popen() and a separate input pipe.
-    pipe_fp = popen(msgcall->valuestring, "w");
-    //fcntl(pipe_fp, F_SETFL, O_NONBLOCK);
-    
-    if (pipe_fp != NULL) {
-        //fwrite(src, 1, size, pipe_fp);
-        const char convert[] = "0123456789ABCDEF";
-        for (; size>0; size--, src++) {
-            fputc(convert[*src >> 4], pipe_fp);
-            fputc(convert[*src & 0x0f], pipe_fp);
-        }
-        fprintf(pipe_fp, "\n");
-    
-        //while(fgets(readbuf, 80, pipe_fp)) {
-        //    puts_fn(readbuf);
-        //}
-        
-        pclose(pipe_fp);
-        return 0;
-    }
-
-    return -1;
-}
-
-
-
-
-void _hexdump_raw(char* dst, uint8_t* src, size_t src_bytes) {
-    const char convert[] = "0123456789ABCDEF";
-    
-    //convert to hex
-    while (src_bytes-- != 0) {
-        *dst++  = convert[(*src >> 4)];
-        *dst++  = convert[(*src & 0x0f)];
-        *dst++  = ' ';
-        src++;
-    }
-    dst--;              // clip last "space" character
-    *dst = 0;           // convert "space" to string terminator
-}
-
-
-char* _hexdump_header(uint8_t* data) {
-    static char hexdump_buf[32*3 + 1];
-    
-    /// @todo header inspection to determine length.
-    ///       this entails looking at CONTROL field to see encryption type
-    
-    _hexdump_raw(hexdump_buf, data, 6);
-    
-    return hexdump_buf;
-}
-
-
-char* _format_crc(unsigned int crcqual) {
-    static char invalid[] = "invalid";
-    static char valid[] = "valid";
-    return (crcqual) ? invalid : valid;
-}
-
-
-char* _format_time(time_t* tstamp) {
-    static char time_buf[24];
-    
-    // convert to time using time.h library functions
-    strftime(time_buf, 24, "%T", localtime(tstamp) );
-    
-    return time_buf;
-}
-
-
-
-
 
 
 

@@ -192,6 +192,11 @@ void dbg_printf(const char *fmt, ...)
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
+// Don't use this version of getopt -- use Darwin version which is mostly same
+#include <getopt.h>
+
+#if 0
+
 #ifndef _GETOPT_H_
 #define _GETOPT_H_
 
@@ -238,6 +243,7 @@ extern   int opterr;
 extern   int optind;
 extern   int optopt;
 extern   int optreset;
+
 extern   char *suboptarg;               /* getsubopt(3) external variable */
 #endif /* _GETOPT_DEFINED */
  
@@ -245,6 +251,10 @@ extern   char *suboptarg;               /* getsubopt(3) external variable */
 }
 #endif
 #endif /* !_GETOPT_H_ */
+
+#endif
+
+
 /*	$Id: getopt_long.c,v 1.1 2009/10/16 19:50:28 rodney Exp rodney $	*/
 /*	$OpenBSD: getopt_long.c,v 1.23 2007/10/31 12:34:57 chl Exp $	*/
 /*	$NetBSD: getopt_long.c,v 1.15 2002/01/31 22:43:40 tv Exp $	*/

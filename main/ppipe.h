@@ -19,4 +19,35 @@
 
 #include <stdio.h>
 
+
+typedef struct {
+    char*   fpath;
+    FILE*   file;
+    int     fd;
+} ppipe_fifo_t;
+
+typedef struct {
+    char            basepath[256];
+    ppipe_fifo_t*   fifo;
+    size_t          num;
+} ppipe_t;
+
+
+
+int ppipe_init(const char* basepath);
+
+void ppipe_deinit(void);
+
+int ppipe_new(const char* prefix, const char* name, const char* fmode);
+
+int ppipe_del(int ppd);
+
+FILE* ppipe_getfile(int ppd);
+
+const char* ppipe_getpath(int ppd);
+
+ppipe_t* ppipe_ref(void);
+
+
+
 #endif /* ppipe_h */
