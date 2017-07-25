@@ -156,6 +156,7 @@ void sub_json_loadargs(cJSON* json,
                        int* baudrate_val, 
                        bool* verbose_val );
 
+void ppipelist_populate(cJSON* obj);
 
 
 // NOTE Change to transparent mutex usage or not?
@@ -393,11 +394,11 @@ int otter_main(const char* ttyfile, int baudrate, bool verbose, cJSON* params) {
     pthread_mutex_t pktrx_mutex;
     
     
-    /// 1. JSON params construct should contain the following objects
+    /// JSON params construct should contain the following objects
     /// - "msgcall": { "msgname1":"call string 1", "msgname2":"call string 2" }
     /// - TODO "msgpipe": (same as msg call, but call is open at startup and piped-to)
     //mpipe_args.msgcall = cJSON_GetObjectItem(params, "msgcall");
-
+    
 
     /// Initialize command search table.  
     ///@todo in the future, let's pull this from an initialization file or
@@ -414,7 +415,24 @@ int otter_main(const char* ttyfile, int baudrate, bool verbose, cJSON* params) {
     /// configuration file.  We have input and output pipes of several types.
     /// @todo determine what all these types are.  They must work with the 
     ///       relatively simple Gateway API.
-    
+    /// @todo the "basepath" input to ppipelist_init() can be an argument 
+    ///       or some other configuration element.
+    ppipelist_init("./");
+    if (params != NULL) {
+        cJSON* obj;
+        
+        for (obj=params->child; obj!=NULL; obj=obj->next) {
+            if (strcmp(obj->string, "pipes") != 0) {
+                continue;
+            }
+            
+            /// This is the pipes object, the only one we care about here
+            for (obj=obj->child; obj!=NULL; obj=obj->next) {
+                ppipelist_populate(obj);
+            }
+            break;
+        }
+    }
     
     /// Initialize Thread Mutexes & Conds.  This is finnicky and it must be
     /// done before assignment into the argument containers, possibly due to 
@@ -429,7 +447,7 @@ int otter_main(const char* ttyfile, int baudrate, bool verbose, cJSON* params) {
     pthread_cond_init(&tlist_cond, NULL);
     assert( pthread_mutex_init(&pktrx_mutex, NULL) == 0 );
     pthread_cond_init(&pktrx_cond, NULL);
-    
+
     
     /// Open the mpipe TTY & Setup MPipe threads
     /// The MPipe Filename (e.g. /dev/ttyACMx) is sent as the first argument
@@ -446,9 +464,9 @@ int otter_main(const char* ttyfile, int baudrate, bool verbose, cJSON* params) {
     mpipe_args.pktrx_cond       = &pktrx_cond;
     mpipe_args.kill_mutex       = &cli.kill_mutex;
     mpipe_args.kill_cond        = &cli.kill_cond;
-    
     if (mpipe_open(&mpipe_ctl, ttyfile, baudrate, 8, 'N', 1, 0, 0, 0) < 0) {
-        return -1;
+        cli.exitcode = -1;
+        goto otter_main_TERM1;
     }
     
     /// Open DTerm interface & Setup DTerm threads
@@ -467,9 +485,10 @@ int otter_main(const char* ttyfile, int baudrate, bool verbose, cJSON* params) {
     dterm_args.kill_mutex       = &cli.kill_mutex;
     dterm_args.kill_cond        = &cli.kill_cond;
     if (dterm_open(&dterm) < 0) {
-        return -1;
+        cli.exitcode = -2;
+        goto otter_main_TERM2;
     }
-    
+
     
     /// Initialize the signal handlers for this process.
     /// These are activated by Ctl+C (SIGINT) and Ctl+\ (SIGQUIT) as is
@@ -478,7 +497,7 @@ int otter_main(const char* ttyfile, int baudrate, bool verbose, cJSON* params) {
     cli.exitcode = EXIT_SUCCESS;
     _assign_signal(SIGINT, &sigint_handler);
     _assign_signal(SIGQUIT, &sigquit_handler);
-    
+
     
     /// Invoke the child threads below.  All of the child threads run
     /// indefinitely until an error occurs or until the user quits.  Quit can 
@@ -489,7 +508,7 @@ int otter_main(const char* ttyfile, int baudrate, bool verbose, cJSON* params) {
     pthread_create(&thr_mpwriter, NULL, &mpipe_writer, (void*)&mpipe_args);
     pthread_create(&thr_mpparser, NULL, &mpipe_parser, (void*)&mpipe_args);
     pthread_create(&thr_dtprompter, NULL, &dterm_prompter, (void*)&dterm_args);
-    
+
     
     /// Threads are now running.  The rest of the main() code, below, is
     /// blocked by pthread_cond_wait() until the kill_cond is sent by one of 
@@ -501,6 +520,7 @@ int otter_main(const char* ttyfile, int baudrate, bool verbose, cJSON* params) {
     pthread_cancel(thr_mpparser);
     pthread_cancel(thr_dtprompter);
     
+    otter_main_TERM:
     pthread_mutex_unlock(&dtwrite_mutex);
     pthread_mutex_destroy(&dtwrite_mutex);
     pthread_mutex_unlock(&rlist_mutex);
@@ -524,11 +544,15 @@ int otter_main(const char* ttyfile, int baudrate, bool verbose, cJSON* params) {
     /// Close the drivers/files and free all allocated data objects (primarily 
     /// in mpipe).
     dterm_close(&dterm);
+    
+    otter_main_TERM2:
     mpipe_close(&mpipe_ctl);
     dterm_free(&dterm);
-    mpipe_freelists(&mpipe_rlist, &mpipe_tlist);
     ch_free(&cmd_history);
     
+    otter_main_TERM1:
+    mpipe_freelists(&mpipe_rlist, &mpipe_tlist);
+    ppipelist_deinit();
     
     // cli.exitcode is set to 0, unless sigint is raised.
 #   ifdef __TEST__
@@ -593,17 +617,18 @@ void sub_json_loadargs(cJSON* json,
 
 
 
-void pipelist_populate(cJSON* obj, const char* pipemode) {
-    int rc;
+void ppipelist_populate(cJSON* obj) {
 
     if (obj != NULL) {
-        const char* group;
-        group = obj->string;
+        const char* prefix;
+        prefix = obj->string;
         
         obj = obj->child;
-        while (obj != NULL) {
-            if (cJSON_IsString(obj) != 0) {
-                ppipelist_new(group, obj->valuestring, pipemode);
+        while (obj != NULL) { 
+            if (cJSON_IsString(obj) != 0) { 
+                //printf("%s, %s, %s\n", prefix, obj->string, obj->valuestring);
+                ppipelist_new(prefix, obj->string, obj->valuestring); 
+                //printf("%d\n", __LINE__);
             }
             obj = obj->next;
         }

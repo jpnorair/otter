@@ -111,28 +111,28 @@ int ppipelist_search(ppipe_fifo_t** dst, const char* prefix, const char* name) {
 
 
 
-int ppipelist_putbinary(const char* prefix, const char* name, uint8_t* src, size_t size) {
+
+int sub_put(const char* prefix, const char* name, uint8_t* hdr, uint8_t* src, size_t size) {
+/// Process for opening and writing to FIFO involves doing a test open in 
+/// non-blocking mode to make sure there is a consumer for the write.
+/// Header (hdr) is 3 bytes and ignored if NULL.
     ppipe_fifo_t*   fifo;
+    int             fd;
     
     ppipelist_search(&fifo, prefix, name);
 
     if (fifo != NULL) {
-        int test;
         //errno = 0;
-        test = fcntl(fifo->fd, F_GETFD);
-        
-        // Make sure fifo is open!
-        // Then write the binary size header and the data
-        // ppipelist is not directly responsible for opening and closing files.
-        if (test != -1) {
-            uint8_t hdr[3];
-            hdr[0] = 0;
-            hdr[1] = (size >> 8) & 0xFF;
-            hdr[2] = (size >> 0) & 0xFF;
+        fd = open(fifo->fpath, O_WRONLY|O_NONBLOCK);
+        if (fd > 0) {
+            close(fd);
+            fd = open(fifo->fpath, O_WRONLY);
             
-            fwrite(hdr, 1, 3, fifo->file);
-            fwrite(src, 1, size, fifo->file);
-            
+            if (hdr != NULL) {
+                write(fd, hdr, 3);
+            }
+            write(fd, src, size);
+            close(fd);
             return 0;
         }
     }
@@ -141,28 +141,19 @@ int ppipelist_putbinary(const char* prefix, const char* name, uint8_t* src, size
 }
 
 
+int ppipelist_putbinary(const char* prefix, const char* name, uint8_t* src, size_t size) {
+    uint8_t hdr[3];
+    hdr[0]  = 0;
+    hdr[1]  = (size >> 8) & 0xFF;
+    hdr[2]  = (size >> 0) & 0xFF;
+    
+    return sub_put(prefix, name, hdr, src, size);
+}
+
+
 
 int ppipelist_puttext(const char* prefix, const char* name, char* src, size_t size) {
-    ppipe_fifo_t*   fifo;
-    
-    ppipelist_search(&fifo, prefix, name);
-
-    if (fifo != NULL) {
-        int test;
-        //errno = 0;
-        test = fcntl(fifo->fd, F_GETFD);
-        
-        // Make sure fifo is open!
-        // Then write the binary size header and the data
-        // ppipelist is not directly responsible for opening and closing files.
-        if (test != -1) {
-            fwrite(src, 1, size, fifo->file);
-            
-            return 0;
-        }
-    }
-    
-    return -1;
+    return sub_put(prefix, name, NULL, (uint8_t*)src, size);
 }
 
 

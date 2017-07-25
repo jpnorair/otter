@@ -1,0 +1,41 @@
+{
+    "arguments": {
+        "verbose": 1
+    },
+    "pipes": {
+        "log": {
+            "JSON": "w",
+            "UBX": "wb"
+        },
+        "file": { 
+            "isf0": "rb+",
+            "isf1": "rb+",
+            "isf2": "rb+",
+            "isf3": "rb+",
+            "isf4": "rb+",
+            "isf5": "rb+",
+            "isf6": "rb+",
+            "isf7": "rb+",
+            "isf8": "rb+",
+            "isf9": "rb+",
+            "isf10": "rb+",
+            "isf11": "rb+",
+            "isf12": "rb+",
+            "isf13": "rb+",
+            "isf14": "rb+",
+            "isf15": "rb+"
+        },
+        "m2session": { 
+            "announcement": "rb+",
+            "inventory": "rb+",
+            "inventoryUDP": "rb+",
+            "collection": "rb+"
+        },
+        "udpdaemons": {
+            "confit": "rb+"
+        },
+        "udpraw": {
+            "port255": "rb+"    
+        }
+    }
+}

@@ -24,8 +24,12 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include <fcntl.h>
 
+// Must be a power of two
 #define PPIPE_GROUP_SIZE    16
+
+
 #define PPIPE_BASEPATH      "./"
 
 
@@ -82,19 +86,20 @@ void ppipe_deinit(void) {
 
 
 int ppipe_new(const char* prefix, const char* name, const char* fmode) {
-    ppipe_fifo_t* fifo;
-    int     ppd;
-    size_t  alloc_size;
-    FILE* test;
-    int test_fd;
-    struct stat st;
-    int rc;
+    ppipe_fifo_t*   fifo;
+    int             ppd;
+    size_t          alloc_size;
+    int             test_fd;
+    int             rc;
+    struct stat     st;
     
-    ///@note user and root rw
-    mode_t  mode    = 0x660;
+    int group       = ppipe.num & (PPIPE_GROUP_SIZE-1);
     
-    if ((ppipe.num != 0) && ((ppipe.num % PPIPE_GROUP_SIZE) == 0)) {
-        ppipe.fifo = realloc(ppipe.fifo, (ppipe.num + PPIPE_GROUP_SIZE));
+    if ((ppipe.num != 0) && (group == 0)) {
+        size_t elem = (ppipe.num / PPIPE_GROUP_SIZE) + 1;
+        alloc_size  = PPIPE_GROUP_SIZE * sizeof(ppipe_fifo_t);
+        ppipe.fifo  = realloc(ppipe.fifo, elem*alloc_size);
+        memset(&ppipe.fifo[ppipe.num], 0, alloc_size);
     }
     if (ppipe.fifo == NULL) {
         ppd = -1;
@@ -104,63 +109,61 @@ int ppipe_new(const char* prefix, const char* name, const char* fmode) {
     ppd = (int)ppipe.num;
     ppipe.num++;
     fifo = &ppipe.fifo[ppd];
-    
     if (fifo->fpath != NULL) {
         ppipe_del(ppd);
     }
-    
+
     alloc_size  = strlen(ppipe.basepath) + strlen(prefix) + strlen(name) + 1;
-    fifo->fpath = malloc(alloc_size);
+    
+    fifo->fpath = calloc(alloc_size, 1);
     if (fifo->fpath == NULL) {
         ppd = -2;
         goto ppipe_new_EXIT;
     }
     
-    strcpy(fifo->fpath, ppipe.basepath);
-    strcat(fifo->fpath, prefix);
-    strcat(fifo->fpath, name);
+    strcpy(fifo->fpath, ppipe.basepath); 
+    strcat(fifo->fpath, prefix); 
+    strcat(fifo->fpath, "/");
+    strcat(fifo->fpath, name); 
     
     /// See if FIFO already exists, in which case just open it.  Else, make it.
-    test = fopen(fifo->fpath, fmode);
-    if (test != NULL) {
-        // File already exists
-        test_fd = fileno(test);
+    rc = access( fifo->fpath, F_OK );
+    
+    if (rc != -1) {
+        test_fd = open(fifo->fpath, O_RDONLY | O_NONBLOCK);
         rc      = fstat(test_fd, &st);
+        close(test_fd);
         
-        if ((rc == 0) && S_ISFIFO(st.st_mode)) {
+        if ((rc == 0) && S_ISFIFO(st.st_mode) && ((st.st_mode&0777)==0666)) {
             // File exists and is fifo
-            //fflush(test);
-            fifo->file  = test;
-            fifo->fd    = test_fd;
+            //printf("File already exists, is fifo, and has proper mode: continuing.\n");
         }
         
         else {
             // File exists, but is not fifo, or some other error
+            //printf("File already exists, is not FIFO and has improper mode: exiting.\n");
             ppd = -3;
             goto ppipe_new_FIFOERR;
         }
     }
     
-    else {
-        // File does not exist, make it.
-        if (mkfifo(fifo->fpath, mode) != 0) {
+    else { 
+        // FIFO does not exist, make it the way we need to.
+        umask(0); 
+        rc = mkfifo(fifo->fpath, 0666);
+        
+        if (rc != 0) {
             ppd = -4;
             goto ppipe_new_FIFOERR;
         }
-        
-        // FIFO is now created, and we open it.
-        fifo->file = fopen(fifo->fpath, fmode);
-        if (fifo->file != NULL) {
-            fifo->fd = fileno(fifo->file);
-            return ppd;
-        }
+
+        return ppd;
     }
     
     ppipe_new_FIFOERR:
+    //printf("%s Error\n", __FUNCTION__);
     free(fifo->fpath);
     fifo->fpath = NULL;
-    fifo->file  = NULL;
-    fifo->fd    = -1;
     
     ppipe_new_EXIT:
     return ppd;
@@ -173,24 +176,22 @@ int ppipe_del(int ppd) {
     ppipe_fifo_t* fifo;
     size_t i = (size_t)ppd;
     
-    if (i <= ppipe.num) {
+    if (i >= ppipe.num) {
         return -1;
     }
     if (i == (ppipe.num-1)) {
-        ppipe.num = (ppipe.num-1);
+        ppipe.num--;
     }
     
     fifo = &ppipe.fifo[i];
     if (fifo == NULL) {
         return -2;
     }
-    if (fifo->file != NULL) {
-        fclose(fifo->file);
-        fifo->file  = NULL;
-        fifo->fd    = -1;
-    }
+
     if (fifo->fpath != NULL) {
-        remove(fifo->fpath);
+        int rc;
+        rc = remove(fifo->fpath);
+        printf("removing: code=%d\n", rc);
         free(fifo->fpath);
         fifo->fpath = NULL;
     }
@@ -207,7 +208,8 @@ FILE* ppipe_getfile(int ppd) {
         return NULL;
     }
     
-    return ppipe.fifo[i].file;
+    return NULL;
+    //return ppipe.fifo[i].file;
 }
 
 

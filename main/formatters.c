@@ -76,7 +76,7 @@ void _output_binarylog(mpipe_printer_t puts_fn, uint8_t* payload, int length) {
         *msgbreak++ = 0;
         length -= (msgbreak - payload);
         
-        if (ppipelist_putbinary("pub", (const char*)payload, msgbreak, length) != 0) {
+        if (ppipelist_putbinary("log", (const char*)payload, msgbreak, length) != 0) {
             puts_fn((char*)payload);
             puts_fn("\n");
             fmt_printhex(puts_fn, msgbreak, length, 16);
@@ -93,7 +93,7 @@ void _output_textlog(mpipe_printer_t puts_fn, uint8_t* payload, int length) {
         *msgbreak++ = 0;
         length -= (msgbreak - payload);
         
-        if (ppipelist_puttext("pub", (const char*)payload, (char*)msgbreak, length) != 0) {
+        if (ppipelist_puttext("log", (const char*)payload, (char*)msgbreak, length) != 0) {
             puts_fn((char*)payload);
             puts_fn("\n");
             puts_fn((char*)msgbreak);
