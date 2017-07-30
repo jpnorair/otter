@@ -25,6 +25,8 @@
 #include <unistd.h>
 
 #include <fcntl.h>
+#include <errno.h>
+#include <assert.h>
 
 // Must be a power of two
 #define PPIPE_GROUP_SIZE    16
@@ -38,6 +40,43 @@ static ppipe_t ppipe = {
     .fifo       = NULL,
     .num        = 0
 };
+
+
+
+
+int sub_assure_path(char* assure_path, mode_t mode) {
+    char* p;
+    char* file_path = NULL;
+    int rc          = 0;
+
+    assert(assure_path && *assure_path);
+    
+    file_path = malloc(strlen(assure_path)+1);
+    if (file_path == NULL) {
+        return -2;
+    }
+    strcpy(file_path, assure_path);
+    
+    for (p=strchr(file_path+1, '/'); p!=NULL; p=strchr(p+1, '/')) {
+        *p='\0';
+        
+        if (mkdir(file_path, mode) == -1) {
+            if (errno!=EEXIST) { 
+                *p='/'; 
+                rc = -1; 
+                goto sub_assure_path_END;
+            }
+        }
+        
+        *p='/';
+    }
+    
+    sub_assure_path_END:
+    free(file_path);
+    return rc;
+}
+
+
 
 
 
@@ -150,8 +189,10 @@ int ppipe_new(const char* prefix, const char* name, const char* fmode) {
     else { 
         // FIFO does not exist, make it the way we need to.
         umask(0); 
-        rc = mkfifo(fifo->fpath, 0666);
-        
+        rc = sub_assure_path(fifo->fpath, 0755);
+        if (rc == 0) {
+            rc = mkfifo(fifo->fpath, 0666);
+        }
         if (rc != 0) {
             ppd = -4;
             goto ppipe_new_FIFOERR;
@@ -191,7 +232,7 @@ int ppipe_del(int ppd) {
     if (fifo->fpath != NULL) {
         int rc;
         rc = remove(fifo->fpath);
-        printf("removing: code=%d\n", rc);
+        printf("removing: %s code=%d\n", fifo->fpath, rc);
         free(fifo->fpath);
         fifo->fpath = NULL;
     }
