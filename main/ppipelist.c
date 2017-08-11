@@ -158,3 +158,39 @@ int ppipelist_puttext(const char* prefix, const char* name, char* src, size_t si
 
 
 
+uint8_t* sub_gethex(uint8_t* dst, uint8_t input) {
+    static const char convert[] = "0123456789ABCDEF";
+    dst[0]  = convert[input >> 4];
+    dst[1]  = convert[input & 0x0f];
+    
+    return dst;
+}
+
+int ppipelist_puthex(const char* prefix, const char* name, char* src, size_t size) {
+/// This is a variant of sub_put()
+    ppipe_fifo_t*   fifo;
+    int             fd;
+    
+    ppipelist_search(&fifo, prefix, name);
+
+    if (fifo != NULL) {
+        //errno = 0;
+        fd = open(fifo->fpath, O_WRONLY|O_NONBLOCK);
+        if (fd > 0) {
+            close(fd);
+            fd = open(fifo->fpath, O_WRONLY);
+            
+            while (size-- != 0) {
+                uint8_t hexbuf[2];
+                write(fd, sub_gethex(hexbuf, *src++), 2);
+            }
+            
+            close(fd);
+            return 0;
+        }
+    }
+    
+    return -1;
+}
+
+

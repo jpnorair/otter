@@ -41,5 +41,6 @@ int ppipelist_putbinary(const char* prefix, const char* name, uint8_t* src, size
 
 int ppipelist_puttext(const char* prefix, const char* name, char* src, size_t size);
 
+int ppipelist_puthex(const char* prefix, const char* name, char* src, size_t size);
 
 #endif /* ppipe_list_h */
