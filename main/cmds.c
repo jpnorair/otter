@@ -239,6 +239,7 @@ int cmd_whoami(dterm_t* dt, uint8_t* dst, uint8_t* src, size_t dstmax) {
 
 
 
+///@todo make separate commands for file & string based input
 // Raw Protocol Entry: This is implemented fully and it takes a Bintex
 // expression as input, with no special keywords or arguments.
 int cmd_raw(dterm_t* dt, uint8_t* dst, uint8_t* src, size_t dstmax) {

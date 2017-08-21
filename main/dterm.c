@@ -157,8 +157,93 @@ int dterm_close(dterm_t* dt) {
 
 /** DTerm Threads <BR>
   * ========================================================================<BR>
-  * <LI> dterm_prompter() : </LI>
+  * <LI> dterm_piper()      : For use with input pipe option </LI>
+  * <LI> dterm_prompter()   : For use with console entry (default) </LI>
+  *
+  * Only one of the threads will run.  Piper is much simpler because it just
+  * reads stdin pipe as an atomic line read.  Prompter requires character by
+  * character input and analysis, and it enables shell-like features.
   */
+
+void* dterm_piper(void* args) {
+/// Thread that:
+/// <LI> Listens to stdin via read() pipe </LI>
+/// <LI> Processes each keystroke and takes action accordingly. </LI>
+/// <LI> Prints to the output while the prompt is active. </LI>
+/// <LI> Sends signal (and the accompanied input) to dterm_parser() when a new
+///          input is entered. </LI>
+/// 
+    
+    uint8_t protocol_buf[1024];
+
+    char                cmdname[256];
+    ssize_t             keychars    = 0;
+    dterm_t*            dt          = ((dterm_arg_t*)args)->dt;
+    pktlist_t*          tlist       = ((dterm_arg_t*)args)->tlist;
+    pthread_mutex_t*    tlist_mutex = ((dterm_arg_t*)args)->tlist_mutex;
+    pthread_cond_t*     tlist_cond  = ((dterm_arg_t*)args)->tlist_cond;
+    
+    // Initial state = off
+    dt->state = prompt_off;
+    
+    // Initial prompt = Guest
+    prompt_str = prompt_guest;
+    
+    /// Get each line from the pipe.
+    while (1) {
+        int             cmdlen;
+        const cmd_t*    cmdptr;
+    
+        keychars    = read(dt->fd_in, dt->readbuf, 1024);
+        cmdlen      = cmd_getname(cmdname, dt->linebuf, 256);
+        cmdptr      = cmd_search(cmdname);
+        
+        ///@todo this is the same block of code used in prompter.  It could be
+        ///      consolidated into a subroutine called by both.
+        if (cmdptr == NULL) {
+            ///@todo build a nicer way to show where the error is,
+            ///      possibly by using pi or ci (sign reversing)
+            dterm_puts(dt, "--> command not found\n");
+        }
+        else {
+            int rawbytes;
+            uint8_t* cursor = (uint8_t*)&dt->linebuf[cmdlen];
+            
+            ///@todo change 1024 to a configured value
+            rawbytes = cmdptr->action(dt, protocol_buf, cursor, 1024);
+            
+            // Error, print-out protocol_buf as an error message
+            ///@todo spruce-up the command error reporting, maybe even with
+            ///      a cursor showing where the first error was found.
+            if (rawbytes < 0) {
+                dterm_puts(dt, "--> unknown command error\n");
+            }
+            
+            // If there are bytes to send to MPipe, do that.
+            // If rawbytes == 0, there is no error, but also nothing
+            // to send to MPipe.
+            else {
+                int list_size;
+                pthread_mutex_lock(tlist_mutex);
+                list_size = pktlist_add(tlist, true, protocol_buf, rawbytes);
+                pthread_mutex_unlock(tlist_mutex);
+                if (list_size > 0) {
+                    pthread_cond_signal(tlist_cond);
+                }
+            }
+        }
+        dterm_reset(dt);
+        ///@todo this is end of the code block
+        
+    }
+    
+    /// This code should never occur, given the while(1) loop.
+    /// If it does (possibly a stack fuck-up), we print this "chaotic error."
+    fprintf(stderr, "\n--> Chaotic error: dterm_piper() thread broke loop.\n");
+    raise(SIGINT);
+    return NULL;
+}
+
 
 
 void* dterm_prompter(void* args) {
@@ -593,7 +678,7 @@ int dterm_putlinec(dterm_t *dt, char c) {
 int dterm_putcmd(dterm_t *dt, char *s, int size) {
     int i;
     
-    if ((dt->linelen + size) > CMDSIZE) {
+    if ((dt->linelen + size) > LINESIZE) {
         return 0;
     }
         
@@ -630,9 +715,9 @@ void dterm_remln(dterm_t *dt) {
 void dterm_reset(dterm_t *dt) {
     dt->cline = dt->linebuf;
     
-    //int i = CMDSIZE;
+    //int i = LINESIZE;
     //while (--i >= 0) {                            ///@todo this way is the preferred way
-    while (dt->cline < (dt->linebuf + CMDSIZE)) {
+    while (dt->cline < (dt->linebuf + LINESIZE)) {
         *dt->cline++ = 0;  
     }
     

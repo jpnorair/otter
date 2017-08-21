@@ -130,6 +130,12 @@ int dterm_open(dterm_t* dt);
 int dterm_close(dterm_t* dt);
 void dterm_free(dterm_t* dt);
 
+
+// DTerm threads called in main.  
+// One one should be started.  
+// Piper is for usage with stdin/stdout pipes, via another process.
+// Prompter is for usage with user console I/O.
+void* dterm_piper(void* args);
 void* dterm_prompter(void* args);
 
 

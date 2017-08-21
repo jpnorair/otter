@@ -146,6 +146,7 @@ void sigquit_handler(int sigcode) {
 
 int otter_main( const char* ttyfile,
                 int baudrate,
+                bool pipe,
                 bool verbose,
                 cJSON* params
                 ); 
@@ -154,6 +155,7 @@ int otter_main( const char* ttyfile,
 void sub_json_loadargs(cJSON* json, 
                        char* ttyfile, 
                        int* baudrate_val, 
+                       bool* pipe_val,
                        bool* verbose_val );
 
 void ppipelist_populate(cJSON* obj);
@@ -205,24 +207,26 @@ int main(int argc, const char * argv[]) {
 /// ArgTable params: These define the input argument behavior
     struct arg_file *ttyfile = arg_file1(NULL,NULL,"<ttyfile>",         "path to tty file (e.g. /dev/tty.usbmodem)");
     struct arg_int  *brate   = arg_int0(NULL,NULL,"<baudrate>",         "baudrate, default is 115200");
+    struct arg_lit  *pipe    = arg_lit0("p","pipe",                     "use pipe I/O instead of terminal console");
     //struct arg_str  *parsers = arg_str1("p", "parsers", "<msg:parser>", "parser call string with comma-separated msg:parser pairs");
     //struct arg_str  *fparse  = arg_str1("P", "parsefile", "<file>",     "file containing comma-separated msg:parser pairs");
     
     // Generic
-    struct arg_file *config  = arg_file0("C", "config", "<file.json>",   "JSON based configuration file.");
+    struct arg_file *config  = arg_file0("C", "config", "<file.json>",  "JSON based configuration file.");
     struct arg_lit  *verbose = arg_lit0("v","verbose",                  "use verbose mode");
     struct arg_lit  *help    = arg_lit0(NULL,"help",                    "print this help and exit");
     struct arg_lit  *version = arg_lit0(NULL,"version",                 "print version information and exit");
     struct arg_end  *end     = arg_end(20);
     
-    void* argtable[] = {ttyfile,brate,config,verbose,help,version,end};
+    void* argtable[] = {ttyfile,brate,pipe,config,verbose,help,version,end};
     const char* progname = "otter";
     int nerrors;
     int exitcode = 0;
     
     char ttyfile_val[256];
-    int  baudrate_val = _DEFAULT_BAUDRATE;
-    bool verbose_val  = false;
+    int  baudrate_val   = _DEFAULT_BAUDRATE;
+    bool verbose_val    = false;
+    bool pipe_val       = false;
     
     cJSON* json = NULL;
     char* buffer = NULL;
@@ -320,7 +324,7 @@ int main(int argc, const char * argv[]) {
             goto main_EXIT;
         }
         
-        sub_json_loadargs(json, ttyfile_val, &baudrate_val, &verbose_val);
+        sub_json_loadargs(json, ttyfile_val, &baudrate_val, &pipe_val, &verbose_val);
     }
     
     /// If no JSON file, then configuration should be through the arguments.
@@ -337,6 +341,9 @@ int main(int argc, const char * argv[]) {
     if (brate->count != 0) {
         baudrate_val = brate->ival[0];
     }
+    if (pipe->count != 0) {
+        pipe_val = true;
+    }
     if (verbose->count != 0) {
         verbose_val = true;
     }
@@ -344,6 +351,7 @@ int main(int argc, const char * argv[]) {
 
     exitcode = otter_main(  (const char*)ttyfile_val, 
                             baudrate_val, 
+                            pipe_val,
                             verbose_val,
                             json);
                             
@@ -364,7 +372,7 @@ int main(int argc, const char * argv[]) {
 
 /// What this should do is start two threads, one for the character I/O on
 /// the dterm side, and one for the serial I/O.
-int otter_main(const char* ttyfile, int baudrate, bool verbose, cJSON* params) {    
+int otter_main(const char* ttyfile, int baudrate, bool pipe, bool verbose, cJSON* params) {    
     // MPipe Datastructs
     mpipe_arg_t mpipe_args;
     mpipe_ctl_t mpipe_ctl;
@@ -380,7 +388,8 @@ int otter_main(const char* ttyfile, int baudrate, bool verbose, cJSON* params) {
     pthread_t   thr_mpreader;
     pthread_t   thr_mpwriter;
     pthread_t   thr_mpparser;
-    pthread_t   thr_dtprompter;
+    void*       (*dterm_fn)(void* args);
+    pthread_t   thr_dterm;
     
     // Mutexes used with Child Threads
     pthread_mutex_t dtwrite_mutex;          // For control of writeout to dterm
@@ -484,11 +493,11 @@ int otter_main(const char* ttyfile, int baudrate, bool verbose, cJSON* params) {
     dterm_args.tlist_cond       = &tlist_cond;
     dterm_args.kill_mutex       = &cli.kill_mutex;
     dterm_args.kill_cond        = &cli.kill_cond;
+    dterm_fn                    = (pipe == false) ? &dterm_prompter : &dterm_piper;
     if (dterm_open(&dterm) < 0) {
         cli.exitcode = -2;
         goto otter_main_TERM2;
     }
-
     
     /// Initialize the signal handlers for this process.
     /// These are activated by Ctl+C (SIGINT) and Ctl+\ (SIGQUIT) as is
@@ -503,12 +512,11 @@ int otter_main(const char* ttyfile, int baudrate, bool verbose, cJSON* params) {
     /// indefinitely until an error occurs or until the user quits.  Quit can 
     /// be via Ctl+C or Ctl+\, or potentially also through a dterm command.  
     /// Each thread must be be implemented to raise SIGQUIT or SIGINT on exit
-    /// i.e. raise(SIGQUIT).
+    /// i.e. raise(SIGINT).
     pthread_create(&thr_mpreader, NULL, &mpipe_reader, (void*)&mpipe_args);
     pthread_create(&thr_mpwriter, NULL, &mpipe_writer, (void*)&mpipe_args);
     pthread_create(&thr_mpparser, NULL, &mpipe_parser, (void*)&mpipe_args);
-    pthread_create(&thr_dtprompter, NULL, &dterm_prompter, (void*)&dterm_args);
-
+    pthread_create(&thr_dterm, NULL, dterm_fn, (void*)&dterm_args);
     
     /// Threads are now running.  The rest of the main() code, below, is
     /// blocked by pthread_cond_wait() until the kill_cond is sent by one of 
@@ -518,7 +526,7 @@ int otter_main(const char* ttyfile, int baudrate, bool verbose, cJSON* params) {
     pthread_cancel(thr_mpreader);
     pthread_cancel(thr_mpwriter);
     pthread_cancel(thr_mpparser);
-    pthread_cancel(thr_dtprompter);
+    pthread_cancel(thr_dterm);
     
     otter_main_TERM:
     pthread_mutex_unlock(&dtwrite_mutex);
@@ -567,6 +575,7 @@ int otter_main(const char* ttyfile, int baudrate, bool verbose, cJSON* params) {
 void sub_json_loadargs(cJSON* json, 
                        char* ttyfile, 
                        int* baudrate_val, 
+                       bool* pipe_val,
                        bool* verbose_val ) {
                        
 #   define GET_STRING_ARG(DST, LIMIT, NAME) do { \
@@ -608,6 +617,8 @@ void sub_json_loadargs(cJSON* json,
     GET_STRING_ARG(ttyfile, 256, "tty");
 
     GET_INT_ARG(baudrate_val, "baudrate");
+
+    GET_BOOL_ARG(pipe_val, "pipe");
 
     GET_BOOL_ARG(verbose_val, "verbose");
 }

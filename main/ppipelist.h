@@ -35,7 +35,12 @@ int ppipelist_new(const char* prefix, const char* name, const char* fmode);
 
 int ppipelist_del(const char* prefix, const char* name);
 
+
+#ifdef USE_BIDIRECTIONAL_PIPES
+int ppipelist_search(ppipe_fifo_t** dst, const char* prefix, const char* name, const char* mode);
+#else
 int ppipelist_search(ppipe_fifo_t** dst, const char* prefix, const char* name);
+#endif
 
 int ppipelist_putbinary(const char* prefix, const char* name, uint8_t* src, size_t size);
 

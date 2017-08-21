@@ -8,34 +8,34 @@
             "UBX": "wb"
         },
         "file": { 
-            "isf0": "rb+",
-            "isf1": "rb+",
-            "isf2": "rb+",
-            "isf3": "rb+",
-            "isf4": "rb+",
-            "isf5": "rb+",
-            "isf6": "rb+",
-            "isf7": "rb+",
-            "isf8": "rb+",
-            "isf9": "rb+",
-            "isf10": "rb+",
-            "isf11": "rb+",
-            "isf12": "rb+",
-            "isf13": "rb+",
-            "isf14": "rb+",
-            "isf15": "rb+"
+            "isf0": "w",
+            "isf1": "w",
+            "isf2": "w",
+            "isf3": "w",
+            "isf4": "w",
+            "isf5": "w",
+            "isf6": "w",
+            "isf7": "w",
+            "isf8": "w",
+            "isf9": "w",
+            "isf10": "w",
+            "isf11": "w",
+            "isf12": "w",
+            "isf13": "w",
+            "isf14": "w",
+            "isf15": "w"
         },
         "m2session": { 
-            "announcement": "rb+",
-            "inventory": "rb+",
-            "inventoryUDP": "rb+",
-            "collection": "rb+"
+            "announcement": "w",
+            "inventory": "w",
+            "inventoryUDP": "w",
+            "collection": "w"
         },
         "udpdaemons": {
-            "confit": "rb+"
+            "confit": "w"
         },
         "udpraw": {
-            "port255": "rb+"    
+            "port255": "w"    
         }
     }
 }
