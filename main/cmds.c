@@ -25,8 +25,16 @@
 #include <signal.h>
 #include <stdio.h>
 #include <string.h>
+#include <ctype.h>
 
+// HBuilder is part of Haystack HDO and it is not open source as of 08.2017.
+// HBuilder provides a library of DASH7/OpenTag communication API functions 
+// that are easy to use.
+#define __HBUILDER__
 
+#ifdef __HBUILDER__
+#include "hbuilder.h"
+#endif
 
 
 /// Variables used across shell commands
@@ -63,7 +71,7 @@ uint8_t user_key[16];
 
 
 int cmd_quit(dterm_t* dt, uint8_t* dst, uint8_t* src, size_t dstmax) {
-    raise(SIGQUIT);
+    raise(SIGINT);
     return 0;
 }
 
@@ -269,6 +277,14 @@ int cmd_raw(dterm_t* dt, uint8_t* dst, uint8_t* src, size_t dstmax) {
     }
     else {
         bytesout = bintex_ss((unsigned char*)src, (unsigned char*)dst, (int)dstmax);
+        
+        // Test code below for printing the binary output from bintex
+//        printf("bytesout = %d\n", bytesout);
+//        for (int i=0; i<bytesout; i++) {
+//            printf("%02X ", dst[i]);
+//        }
+//        printf("\n");
+//        fflush(stdout);
     }
     
     // Undo whatever was done to the home_path
@@ -284,6 +300,60 @@ int cmd_raw(dterm_t* dt, uint8_t* dst, uint8_t* src, size_t dstmax) {
     return bytesout;
 }
 
+
+
+
+
+int cmd_hbcc(dterm_t* dt, uint8_t* dst, uint8_t* src, size_t dstmax) {
+/// HBCC src must be a code-word, then whitespace, then a bintex string.
+
+    if ((src == NULL) || (dst == NULL) || (dt == NULL)) {
+        return -1;
+    }
+    
+#   if (1 || defined(__HBUILDER__))
+    {   int         bytesout;
+        size_t      code_len;
+        size_t      code_max;
+        uint8_t*    cursor;
+    
+        /// 1. Get codeword.  It will be a string followed by some whitespace.
+        ///    code_max should have some upper bound that's not currently defined,
+        ///    but it's 32 chars at the moment
+        code_max = (dstmax < 32) ? dstmax : 32; 
+        
+        // Go past whitespace in the front of the codeword if there is any.
+        while (isspace(*src)) { src++; }
+        
+        for (code_len=0, cursor=src; (code_len < code_max); code_len++, cursor++) {
+            if (isspace(*cursor)) {
+                *cursor = 0;
+                cursor++;
+                break;
+            }
+        }
+        
+        /// 2. get binary from bintex string input.
+        bytesout = bintex_ss((unsigned char*)cursor, (unsigned char*)dst, (int)dstmax);
+
+        // Test print-out of bintex input
+//        fprintf(stderr, "hbcc invoked: cmd=%s, bytesout=%d\n", src, bytesout);
+//        for (int i=0; i<bytesout; i++) {
+//            fprintf(stderr, "%02X ", dst[i]);
+//        }
+//        fprintf(stderr, "\n");
+//        return -1;
+        
+        
+        return hbcc_generate( (char*)src, (size_t)bytesout, dst);
+    }
+    
+#   else
+    fprintf(stderr, "hbcc invoked %s\n", src);
+    return -2;
+    
+#   endif
+}
 
 
 
@@ -336,7 +406,41 @@ int app_dforth(dterm_t* dt, uint8_t* dst, uint8_t* src, size_t dstmax) {
 
 // ID = 6
 int app_confit(dterm_t* dt, uint8_t* dst, uint8_t* src, size_t dstmax) {
+/// Confit message string is presently undefined.  What is here now is a paste
+/// from the hbcc command handler.
+    
+    if ((src == NULL) || (dst == NULL) || (dt == NULL)) {
+        return -1;
+    }
+    
+#   ifdef __HBUILDER__
+    {   int         bytesout;
+        size_t      code_len;
+        size_t      code_max;
+        uint8_t*    cursor;
+    
+        /// 1. Get codeword.  It will be a string followed by some whitespace.
+        ///    code_max should have some upper bound that's not currently defined,
+        ///    but it's 32 chars at the moment
+        code_max = (dstmax < 32) ? dstmax : 32; 
+        for (code_len=0, cursor=src; (code_len < code_max); code_len++, cursor++) {
+            if (isspace(*cursor)) {
+                *cursor = 0;
+                cursor++;
+                break;
+            }
+        }
+        
+        /// 2. get binary from bintex string input.
+        bytesout = bintex_ss((unsigned char*)cursor, (unsigned char*)dst, (int)dstmax);
+
+        ///@todo confit api
+        return -1; //hbconfit_exec(dst, dstmax, codeword, params);
+    }
+
+#   else
     fprintf(stderr, "confit invoked %s\n", src);
+#   endif
     return -1;
 }
 

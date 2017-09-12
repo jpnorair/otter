@@ -28,7 +28,7 @@
 
 
 #define CMD_NAMESIZE    8
-#define CMD_COUNT       14
+#define CMD_COUNT       15
 
 // arg1: dst buffer
 // arg2: src buffer
@@ -56,6 +56,11 @@ int cmd_whoami(dterm_t* dt, uint8_t* dst, uint8_t* src, size_t dstmax);
 
 // Raw Protocol Entry: 
 int cmd_raw(dterm_t* dt, uint8_t* dst, uint8_t* src, size_t dstmax);
+
+// HBCC is a client-side generator of sequential ASAPI Calls into simple, 
+// atomic API messages
+int cmd_hbcc(dterm_t* dt, uint8_t* dst, uint8_t* src, size_t dstmax);
+
 
 
 
@@ -93,6 +98,8 @@ int app_confit(dterm_t* dt, uint8_t* dst, uint8_t* src, size_t dstmax);
 
 // ID = 7
 int app_asapi(dterm_t* dt, uint8_t* dst, uint8_t* src, size_t dstmax);
+
+
 
 
 

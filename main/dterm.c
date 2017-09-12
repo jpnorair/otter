@@ -84,10 +84,6 @@ int dterm_remc(dterm_t *dt, int count);
 int dterm_read(dterm_t *dt);
 
 
-// resets command buffer
-void dterm_reset(dterm_t *dt);
-
-
 // clears current line, resets command buffer
 // return ignored
 void dterm_remln(dterm_t *dt);
@@ -177,7 +173,7 @@ void* dterm_piper(void* args) {
     uint8_t protocol_buf[1024];
 
     char                cmdname[256];
-    ssize_t             keychars    = 0;
+    ssize_t             linelen     = 0;
     dterm_t*            dt          = ((dterm_arg_t*)args)->dt;
     pktlist_t*          tlist       = ((dterm_arg_t*)args)->tlist;
     pthread_mutex_t*    tlist_mutex = ((dterm_arg_t*)args)->tlist_mutex;
@@ -194,9 +190,9 @@ void* dterm_piper(void* args) {
         int             cmdlen;
         const cmd_t*    cmdptr;
     
-        keychars    = read(dt->fd_in, dt->readbuf, 1024);
-        cmdlen      = cmd_getname(cmdname, dt->linebuf, 256);
-        cmdptr      = cmd_search(cmdname);
+        linelen = read(dt->fd_in, dt->linebuf, 1024);
+        cmdlen  = cmd_getname(cmdname, dt->linebuf, 256);
+        cmdptr  = cmd_search(cmdname);
         
         ///@todo this is the same block of code used in prompter.  It could be
         ///      consolidated into a subroutine called by both.

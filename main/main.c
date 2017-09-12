@@ -494,9 +494,15 @@ int otter_main(const char* ttyfile, int baudrate, bool pipe, bool verbose, cJSON
     dterm_args.kill_mutex       = &cli.kill_mutex;
     dterm_args.kill_cond        = &cli.kill_cond;
     dterm_fn                    = (pipe == false) ? &dterm_prompter : &dterm_piper;
-    if (dterm_open(&dterm) < 0) {
-        cli.exitcode = -2;
-        goto otter_main_TERM2;
+    
+    if (pipe == false) {
+        if (dterm_open(&dterm) < 0) {
+            cli.exitcode = -2;
+            goto otter_main_TERM2;
+        }
+    }
+    else {
+        dterm_reset(&dterm);
     }
     
     /// Initialize the signal handlers for this process.
@@ -551,7 +557,9 @@ int otter_main(const char* ttyfile, int baudrate, bool pipe, bool verbose, cJSON
     
     /// Close the drivers/files and free all allocated data objects (primarily 
     /// in mpipe).
-    dterm_close(&dterm);
+    if (pipe == false) {
+        dterm_close(&dterm);
+    }
     
     otter_main_TERM2:
     mpipe_close(&mpipe_ctl);
@@ -567,6 +575,9 @@ int otter_main(const char* ttyfile, int baudrate, bool pipe, bool verbose, cJSON
     fprintf(stderr, "Exiting Cleanly\n"); 
 #   endif
 
+    fflush(stdout);
+    fflush(stderr);
+    
     return cli.exitcode;
 }
 

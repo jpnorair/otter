@@ -140,6 +140,10 @@ void* dterm_prompter(void* args);
 
 
 
+// resets command buffer
+void dterm_reset(dterm_t *dt);
+
+
 
 int dterm_putc(dterm_t *dt, char c);
 

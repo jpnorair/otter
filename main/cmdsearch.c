@@ -20,7 +20,8 @@
 
 
 #include <string.h>
-
+#include <stdio.h>
+#include <ctype.h>
 
 
 
@@ -39,6 +40,7 @@ static const cmd_t commands[CMD_COUNT] = {
     { "confit",     &app_confit,    NULL, NULL },
     { "dforth",     &app_dforth,    NULL, NULL },
     { "file",       &app_file,      NULL, NULL },
+    { "hbcc",       &cmd_hbcc,      NULL, NULL },
     { "log",        &app_log,       NULL, NULL },
     { "null",       &app_null,      NULL, NULL },
     { "quit",       &cmd_quit,      NULL, NULL },
@@ -113,9 +115,9 @@ int cmdsearch_init(cmd_t* init_table) {
 int cmd_getname(char* cmdname, char* cmdline, size_t max_cmdname) {
 	size_t diff = max_cmdname;
     
-    // Copy command into cmdname, stopping when whitspace is detected, or
+    // Copy command into cmdname, stopping when whitespace is detected, or
     // the command line (string) is ended.
-    while ((diff != 0) && (*cmdline != 0) && (*cmdline != ' ')) {
+    while ((diff != 0) && (*cmdline != 0) && !isspace(*cmdline)) {
         diff--;
         *cmdname++ = *cmdline++;
     }
