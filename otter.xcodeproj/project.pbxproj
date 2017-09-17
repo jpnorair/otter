@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		2219722C1EEF81B70087598A /* cJSON.c in Sources */ = {isa = PBXBuildFile; fileRef = 2219722A1EEF81B70087598A /* cJSON.c */; };
+		223DE8D41F6B828C00F3639F /* libhbuilder.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 223DE8D31F6B828C00F3639F /* libhbuilder.a */; };
 		225CD1681F17BF9B00D10812 /* ppipelist.c in Sources */ = {isa = PBXBuildFile; fileRef = 225CD1661F17BF9B00D10812 /* ppipelist.c */; };
 		225CD16B1F1EF4FE00D10812 /* pktlist.c in Sources */ = {isa = PBXBuildFile; fileRef = 225CD1691F1EF4FE00D10812 /* pktlist.c */; };
 		225CD16E1F1FA88C00D10812 /* formatters.c in Sources */ = {isa = PBXBuildFile; fileRef = 225CD16C1F1FA88C00D10812 /* formatters.c */; };
@@ -22,7 +23,6 @@
 		22E34F9C1985D43600C19BBB /* main.c in Sources */ = {isa = PBXBuildFile; fileRef = 22E34F941985D43600C19BBB /* main.c */; };
 		22E34F9D1985D43600C19BBB /* mpipe.c in Sources */ = {isa = PBXBuildFile; fileRef = 22E34F951985D43600C19BBB /* mpipe.c */; };
 		22E34FA11985D45600C19BBB /* bintex.c in Sources */ = {isa = PBXBuildFile; fileRef = 22E34F9F1985D45600C19BBB /* bintex.c */; };
-		22FB48441F677E5E00F1B458 /* libhbuilder.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 22FB48431F677E5E00F1B458 /* libhbuilder.a */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -41,6 +41,8 @@
 /* Begin PBXFileReference section */
 		2219722A1EEF81B70087598A /* cJSON.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = cJSON.c; sourceTree = "<group>"; };
 		2219722B1EEF81B70087598A /* cJSON.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = cJSON.h; sourceTree = "<group>"; };
+		223DE8D31F6B828C00F3639F /* libhbuilder.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libhbuilder.a; path = "../HBuilder-lib/libhbuilder.a"; sourceTree = "<group>"; };
+		223DE8D51F6B828F00F3639F /* hbuilder.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = hbuilder.h; path = "../HBuilder-lib/hbuilder.h"; sourceTree = "<group>"; };
 		225CD1661F17BF9B00D10812 /* ppipelist.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = ppipelist.c; path = main/ppipelist.c; sourceTree = "<group>"; };
 		225CD1671F17BF9B00D10812 /* ppipelist.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = ppipelist.h; path = main/ppipelist.h; sourceTree = "<group>"; };
 		225CD1691F1EF4FE00D10812 /* pktlist.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = pktlist.c; path = main/pktlist.c; sourceTree = "<group>"; };
@@ -69,7 +71,6 @@
 		22E34F9F1985D45600C19BBB /* bintex.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = bintex.c; path = ../bintex/bintex.c; sourceTree = "<group>"; };
 		22E34FA01985D45600C19BBB /* bintex.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = bintex.h; path = ../bintex/bintex.h; sourceTree = "<group>"; };
 		22E34FA31985D48C00C19BBB /* m2def.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = m2def.h; path = ../m2def/m2def.h; sourceTree = "<group>"; };
-		22FB48431F677E5E00F1B458 /* libhbuilder.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libhbuilder.a; path = "../HBuilder-lib/libhbuilder.a"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -77,7 +78,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				22FB48441F677E5E00F1B458 /* libhbuilder.a in Frameworks */,
+				223DE8D41F6B828C00F3639F /* libhbuilder.a in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -96,7 +97,8 @@
 		225181B51F677702006FDA46 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
-				22FB48431F677E5E00F1B458 /* libhbuilder.a */,
+				223DE8D51F6B828F00F3639F /* hbuilder.h */,
+				223DE8D31F6B828C00F3639F /* libhbuilder.a */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -343,6 +345,8 @@
 			buildSettings = {
 				HEADER_SEARCH_PATHS = "$(PROJECT_DIR)/../HBuilder-lib";
 				LIBRARY_SEARCH_PATHS = "$(PROJECT_DIR)/../HBuilder-lib";
+				OTHER_LDFLAGS = "";
+				OTHER_LIBTOOLFLAGS = "";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 			};
 			name = Debug;
@@ -352,6 +356,8 @@
 			buildSettings = {
 				HEADER_SEARCH_PATHS = "$(PROJECT_DIR)/../HBuilder-lib";
 				LIBRARY_SEARCH_PATHS = "$(PROJECT_DIR)/../HBuilder-lib";
+				OTHER_LDFLAGS = "";
+				OTHER_LIBTOOLFLAGS = "";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 			};
 			name = Release;

@@ -13,7 +13,6 @@ import time
 
 def signal_handler(signal, frame):
     global do_subpipe
-    
     do_subpipe = False
     #sys.exit(0)
 
@@ -29,24 +28,45 @@ def bindata_reader(data):
 
 
 def subpipe():
-    global do_subpipe
     global p
     
+    '''
+    stdout_fd = p.stdout.fileno()
+    stderr_fd = p.stderr.fileno()
     while do_subpipe:
-        indata, outdata, exceptions = select.select([p.stdout, p.stderr], [], [], 1)
+        indata, outdata, exceptions = select.select([stdout_fd, stderr_fd], [], [], 1)
         
-        if p.stdout in indata:
-            newdata = os.read(p.stdout, 1024)
+        if stdout_fd in indata:
+            newdata = os.read(stdout_fd, 1024)
             if len(newdata):
                 print '>> ' + newdata,
-        elif p.stderr in indata:
-            newdata = os.read(p.stderr, 1024)
+        elif stderr_fd in indata:
+            newdata = os.read(stderr_fd, 1024)
             if len(newdata):
                 print '*> ' + newdata,
+    '''
     
-    p.send_signal(signal.SIGINT)
-    p.wait()
+    # readline method
+    while p.poll() is None:
+        output = p.stdout.readline()
+        print '>>' + output,
+    
+    #p.send_signal(signal.SIGINT)
+    
+    #wait 1 second.  p.wait fails, as does p.communicate.  Stupid Python.
+    time.sleep(1)
 
+
+def subpipe1():
+    global p
+    
+    while p.poll() is None:
+        output = p.stderr.readline()
+        print '*>' + output,
+
+    time.sleep(1)
+    
+    
     
 
 # ------- Program startup ---------
@@ -56,29 +76,34 @@ do_subpipe = True;
 # Allow sigquit to pass through to child
 signal.signal(signal.SIGINT, signal_handler)
 
-p = Popen("./debug/otter /dev/tty.usbmodem1413 115200 --config=./input.json", stdout=PIPE, stdin=PIPE, stderr=PIPE, bufsize=1)
-
+p = Popen(['./debug/otter', '/dev/tty.usbmodem1413', '115200', '--config=./input.json', '--pipe'], stdout=PIPE, stdin=PIPE, stderr=PIPE, bufsize=1)
 
 subpipe_thread = threading.Thread(target=subpipe)
 subpipe_thread.start()
 
+subpipe1_thread = threading.Thread(target=subpipe1)
+subpipe1_thread.start()
+
 # Wait a few seconds
-time.sleep(3)
+time.sleep(1)
 
-# Dopey testing of a few input strings
-pout, _ = p.communicate("whoami")
-print pout
-time.sleep(3)
+pin = p.stdin.fileno()
+print("Opened Fifo %d for writing" % pin)
+os.write(pin, "whoami")
+time.sleep(1)
+#os.close(pin)
 
-pout, _ = p.communicate("whoami")
-print pout
-time.sleep(3)
+#p.stdin.write("raw \"test test test\"\n")
+os.write(pin, "hbcc test [90178234589f71235897]")
+time.sleep(1)
 
-time.sleep(3)
+#p.stdin.write("quit \n")
+os.write(pin, "quit")
+time.sleep(1)
 
 
 subpipe_thread.join()
-
+subpipe1_thread.join()
 
 sys.exit(0)
 
