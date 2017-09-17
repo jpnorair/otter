@@ -1,11 +1,17 @@
-*.xcuserstate
-xcuserdata
-*xcuserdata*
-project.xcworkspace
+
 .DS_Store
 
 legacy_code*
 
-DerivedData/*
-
+# Stuff that gets generated from XCode
 *.xcuserstate
+*.xcuserstate
+xcuserdata
+*xcuserdata*
+project.xcworkspace
+DerivedData/*
+parsers/*
+otter_pkg/*
+debug/*
+bin/*
+archives/*
