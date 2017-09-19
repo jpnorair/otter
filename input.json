@@ -5,7 +5,7 @@
     "pipes": {
         "log": {
             "JSON": "w",
-            "UBX": "wb"
+            "UBX": "w"
         },
         "file": { 
             "isf0": "w",

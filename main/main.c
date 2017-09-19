@@ -426,7 +426,7 @@ int otter_main(const char* ttyfile, int baudrate, bool pipe, bool verbose, cJSON
     ///       relatively simple Gateway API.
     /// @todo the "basepath" input to ppipelist_init() can be an argument 
     ///       or some other configuration element.
-    ppipelist_init("./");
+    ppipelist_init("./pipes/");
     if (params != NULL) {
         cJSON* obj;
         
