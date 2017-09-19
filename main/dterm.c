@@ -412,8 +412,14 @@ void* dterm_prompter(void* args) {
                                     break;
                                     
                 // Prompt-Escape is pressed, 
-                case ct_prompt:     dterm_puts(dt, (char*)prompt_str);
-                                    dt->state = prompt_on;
+                case ct_prompt:     if (dt->state == prompt_on) {
+                                        dterm_remln(dt);
+                                        dt->state = prompt_off;
+                                    }
+                                    else {
+                                        dterm_puts(dt, (char*)prompt_str);
+                                        dt->state = prompt_on;
+                                    }
                                     break;
             
                 // EOF currently has the same effect as ENTER/RETURN
