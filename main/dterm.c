@@ -164,10 +164,7 @@ int dterm_close(dterm_t* dt) {
 void* dterm_piper(void* args) {
 /// Thread that:
 /// <LI> Listens to stdin via read() pipe </LI>
-/// <LI> Processes each keystroke and takes action accordingly. </LI>
-/// <LI> Prints to the output while the prompt is active. </LI>
-/// <LI> Sends signal (and the accompanied input) to dterm_parser() when a new
-///          input is entered. </LI>
+/// <LI> Processes each LINE and takes action accordingly. </LI>
 /// 
     
     uint8_t protocol_buf[1024];
