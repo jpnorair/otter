@@ -9,6 +9,7 @@ legacy_code*
 xcuserdata
 *xcuserdata*
 project.xcworkspace
+/Build
 DerivedData/*
 parsers/*
 otter_pkg/*
