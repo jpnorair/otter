@@ -32,7 +32,7 @@
 #define PPIPE_GROUP_SIZE    16
 
 
-#define PPIPE_BASEPATH      "./"
+#define PPIPE_BASEPATH      "./pipes/"
 
 
 static ppipe_t ppipe = {
@@ -47,19 +47,28 @@ static ppipe_t ppipe = {
 int sub_assure_path(char* assure_path, mode_t mode) {
     char* p;
     char* file_path = NULL;
+    size_t pathlen;
     int rc          = 0;
 
     assert(assure_path && *assure_path);
+
+    //pathlen     = strlen(assure_path);
+    //file_path   = malloc(pathlen+1);
+    //if (file_path == NULL) {
+    //    return -2;
+    //}
     
-    file_path = malloc(strlen(assure_path)+1);
-    if (file_path == NULL) {
-        return -2;
-    }
-    strcpy(file_path, assure_path);
+    ///@note Originally used strcpy, but bizarre side-effects were observed
+    /// on assure_path, in certain cases.  Adding manual terminators.
+    //strncpy(file_path, assure_path, pathlen);
+    //file_path[pathlen]      = 0;
+    //assure_path[pathlen]    = 0;
+    
+    /// Now not using copying at all.  strcpy/strncpy were being chaotic.
+    file_path = assure_path;
     
     for (p=strchr(file_path+1, '/'); p!=NULL; p=strchr(p+1, '/')) {
         *p='\0';
-        
         if (mkdir(file_path, mode) == -1) {
             if (errno!=EEXIST) { 
                 *p='/'; 
@@ -67,12 +76,12 @@ int sub_assure_path(char* assure_path, mode_t mode) {
                 goto sub_assure_path_END;
             }
         }
-        
         *p='/';
     }
     
     sub_assure_path_END:
-    free(file_path);
+    
+    //free(file_path);
     return rc;
 }
 
@@ -152,18 +161,19 @@ int ppipe_new(const char* prefix, const char* name, const char* fmode) {
         ppipe_del(ppd);
     }
 
-    alloc_size  = strlen(ppipe.basepath) + strlen(prefix) + strlen(name) + 1;
-    
-    fifo->fpath = calloc(alloc_size, 1);
+    // The "+2" is for the intermediate '/' and the null terminator
+    alloc_size  = strlen(ppipe.basepath) + strlen(prefix) + strlen(name) + 2;
+    fifo->fpath = malloc(alloc_size);
     if (fifo->fpath == NULL) {
         ppd = -2;
         goto ppipe_new_EXIT;
     }
     
+    memset(fifo->fpath, 0, alloc_size);
     strcpy(fifo->fpath, ppipe.basepath); 
     strcat(fifo->fpath, prefix); 
     strcat(fifo->fpath, "/");
-    strcat(fifo->fpath, name); 
+    strcat(fifo->fpath, name);
     
     /// See if FIFO already exists, in which case just open it.  Else, make it.
     rc = access( fifo->fpath, F_OK );
@@ -188,8 +198,9 @@ int ppipe_new(const char* prefix, const char* name, const char* fmode) {
     
     else { 
         // FIFO does not exist, make it the way we need to.
-        umask(0); 
+        umask(0);
         rc = sub_assure_path(fifo->fpath, 0755);
+        
         if (rc == 0) {
             rc = mkfifo(fifo->fpath, 0666);
         }
@@ -202,10 +213,12 @@ int ppipe_new(const char* prefix, const char* name, const char* fmode) {
     }
     
     ppipe_new_FIFOERR:
-    //printf("%s Error\n", __FUNCTION__);
-    free(fifo->fpath);
-    fifo->fpath = NULL;
-    
+    if (ppd < 0) {
+        fprintf(stderr, "Could not make FIFO \"%s\": code=%d\n", fifo->fpath, ppd);
+        free(fifo->fpath);
+        fifo->fpath = NULL;
+    }
+
     ppipe_new_EXIT:
     return ppd;
 }
@@ -232,7 +245,10 @@ int ppipe_del(int ppd) {
     if (fifo->fpath != NULL) {
         int rc;
         rc = remove(fifo->fpath);
-        printf("removing: %s code=%d\n", fifo->fpath, rc);
+        if (rc != 0) {
+            fprintf(stderr, "Could not remove FIFO \"%s\": code=%d\n", fifo->fpath, rc);
+        }
+        
         free(fifo->fpath);
         fifo->fpath = NULL;
     }
