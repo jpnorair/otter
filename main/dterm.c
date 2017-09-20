@@ -232,7 +232,7 @@ void* dterm_piper(void* args) {
             // If there are bytes to send to MPipe, do that.
             // If bytesout == 0, there is no error, but also nothing
             // to send to MPipe.
-            else {
+            else if (bytesout > 0) {
                 int list_size;
                 pthread_mutex_lock(tlist_mutex);
                 list_size = pktlist_add(tlist, true, protocol_buf, bytesout);
@@ -459,26 +459,27 @@ void* dterm_prompter(void* args) {
                                         dterm_puts(dt, "--> command not found\n");
                                     }
                                     else {
-                                        int rawbytes;
+                                        int outbytes;
+                                        int inbytes;
                                         uint8_t* cursor = (uint8_t*)&dt->linebuf[cmdlen];
                                         
                                         ///@todo change 1024 to a configured value
-                                        rawbytes = cmdptr->action(dt, protocol_buf, cursor, 1024);
+                                        outbytes = cmdptr->action(dt, protocol_buf, &inbytes, cursor, 1024);
                                         
                                         // Error, print-out protocol_buf as an error message
                                         ///@todo spruce-up the command error reporting, maybe even with
                                         ///      a cursor showing where the first error was found.
-                                        if (rawbytes < 0) {
+                                        if (outbytes < 0) {
                                             dterm_puts(dt, "--> unknown command error\n");
                                         }
                                         
                                         // If there are bytes to send to MPipe, do that.
                                         // If rawbytes == 0, there is no error, but also nothing
                                         // to send to MPipe.
-                                        else {
+                                        else if (outbytes > 0) {
                                             int list_size;
                                             pthread_mutex_lock(tlist_mutex);
-                                            list_size = pktlist_add(tlist, true, protocol_buf, rawbytes);
+                                            list_size = pktlist_add(tlist, true, protocol_buf, outbytes);
                                             pthread_mutex_unlock(tlist_mutex);
                                             if (list_size > 0) {
                                                 pthread_cond_signal(tlist_cond);
