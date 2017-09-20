@@ -67,20 +67,32 @@ uint8_t user_key[16];
 
 
 
-int goto_eol(uint8_t* src) {
+uint8_t* goto_eol(uint8_t* src) {
     uint8_t* end = src;
     
     while ((*end != 0) && (*end != '\n')) {
         end++;
     }
     
-    return (int)(end-src);
+    return end;
 }
 
+
+#define INPUT_SANITIZE() do { \
+    if ((src == NULL) || (dst == NULL) || (dt == NULL)) {   \
+        *inbytes = 0;                                       \
+        return -1;                                          \
+    }                                                       \
+    {   uint8_t* eol    = goto_eol(src);                    \
+        *inbytes        = (int)(eol-src);                   \
+        *eol   = 0;                                         \
+    }                                                       \
+} while(0)
 
 
 
 int cmd_quit(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
+    INPUT_SANITIZE();
     raise(SIGINT);
     return 0;
 }
@@ -88,22 +100,21 @@ int cmd_quit(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstma
 
 
 int cmd_sethome(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
-    unsigned int srclen;
-    srclen = (unsigned int)strlen((char*)src);
+    INPUT_SANITIZE();
     
-    if (srclen >= 1023) {
+    if (*inbytes >= 1023) {
         dterm_puts(dt, "Error: supplied home-path is too long, must be < 1023 chars.\n");
     }
     else {
         strcpy(home_path, (char*)src);
-        if (home_path[srclen]  != '/') {
-            home_path[srclen]   = '/';
-            home_path[++srclen] = 0;
+        if (home_path[*inbytes]  != '/') {
+            home_path[*inbytes]   = '/';
+            home_path[*inbytes+1] = 0;
         }
-        home_path_len = srclen;
+        home_path_len = *inbytes+1;
     }
     
-    return srclen;
+    return 0;
 }
 
 
@@ -116,11 +127,12 @@ int cmd_su(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax)
 /// - "root"
     int test_id     = -1;
     int bytes_out   = 0;
-    int srclen      = (int)strlen((char*)src);
+    
+    INPUT_SANITIZE();
     
     // The user search implementation is not optimized for speed, it just uses 
     // strcmp and strlen
-    if (srclen == 0) {
+    if (*inbytes == 0) {
         test_id = 2;
     }
     else if (strcmp("guest", (const char*)src) == 0) {
@@ -225,7 +237,7 @@ int cmd_su(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax)
     /// User or Root attempted accesses will require a transmission of an
     /// authentication command over the M2DEF protocol, via MPipe.  Attempted
     /// Guest access will not do authentication.
-    return srclen;
+    return 0;
 }
 
 
@@ -233,9 +245,10 @@ int cmd_su(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax)
 int cmd_whoami(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
 /// whoami command does not send any data to the target, it just checks to see
 /// who is the active CLI user, and if it has been authenticated successfully.
-    int srclen = (int)strlen((char*)src);
+
+    INPUT_SANITIZE();     
     
-    if (srclen != 0) {
+    if (*inbytes != 0) {
         dterm_puts(dt, "Usage: whoami [no parameters]\n");
         dterm_puts(dt, "Indicates the current user, and if it has been authenticated on the target.\n");
     }
@@ -251,7 +264,7 @@ int cmd_whoami(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dst
         dterm_putc(dt, '\n');
     }
     
-    return srclen;
+    return 0;
 }
 
 
@@ -263,6 +276,8 @@ int cmd_raw(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax
     const char* filepath;
     FILE*       fp;
     int         bytesout;
+    
+    INPUT_SANITIZE();
     
     // Consider absolute path
     if (src[0] == '/') {
@@ -286,14 +301,6 @@ int cmd_raw(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax
     }
     else {
         bytesout = bintex_ss((unsigned char*)src, (unsigned char*)dst, (int)dstmax);
-        
-        // Test code below for printing the binary output from bintex
-//        printf("bytesout = %d\n", bytesout);
-//        for (int i=0; i<bytesout; i++) {
-//            printf("%02X ", dst[i]);
-//        }
-//        printf("\n");
-//        fflush(stdout);
     }
     
     // Undo whatever was done to the home_path
@@ -301,9 +308,7 @@ int cmd_raw(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax
     
     ///@todo convert the character number into a line and character number
     if (bytesout < 0) {
-        bytesout = -bytesout;
-        dterm_printf(dt, "Bintex error on character %d.\n", bytesout);
-        return 0;
+        dterm_printf(dt, "Bintex error on character %d.\n", -bytesout);
     }
 
     return bytesout;
@@ -318,9 +323,7 @@ int cmd_hbcc(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstma
 /// @todo wrap this into command handling library
     static unsigned int mode = 0;
 
-    if ((src == NULL) || (dst == NULL) || (dt == NULL)) {
-        return -1;
-    }
+    INPUT_SANITIZE();
     
 #   if (1 || defined(__HBUILDER__))
     {   int         bytesout;
@@ -388,6 +391,7 @@ int cmd_hbcc(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstma
 
 // ID = 0
 int app_null(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
+    INPUT_SANITIZE();
     fprintf(stderr, "null invoked %s\n", src);
     return -1;
 }
@@ -395,6 +399,7 @@ int app_null(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstma
 
 // ID = 1
 int app_file(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
+    INPUT_SANITIZE();
     fprintf(stderr, "file invoked %s\n", src);
     return -1;
 }
@@ -402,6 +407,7 @@ int app_file(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstma
 
 // ID = 2
 int app_sensor(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
+    INPUT_SANITIZE();
     fprintf(stderr, "sensor invoked %s\n", src);
     return -1;
 }
@@ -409,6 +415,7 @@ int app_sensor(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dst
 
 // ID = 3
 int app_sec(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
+    INPUT_SANITIZE();
     fprintf(stderr, "sec invoked %s\n", src);
     return -1;
 }
@@ -416,6 +423,7 @@ int app_sec(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax
 
 // ID = 4
 int app_log(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
+    INPUT_SANITIZE();
     fprintf(stderr, "logger invoked %s\n", src);
     return -1;
 }
@@ -423,6 +431,7 @@ int app_log(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax
 
 // ID = 5
 int app_dforth(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
+    INPUT_SANITIZE();
     fprintf(stderr, "dforth invoked %s\n", src);
     return -1;
 }
@@ -433,9 +442,7 @@ int app_confit(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dst
 /// Confit message string is presently undefined.  What is here now is a paste
 /// from the hbcc command handler.
     
-    if ((src == NULL) || (dst == NULL) || (dt == NULL)) {
-        return -1;
-    }
+    INPUT_SANITIZE();
     
 #   ifdef __HBUILDER__
     {   int         bytesout;
@@ -471,6 +478,7 @@ int app_confit(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dst
 
 // ID = 7
 int app_asapi(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
+    INPUT_SANITIZE();
     fprintf(stderr, "asapi invoked %s\n", src);
     return -1;
 }
