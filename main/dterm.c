@@ -175,6 +175,7 @@ void* dterm_piper(void* args) {
     pktlist_t*          tlist       = ((dterm_arg_t*)args)->tlist;
     pthread_mutex_t*    tlist_mutex = ((dterm_arg_t*)args)->tlist_mutex;
     pthread_cond_t*     tlist_cond  = ((dterm_arg_t*)args)->tlist_cond;
+    uint8_t*            cursor = NULL;
     
     // Initial state = off
     dt->state = prompt_off;
@@ -187,7 +188,9 @@ void* dterm_piper(void* args) {
         int             cmdlen;
         const cmd_t*    cmdptr;
     
-        linelen = read(dt->fd_in, dt->linebuf, 1024);
+        if (linelen )
+            linelen = read(dt->fd_in, dt->linebuf, 1024);
+        
         cmdlen  = cmd_getname(cmdname, dt->linebuf, 256);
         cmdptr  = cmd_search(cmdname);
         
@@ -643,7 +646,7 @@ int dterm_putsc(dterm_t *dt, char *s) {
 
 
 int dterm_putlinec(dterm_t *dt, char c) {
-    int line_delta;
+    int line_delta = 0;
     
     if (c == ASCII_BACKSPC) {
         line_delta = -1;

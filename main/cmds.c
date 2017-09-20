@@ -67,6 +67,16 @@ uint8_t user_key[16];
 
 
 
+int goto_eol(uint8_t* src) {
+    uint8_t* end = src;
+    
+    while ((*end != 0) && (*end != '\n')) {
+        end++;
+    }
+    
+    return (int)(end-src);
+}
+
 
 
 
@@ -83,18 +93,17 @@ int cmd_sethome(dterm_t* dt, uint8_t* dst, uint8_t* src, size_t dstmax) {
     
     if (srclen >= 1023) {
         dterm_puts(dt, "Error: supplied home-path is too long, must be < 1023 chars.\n");
-        return 0;
+    }
+    else {
+        strcpy(home_path, (char*)src);
+        if (home_path[srclen]  != '/') {
+            home_path[srclen]   = '/';
+            home_path[++srclen] = 0;
+        }
+        home_path_len = srclen;
     }
     
-    strcpy(home_path, (char*)src);
-    if (home_path[srclen]  != '/') {
-        home_path[srclen]   = '/';
-        home_path[++srclen] = 0;
-    }
-    home_path_len = srclen;
-    
-    // No bytes out, just stores into home_path
-    return 0;
+    return srclen;
 }
 
 
@@ -107,11 +116,11 @@ int cmd_su(dterm_t* dt, uint8_t* dst, uint8_t* src, size_t dstmax) {
 /// - "root"
     int test_id     = -1;
     int bytes_out   = 0;
-
+    int srclen      = (int)strlen((char*)src);
     
     // The user search implementation is not optimized for speed, it just uses 
     // strcmp and strlen
-    if (strlen((const char*)src) == 0) {
+    if (srclen == 0) {
         test_id = 2;
     }
     else if (strcmp("guest", (const char*)src) == 0) {
@@ -131,93 +140,92 @@ int cmd_su(dterm_t* dt, uint8_t* dst, uint8_t* src, size_t dstmax) {
     if ((test_id == -1) || (test_id > 2)) {
         dterm_puts(dt, (char*)src);
         dterm_puts(dt, " is not a recognized user.\nTry: guest, admin, root\n");
-        return 0;
     }
     
-    /// If user parameter was entered as Admin/User or Root it requires entry
-    /// of a hex AES128 key for that user.  It will be authenticated on the 
-    /// target, as well, via the M2DEF Auth protocol. 
-    if (test_id < 2) {
-        int     i;
-        char    aes128_key[40];
-        char*   key_ptr;
-        
-        dterm_puts(dt, "Key [AES128]: ");
-        
-        // Read in the 16-byte hex key for AES128
-        
-        ///@todo Implement a readline function for dterm
-        dterm_scanf(dt, "%32s", aes128_key);
-        
-        key_ptr = aes128_key;
-        for (i=0; i<16; i++) {
-            user_key[i] = 0;
-        
-            if (*key_ptr != 0) {
-                user_key[i] = (*key_ptr++);
-                
-                key_ptr++;
-            }
-        }
-        
-        
-        /*
-        while ((keychars = read(dt->fd_in, &char_in, 1)) > 0) {
-            int hexval = -1;
-                
-            if (char_in == '\n') {
-                int i           = (hex_chars + 1) >> 1;
-                aes128_key[i] <<= 4;
-                break;
-            }
-            else if ((char_in >= '0') && (char_in <= '9')) {
-                hexval = ((int)char_in - '0');
-            }
-            else if ((char_in <= 'a') && (char_in <= 'f')) {
-                hexval = ((int)char_in - 'a' + 10);
-            }
-            else if ((char_in <= 'A') && (char_in <= 'F')) {
-                hexval = ((int)char_in - 'a' + 10);
-            }
-                
-            if (hexval >= 0) {
-                int i;
-                dterm_putc(dt, char_in);
+    else {
+        /// If user parameter was entered as Admin/User or Root it requires entry
+        /// of a hex AES128 key for that user.  It will be authenticated on the 
+        /// target, as well, via the M2DEF Auth protocol. 
+        if (test_id < 2) {
+            int     i;
+            char    aes128_key[40];
+            char*   key_ptr;
+            
+            dterm_puts(dt, "Key [AES128]: ");
+            
+            // Read in the 16-byte hex key for AES128
+            
+            ///@todo Implement a readline function for dterm
+            dterm_scanf(dt, "%32s", aes128_key);
+            
+            key_ptr = aes128_key;
+            for (i=0; i<16; i++) {
+                user_key[i] = 0;
+            
+                if (*key_ptr != 0) {
+                    user_key[i] = (*key_ptr++);
                     
-                i               = hex_chars >> 1;
-                aes128_key[i] <<= 4;
-                aes128_key[i]  |= hexval;
-                    
-                if (++hex_chars == 32) {
-                    break;
+                    key_ptr++;
                 }
             }
+            
+            /*
+            while ((keychars = read(dt->fd_in, &char_in, 1)) > 0) {
+                int hexval = -1;
+                    
+                if (char_in == '\n') {
+                    int i           = (hex_chars + 1) >> 1;
+                    aes128_key[i] <<= 4;
+                    break;
+                }
+                else if ((char_in >= '0') && (char_in <= '9')) {
+                    hexval = ((int)char_in - '0');
+                }
+                else if ((char_in <= 'a') && (char_in <= 'f')) {
+                    hexval = ((int)char_in - 'a' + 10);
+                }
+                else if ((char_in <= 'A') && (char_in <= 'F')) {
+                    hexval = ((int)char_in - 'a' + 10);
+                }
+                    
+                if (hexval >= 0) {
+                    int i;
+                    dterm_putc(dt, char_in);
+                        
+                    i               = hex_chars >> 1;
+                    aes128_key[i] <<= 4;
+                    aes128_key[i]  |= hexval;
+                        
+                    if (++hex_chars == 32) {
+                        break;
+                    }
+                }
+            }
+            dterm_putc(dt, '\n');
+            */
+            
+            /// Load aes128 key into actual user_key buffer.
+            ///@todo store this in CLI object
+            memcpy((uint8_t*)user_key, aes128_key, 16);
+            
+            ///@todo build the protocol command for authenticating the user.
+            bytes_out = 0;
         }
-        dterm_putc(dt, '\n');
-        */
         
-        /// Load aes128 key into actual user_key buffer.
-        ///@todo store this in CLI object
-        memcpy((uint8_t*)user_key, aes128_key, 16);
         
-        ///@todo build the protocol command for authenticating the user.
-        bytes_out = 0;
+        /// Save User Parameters.
+        /// Note that these might not properly authenticate with the target, in
+        /// which case an Auth Response from the target should cause the user to 
+        /// be dropped back into guest on failure.
+        user_id     = test_id;
+        user_str    = user_str_lookup[test_id];
+        user_prompt = user_prompt_lookup[test_id];
     }
-    
-    
-    /// Save User Parameters.
-    /// Note that these might not properly authenticate with the target, in
-    /// which case an Auth Response from the target should cause the user to 
-    /// be dropped back into guest on failure.
-    user_id     = test_id;
-    user_str    = user_str_lookup[test_id];
-    user_prompt = user_prompt_lookup[test_id];
-    
-    
+
     /// User or Root attempted accesses will require a transmission of an
     /// authentication command over the M2DEF protocol, via MPipe.  Attempted
     /// Guest access will not do authentication.
-    return bytes_out;
+    return srclen;
 }
 
 
@@ -225,8 +233,9 @@ int cmd_su(dterm_t* dt, uint8_t* dst, uint8_t* src, size_t dstmax) {
 int cmd_whoami(dterm_t* dt, uint8_t* dst, uint8_t* src, size_t dstmax) {
 /// whoami command does not send any data to the target, it just checks to see
 /// who is the active CLI user, and if it has been authenticated successfully.
+    int srclen = (int)strlen((char*)src);
     
-    if (strlen((char*)src) != 0) {
+    if (srclen != 0) {
         dterm_puts(dt, "Usage: whoami [no parameters]\n");
         dterm_puts(dt, "Indicates the current user, and if it has been authenticated on the target.\n");
     }
@@ -242,7 +251,7 @@ int cmd_whoami(dterm_t* dt, uint8_t* dst, uint8_t* src, size_t dstmax) {
         dterm_putc(dt, '\n');
     }
     
-    return 0;
+    return srclen;
 }
 
 
@@ -305,7 +314,9 @@ int cmd_raw(dterm_t* dt, uint8_t* dst, uint8_t* src, size_t dstmax) {
 
 
 int cmd_hbcc(dterm_t* dt, uint8_t* dst, uint8_t* src, size_t dstmax) {
-/// HBCC src must be a code-word, then whitespace, then a bintex string.
+/// HBCC src must be a code-word, then whitespace, then optionally a bintex string.
+/// @todo wrap this into command handling library
+    static unsigned int mode = 0;
 
     if ((src == NULL) || (dst == NULL) || (dt == NULL)) {
         return -1;
@@ -333,19 +344,32 @@ int cmd_hbcc(dterm_t* dt, uint8_t* dst, uint8_t* src, size_t dstmax) {
             }
         }
         
-        /// 2. get binary from bintex string input.
-        bytesout = bintex_ss((unsigned char*)cursor, (unsigned char*)dst, (int)dstmax);
+        /// 2. The code word might be an argument preceded by a hyphen ('-').
+        ///    This is of the typical format for unix command line apps.
+        ///@todo this functionality is not used exactly at this moment.
+        if (src[0] == '-') {
+            // Process parameter list.  Currently undefined
+            mode = 1;
+            bytesout = 0;
+        }
+        
+        /// 3. If not an argument, the command is an API command (not a control)
+        ///    and thus has the normal codeword+bintex format.
+        else {
+            bytesout = bintex_ss((unsigned char*)cursor, (unsigned char*)dst, (int)dstmax);
 
-        // Test print-out of bintex input
-//        fprintf(stderr, "hbcc invoked: cmd=%s, bytesout=%d\n", src, bytesout);
-//        for (int i=0; i<bytesout; i++) {
-//            fprintf(stderr, "%02X ", dst[i]);
-//        }
-//        fprintf(stderr, "\n");
-//        return -1;
+#           if (1 || defined(__PRINT_BINTEX))
+            fprintf(stderr, "hbcc invoked: cmd=%s, bytesout=%d\n", src, bytesout);
+            for (int i=0; i<bytesout; i++) {
+                fprintf(stderr, "%02X ", dst[i]);
+            }
+            fprintf(stderr, "\n");
+#           endif
         
+            bytesout = hbcc_generate( (char*)src, (size_t)bytesout, dst);
+        }
         
-        return hbcc_generate( (char*)src, (size_t)bytesout, dst);
+        return bytesout;
     }
     
 #   else
