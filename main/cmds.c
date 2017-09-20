@@ -80,14 +80,14 @@ int goto_eol(uint8_t* src) {
 
 
 
-int cmd_quit(dterm_t* dt, uint8_t* dst, uint8_t* src, size_t dstmax) {
+int cmd_quit(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
     raise(SIGINT);
     return 0;
 }
 
 
 
-int cmd_sethome(dterm_t* dt, uint8_t* dst, uint8_t* src, size_t dstmax) {
+int cmd_sethome(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
     unsigned int srclen;
     srclen = (unsigned int)strlen((char*)src);
     
@@ -109,7 +109,7 @@ int cmd_sethome(dterm_t* dt, uint8_t* dst, uint8_t* src, size_t dstmax) {
 
 
 
-int cmd_su(dterm_t* dt, uint8_t* dst, uint8_t* src, size_t dstmax) {
+int cmd_su(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
 /// src is a string containing the user to switch-to, which may be:
 /// - "guest" or [empty]
 /// - "user" or "admin"
@@ -230,7 +230,7 @@ int cmd_su(dterm_t* dt, uint8_t* dst, uint8_t* src, size_t dstmax) {
 
 
 
-int cmd_whoami(dterm_t* dt, uint8_t* dst, uint8_t* src, size_t dstmax) {
+int cmd_whoami(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
 /// whoami command does not send any data to the target, it just checks to see
 /// who is the active CLI user, and if it has been authenticated successfully.
     int srclen = (int)strlen((char*)src);
@@ -259,7 +259,7 @@ int cmd_whoami(dterm_t* dt, uint8_t* dst, uint8_t* src, size_t dstmax) {
 ///@todo make separate commands for file & string based input
 // Raw Protocol Entry: This is implemented fully and it takes a Bintex
 // expression as input, with no special keywords or arguments.
-int cmd_raw(dterm_t* dt, uint8_t* dst, uint8_t* src, size_t dstmax) {
+int cmd_raw(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
     const char* filepath;
     FILE*       fp;
     int         bytesout;
@@ -313,7 +313,7 @@ int cmd_raw(dterm_t* dt, uint8_t* dst, uint8_t* src, size_t dstmax) {
 
 
 
-int cmd_hbcc(dterm_t* dt, uint8_t* dst, uint8_t* src, size_t dstmax) {
+int cmd_hbcc(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
 /// HBCC src must be a code-word, then whitespace, then optionally a bintex string.
 /// @todo wrap this into command handling library
     static unsigned int mode = 0;
@@ -387,49 +387,49 @@ int cmd_hbcc(dterm_t* dt, uint8_t* dst, uint8_t* src, size_t dstmax) {
 
 
 // ID = 0
-int app_null(dterm_t* dt, uint8_t* dst, uint8_t* src, size_t dstmax) {
+int app_null(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
     fprintf(stderr, "null invoked %s\n", src);
     return -1;
 }
 
 
 // ID = 1
-int app_file(dterm_t* dt, uint8_t* dst, uint8_t* src, size_t dstmax) {
+int app_file(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
     fprintf(stderr, "file invoked %s\n", src);
     return -1;
 }
 
 
 // ID = 2
-int app_sensor(dterm_t* dt, uint8_t* dst, uint8_t* src, size_t dstmax) {
+int app_sensor(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
     fprintf(stderr, "sensor invoked %s\n", src);
     return -1;
 }
 
 
 // ID = 3
-int app_sec(dterm_t* dt, uint8_t* dst, uint8_t* src, size_t dstmax) {
+int app_sec(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
     fprintf(stderr, "sec invoked %s\n", src);
     return -1;
 }
 
 
 // ID = 4
-int app_log(dterm_t* dt, uint8_t* dst, uint8_t* src, size_t dstmax) {
+int app_log(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
     fprintf(stderr, "logger invoked %s\n", src);
     return -1;
 }
 
 
 // ID = 5
-int app_dforth(dterm_t* dt, uint8_t* dst, uint8_t* src, size_t dstmax) {
+int app_dforth(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
     fprintf(stderr, "dforth invoked %s\n", src);
     return -1;
 }
 
 
 // ID = 6
-int app_confit(dterm_t* dt, uint8_t* dst, uint8_t* src, size_t dstmax) {
+int app_confit(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
 /// Confit message string is presently undefined.  What is here now is a paste
 /// from the hbcc command handler.
     
@@ -470,7 +470,7 @@ int app_confit(dterm_t* dt, uint8_t* dst, uint8_t* src, size_t dstmax) {
 
 
 // ID = 7
-int app_asapi(dterm_t* dt, uint8_t* dst, uint8_t* src, size_t dstmax) {
+int app_asapi(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
     fprintf(stderr, "asapi invoked %s\n", src);
     return -1;
 }

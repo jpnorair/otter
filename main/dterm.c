@@ -36,7 +36,7 @@
 #include <termios.h>
 #include <unistd.h>
 
-
+#include <ctype.h>
 
 
 // Dterm variables
@@ -170,12 +170,12 @@ void* dterm_piper(void* args) {
     uint8_t protocol_buf[1024];
 
     char                cmdname[256];
-    ssize_t             linelen     = 0;
     dterm_t*            dt          = ((dterm_arg_t*)args)->dt;
     pktlist_t*          tlist       = ((dterm_arg_t*)args)->tlist;
     pthread_mutex_t*    tlist_mutex = ((dterm_arg_t*)args)->tlist_mutex;
     pthread_cond_t*     tlist_cond  = ((dterm_arg_t*)args)->tlist_cond;
-    uint8_t*            cursor = NULL;
+    int                 linelen     = 0;
+    char*               linebuf     = dt->linebuf;
     
     // Initial state = off
     dt->state = prompt_off;
@@ -188,10 +188,14 @@ void* dterm_piper(void* args) {
         int             cmdlen;
         const cmd_t*    cmdptr;
     
-        if (linelen )
-            linelen = read(dt->fd_in, dt->linebuf, 1024);
+        if (linelen <= 0) {
+            linelen = (int)read(dt->fd_in, dt->linebuf, 1024);
+            linebuf = dt->linebuf;
+        }
         
-        cmdlen  = cmd_getname(cmdname, dt->linebuf, 256);
+        // Burn whitespace ahead of command, then search/get command in list.
+        while (isspace(*linebuf)) { linebuf++; linelen--; }
+        cmdlen  = cmd_getname(cmdname, linebuf, 256);
         cmdptr  = cmd_search(cmdname);
         
         ///@todo this is the same block of code used in prompter.  It could be
@@ -200,28 +204,38 @@ void* dterm_piper(void* args) {
             ///@todo build a nicer way to show where the error is,
             ///      possibly by using pi or ci (sign reversing)
             dterm_puts(dt, "--> command not found\n");
+            linelen = 0;
         }
         else {
-            int rawbytes;
-            uint8_t* cursor = (uint8_t*)&dt->linebuf[cmdlen];
+            int bytesout;
+            int bytesin = 0;
+
+            linebuf += cmdlen;
+            linelen -= cmdlen;
             
-            ///@todo change 1024 to a configured value
-            rawbytes = cmdptr->action(dt, protocol_buf, cursor, 1024);
+            ///@todo final arg is max size of protocol_buf.  It should be changed
+            ///      to a non constant.
+            bytesout = cmdptr->action(dt, protocol_buf, &bytesin, (uint8_t*)linebuf, 1024);
             
-            // Error, print-out protocol_buf as an error message
+            /// bytesin is an input that tells how many bytes have been consumed
+            /// from the line.  If bytes remain they get treated as the next
+            /// command.
+            linelen -= bytesin;
+            linebuf += bytesin;
+            
             ///@todo spruce-up the command error reporting, maybe even with
             ///      a cursor showing where the first error was found.
-            if (rawbytes < 0) {
+            if (bytesout < 0) {
                 dterm_puts(dt, "--> unknown command error\n");
             }
             
             // If there are bytes to send to MPipe, do that.
-            // If rawbytes == 0, there is no error, but also nothing
+            // If bytesout == 0, there is no error, but also nothing
             // to send to MPipe.
             else {
                 int list_size;
                 pthread_mutex_lock(tlist_mutex);
-                list_size = pktlist_add(tlist, true, protocol_buf, rawbytes);
+                list_size = pktlist_add(tlist, true, protocol_buf, bytesout);
                 pthread_mutex_unlock(tlist_mutex);
                 if (list_size > 0) {
                     pthread_cond_signal(tlist_cond);

@@ -33,7 +33,7 @@
 // arg1: dst buffer
 // arg2: src buffer
 // arg3: dst buffer max size
-typedef int (*cmdaction_t)(dterm_t*, uint8_t*, uint8_t*, size_t);
+typedef int (*cmdaction_t)(dterm_t*, uint8_t*, int*, uint8_t*, size_t);
 
 typedef struct cmd_s {
 	const char      name[CMD_NAMESIZE]; 
@@ -46,20 +46,20 @@ typedef struct cmd_s {
 
 /// Commands for local otter control
 
-int cmd_quit(dterm_t* dt, uint8_t* dst, uint8_t* src, size_t dstmax);
+int cmd_quit(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax);
 
-int cmd_sethome(dterm_t* dt, uint8_t* dst, uint8_t* src, size_t dstmax);
+int cmd_sethome(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax);
 
-int cmd_su(dterm_t* dt, uint8_t* dst, uint8_t* src, size_t dstmax);
+int cmd_su(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax);
 
-int cmd_whoami(dterm_t* dt, uint8_t* dst, uint8_t* src, size_t dstmax);
+int cmd_whoami(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax);
 
 // Raw Protocol Entry: 
-int cmd_raw(dterm_t* dt, uint8_t* dst, uint8_t* src, size_t dstmax);
+int cmd_raw(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax);
 
 // HBCC is a client-side generator of sequential ASAPI Calls into simple, 
 // atomic API messages
-int cmd_hbcc(dterm_t* dt, uint8_t* dst, uint8_t* src, size_t dstmax);
+int cmd_hbcc(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax);
 
 
 
@@ -69,35 +69,35 @@ int cmd_hbcc(dterm_t* dt, uint8_t* dst, uint8_t* src, size_t dstmax);
 
 
 // ID = 0
-int app_null(dterm_t* dt, uint8_t* dst, uint8_t* src, size_t dstmax);
+int app_null(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax);
 
 
 // ID = 1
-int app_file(dterm_t* dt, uint8_t* dst, uint8_t* src, size_t dstmax);
+int app_file(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax);
 
 
 // ID = 2
-int app_sensor(dterm_t* dt, uint8_t* dst, uint8_t* src, size_t dstmax);
+int app_sensor(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax);
 
 
 // ID = 3
-int app_sec(dterm_t* dt, uint8_t* dst, uint8_t* src, size_t dstmax);
+int app_sec(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax);
 
 
 // ID = 4
-int app_log(dterm_t* dt, uint8_t* dst, uint8_t* src, size_t dstmax);
+int app_log(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax);
 
 
 // ID = 5
-int app_dforth(dterm_t* dt, uint8_t* dst, uint8_t* src, size_t dstmax);
+int app_dforth(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax);
 
 
 // ID = 6
-int app_confit(dterm_t* dt, uint8_t* dst, uint8_t* src, size_t dstmax);
+int app_confit(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax);
 
 
 // ID = 7
-int app_asapi(dterm_t* dt, uint8_t* dst, uint8_t* src, size_t dstmax);
+int app_asapi(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax);
 
 
 
