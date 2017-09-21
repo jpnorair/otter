@@ -19,6 +19,7 @@
 #include "cmdhistory.h"
 #include "cmdsearch.h"
 #include "dterm.h"
+#include "test.h"
 
 // Local Libraries/Headers
 #include "bintex.h"
@@ -167,8 +168,7 @@ void* dterm_piper(void* args) {
 /// <LI> Processes each LINE and takes action accordingly. </LI>
 /// 
     
-    uint8_t protocol_buf[1024];
-
+    uint8_t             protocol_buf[1024];
     char                cmdname[256];
     dterm_t*            dt          = ((dterm_arg_t*)args)->dt;
     pktlist_t*          tlist       = ((dterm_arg_t*)args)->tlist;
@@ -176,6 +176,7 @@ void* dterm_piper(void* args) {
     pthread_cond_t*     tlist_cond  = ((dterm_arg_t*)args)->tlist_cond;
     int                 linelen     = 0;
     char*               linebuf     = dt->linebuf;
+    
     
     // Initial state = off
     dt->state = prompt_off;
@@ -190,8 +191,8 @@ void* dterm_piper(void* args) {
     
         if (linelen <= 0) {
             dterm_reset(dt);
-            linelen = (int)read(dt->fd_in, dt->linebuf, 1024);
-            linebuf = dt->linebuf;
+            linelen         = (int)read(dt->fd_in, dt->linebuf, 1024);
+            linebuf         = dt->linebuf;
         }
         
         // Burn whitespace ahead of command, then search/get command in list.
@@ -240,6 +241,11 @@ void* dterm_piper(void* args) {
             // to send to MPipe.
             else if (bytesout > 0) {
                 int list_size;
+                
+                // Test only
+                test_dumpbytes(protocol_buf, bytesout, "TX Packet Add");
+                // Test only
+                
                 pthread_mutex_lock(tlist_mutex);
                 list_size = pktlist_add(tlist, true, protocol_buf, bytesout);
                 pthread_mutex_unlock(tlist_mutex);

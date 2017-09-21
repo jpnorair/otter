@@ -23,6 +23,7 @@
 		22E34F9D1985D43600C19BBB /* mpipe.c in Sources */ = {isa = PBXBuildFile; fileRef = 22E34F951985D43600C19BBB /* mpipe.c */; };
 		22E34FA11985D45600C19BBB /* bintex.c in Sources */ = {isa = PBXBuildFile; fileRef = 22E34F9F1985D45600C19BBB /* bintex.c */; };
 		7E9FE1B21F70388400D360DF /* libhbuilder.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 7E9FE1B11F70388400D360DF /* libhbuilder.a */; };
+		7E9FE1B51F74381500D360DF /* test.c in Sources */ = {isa = PBXBuildFile; fileRef = 7E9FE1B31F74381500D360DF /* test.c */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -71,6 +72,8 @@
 		22E34FA01985D45600C19BBB /* bintex.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = bintex.h; path = ../bintex/bintex.h; sourceTree = "<group>"; };
 		22E34FA31985D48C00C19BBB /* m2def.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = m2def.h; path = ../m2def/m2def.h; sourceTree = "<group>"; };
 		7E9FE1B11F70388400D360DF /* libhbuilder.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libhbuilder.a; path = "../hbuilder-lib/libhbuilder.a"; sourceTree = "<group>"; };
+		7E9FE1B31F74381500D360DF /* test.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = test.c; path = main/test.c; sourceTree = "<group>"; };
+		7E9FE1B41F74381500D360DF /* test.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = test.h; path = main/test.h; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -166,6 +169,8 @@
 				228DF9D91EE5A9C5004D8D4F /* ppipe.h */,
 				225CD1661F17BF9B00D10812 /* ppipelist.c */,
 				225CD1671F17BF9B00D10812 /* ppipelist.h */,
+				7E9FE1B31F74381500D360DF /* test.c */,
+				7E9FE1B41F74381500D360DF /* test.h */,
 			);
 			name = main;
 			sourceTree = "<group>";
@@ -238,6 +243,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				7E9FE1B51F74381500D360DF /* test.c in Sources */,
 				228DF9DA1EE5A9C5004D8D4F /* ppipe.c in Sources */,
 				22E34F981985D43600C19BBB /* cmds.c in Sources */,
 				22E34F9A1985D43600C19BBB /* crc_calc_block.c in Sources */,

@@ -17,6 +17,7 @@
 // Local Headers
 #include "cmds.h"
 #include "dterm.h"
+#include "test.h"
 
 // Local Headers/Libraries
 #include "bintex.h"
@@ -85,6 +86,18 @@ uint8_t* goto_eol(uint8_t* src) {
     }                                                       \
     {   uint8_t* eol    = goto_eol(src);                    \
         *inbytes        = (int)(eol-src);                   \
+        *eol   = 0;                                         \
+    }                                                       \
+} while(0)
+
+#define INPUT_SANITIZE_FLAG_EOS(IS_EOS) do { \
+    if ((src == NULL) || (dst == NULL)) {   \
+        *inbytes = 0;                                       \
+        return -1;                                          \
+    }                                                       \
+    {   uint8_t* eol    = goto_eol(src);                    \
+        *inbytes        = (int)(eol-src);                   \
+        IS_EOS          = (bool)(*eol == 0);                \
         *eol   = 0;                                         \
     }                                                       \
 } while(0)
@@ -354,7 +367,7 @@ int cmd_raw(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax
 int cmd_hbcc(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
 /// HBCC src must be a code-word, then whitespace, then optionally a bintex string.
 /// @todo wrap this into command handling library
-    //static unsigned int mode = 0;
+    bool is_eos = false;
 
     /// Initialization
     if (dt == NULL) {
@@ -362,7 +375,7 @@ int cmd_hbcc(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstma
         return 0;
     }
     
-    INPUT_SANITIZE();
+    INPUT_SANITIZE_FLAG_EOS(is_eos);
     
 #   if (1 || defined(__HBUILDER__))
     {   int         bytesout;
@@ -398,19 +411,23 @@ int cmd_hbcc(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstma
         /// 3. If not an argument, the command is an API command (not a control)
         ///    and thus has the normal codeword+bintex format.
         else {
-            bytesout = bintex_ss((unsigned char*)cursor, (unsigned char*)dst, (int)dstmax);
+            uint8_t temp_buffer[64];
             
-#           if (1 || defined(__PRINT_BINTEX))
-            fprintf(stderr, "hbcc invoked: cmd=%s, input-len=%d\n", src, bytesout);
-            for (int i=0; i<bytesout; i++) {
-                fprintf(stderr, "%02X ", dst[i]);
-            }
-            fprintf(stderr, "\n");
+            bytesout = bintex_ss((unsigned char*)cursor, (unsigned char*)temp_buffer, (int)sizeof(temp_buffer));
+            
+#           if 0 || (defined(__PRINT_BINTEX))
+            test_dumpbytes(temp_buffer, bytesout, "HBCC Partial Bintex output");
 #           endif
-        
-            bytesout = hbcc_generate( (char*)src, (size_t)bytesout, dst);
+            
+            bytesout = hbcc_generate(dst, dstmax, (char*)src, (size_t)bytesout, temp_buffer);
+            
+            if ((bytesout == 0) && is_eos) {
+                bytesout = hbcc_flush();
+            }
+            
+            fprintf(stderr, "bytesout = %d\n", bytesout);
         }
-        
+
         return bytesout;
     }
     
