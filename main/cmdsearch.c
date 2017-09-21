@@ -85,6 +85,11 @@ int cmdsearch_init(cmd_t* init_table) {
         
     }
     
+    /// Run all commands with dt=NULL to do command initialization
+    for (int i=0; i<CMD_COUNT; i++) {
+        commands[i].action(NULL, NULL, NULL, NULL, 0);
+    }
+    
     return 0;
 }
 

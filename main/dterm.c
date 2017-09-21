@@ -189,6 +189,7 @@ void* dterm_piper(void* args) {
         const cmd_t*    cmdptr;
     
         if (linelen <= 0) {
+            dterm_reset(dt);
             linelen = (int)read(dt->fd_in, dt->linebuf, 1024);
             linebuf = dt->linebuf;
         }
@@ -197,6 +198,8 @@ void* dterm_piper(void* args) {
         while (isspace(*linebuf)) { linebuf++; linelen--; }
         cmdlen  = cmd_getname(cmdname, linebuf, 256);
         cmdptr  = cmd_search(cmdname);
+        
+        //fprintf(stderr, "\nlinebuf=%s\nlinelen=%d\ncmdname=%s, len=%d, ptr=%016X\n", linebuf, linelen, cmdname, cmdlen, cmdptr);
         
         ///@todo this is the same block of code used in prompter.  It could be
         ///      consolidated into a subroutine called by both.
@@ -220,8 +223,11 @@ void* dterm_piper(void* args) {
             /// bytesin is an input that tells how many bytes have been consumed
             /// from the line.  If bytes remain they get treated as the next
             /// command.
+            bytesin += 1;           // eat terminator (null or \n)
             linelen -= bytesin;
             linebuf += bytesin;
+            
+            //fprintf(stderr, "\noutput\nlinebuf=%s\nlinelen=%d\n", linebuf, linelen);
             
             ///@todo spruce-up the command error reporting, maybe even with
             ///      a cursor showing where the first error was found.
@@ -242,9 +248,7 @@ void* dterm_piper(void* args) {
                 }
             }
         }
-        dterm_reset(dt);
-        ///@todo this is end of the code block
-        
+
     }
     
     /// This code should never occur, given the while(1) loop.

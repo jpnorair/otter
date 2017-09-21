@@ -79,7 +79,7 @@ uint8_t* goto_eol(uint8_t* src) {
 
 
 #define INPUT_SANITIZE() do { \
-    if ((src == NULL) || (dst == NULL) || (dt == NULL)) {   \
+    if ((src == NULL) || (dst == NULL)) {   \
         *inbytes = 0;                                       \
         return -1;                                          \
     }                                                       \
@@ -92,7 +92,15 @@ uint8_t* goto_eol(uint8_t* src) {
 
 
 int cmd_quit(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
+    
+    /// dt == NULL is the initialization case.
+    /// There may not be an initialization for all command groups.
+    if (dt == NULL) {
+        return 0;
+    }
+    
     INPUT_SANITIZE();
+    
     raise(SIGINT);
     return 0;
 }
@@ -100,6 +108,13 @@ int cmd_quit(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstma
 
 
 int cmd_sethome(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
+    
+    /// dt == NULL is the initialization case.
+    /// There may not be an initialization for all command groups.
+    if (dt == NULL) {
+        return 0;
+    }
+    
     INPUT_SANITIZE();
     
     if (*inbytes >= 1023) {
@@ -127,6 +142,12 @@ int cmd_su(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax)
 /// - "root"
     int test_id     = -1;
     int bytes_out   = 0;
+    
+    /// dt == NULL is the initialization case.
+    /// There may not be an initialization for all command groups.
+    if (dt == NULL) {
+        return 0;
+    }
     
     INPUT_SANITIZE();
     
@@ -246,6 +267,12 @@ int cmd_whoami(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dst
 /// whoami command does not send any data to the target, it just checks to see
 /// who is the active CLI user, and if it has been authenticated successfully.
 
+    /// dt == NULL is the initialization case.
+    /// There may not be an initialization for all command groups.
+    if (dt == NULL) {
+        return 0;
+    }
+    
     INPUT_SANITIZE();     
     
     if (*inbytes != 0) {
@@ -276,6 +303,12 @@ int cmd_raw(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax
     const char* filepath;
     FILE*       fp;
     int         bytesout;
+    
+    /// dt == NULL is the initialization case.
+    /// There may not be an initialization for all command groups.
+    if (dt == NULL) {
+        return 0;
+    }
     
     INPUT_SANITIZE();
     
@@ -321,8 +354,14 @@ int cmd_raw(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax
 int cmd_hbcc(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
 /// HBCC src must be a code-word, then whitespace, then optionally a bintex string.
 /// @todo wrap this into command handling library
-    static unsigned int mode = 0;
+    //static unsigned int mode = 0;
 
+    /// Initialization
+    if (dt == NULL) {
+        hbcc_init();
+        return 0;
+    }
+    
     INPUT_SANITIZE();
     
 #   if (1 || defined(__HBUILDER__))
@@ -352,7 +391,7 @@ int cmd_hbcc(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstma
         ///@todo this functionality is not used exactly at this moment.
         if (src[0] == '-') {
             // Process parameter list.  Currently undefined
-            mode = 1;
+            //mode = 1;
             bytesout = 0;
         }
         
@@ -360,9 +399,9 @@ int cmd_hbcc(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstma
         ///    and thus has the normal codeword+bintex format.
         else {
             bytesout = bintex_ss((unsigned char*)cursor, (unsigned char*)dst, (int)dstmax);
-
+            
 #           if (1 || defined(__PRINT_BINTEX))
-            fprintf(stderr, "hbcc invoked: cmd=%s, bytesout=%d\n", src, bytesout);
+            fprintf(stderr, "hbcc invoked: cmd=%s, input-len=%d\n", src, bytesout);
             for (int i=0; i<bytesout; i++) {
                 fprintf(stderr, "%02X ", dst[i]);
             }
@@ -391,6 +430,13 @@ int cmd_hbcc(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstma
 
 // ID = 0
 int app_null(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
+    
+    /// dt == NULL is the initialization case.
+    /// There may not be an initialization for all command groups.
+    if (dt == NULL) {
+        return 0;
+    }
+    
     INPUT_SANITIZE();
     fprintf(stderr, "null invoked %s\n", src);
     return -1;
@@ -399,6 +445,13 @@ int app_null(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstma
 
 // ID = 1
 int app_file(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
+    
+    /// dt == NULL is the initialization case.
+    /// There may not be an initialization for all command groups.
+    if (dt == NULL) {
+        return 0;
+    }
+    
     INPUT_SANITIZE();
     fprintf(stderr, "file invoked %s\n", src);
     return -1;
@@ -407,6 +460,13 @@ int app_file(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstma
 
 // ID = 2
 int app_sensor(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
+    
+    /// dt == NULL is the initialization case.
+    /// There may not be an initialization for all command groups.
+    if (dt == NULL) {
+        return 0;
+    }
+    
     INPUT_SANITIZE();
     fprintf(stderr, "sensor invoked %s\n", src);
     return -1;
@@ -415,6 +475,13 @@ int app_sensor(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dst
 
 // ID = 3
 int app_sec(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
+    
+    /// dt == NULL is the initialization case.
+    /// There may not be an initialization for all command groups.
+    if (dt == NULL) {
+        return 0;
+    }
+    
     INPUT_SANITIZE();
     fprintf(stderr, "sec invoked %s\n", src);
     return -1;
@@ -423,6 +490,13 @@ int app_sec(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax
 
 // ID = 4
 int app_log(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
+    
+    /// dt == NULL is the initialization case.
+    /// There may not be an initialization for all command groups.
+    if (dt == NULL) {
+        return 0;
+    }
+    
     INPUT_SANITIZE();
     fprintf(stderr, "logger invoked %s\n", src);
     return -1;
@@ -431,6 +505,13 @@ int app_log(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax
 
 // ID = 5
 int app_dforth(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
+    
+    /// dt == NULL is the initialization case.
+    /// There may not be an initialization for all command groups.
+    if (dt == NULL) {
+        return 0;
+    }
+    
     INPUT_SANITIZE();
     fprintf(stderr, "dforth invoked %s\n", src);
     return -1;
@@ -441,6 +522,12 @@ int app_dforth(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dst
 int app_confit(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
 /// Confit message string is presently undefined.  What is here now is a paste
 /// from the hbcc command handler.
+    
+    /// dt == NULL is the initialization case.
+    /// There may not be an initialization for all command groups.
+    if (dt == NULL) {
+        return 0;
+    }
     
     INPUT_SANITIZE();
     
@@ -478,6 +565,13 @@ int app_confit(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dst
 
 // ID = 7
 int app_asapi(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
+    
+    /// dt == NULL is the initialization case.
+    /// There may not be an initialization for all command groups.
+    if (dt == NULL) {
+        return 0;
+    }
+    
     INPUT_SANITIZE();
     fprintf(stderr, "asapi invoked %s\n", src);
     return -1;
