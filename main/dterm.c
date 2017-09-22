@@ -243,7 +243,7 @@ void* dterm_piper(void* args) {
                 int list_size;
                 
                 // Test only
-                test_dumpbytes(protocol_buf, bytesout, "TX Packet Add");
+                //test_dumpbytes(protocol_buf, bytesout, "TX Packet Add");
                 // Test only
                 
                 pthread_mutex_lock(tlist_mutex);

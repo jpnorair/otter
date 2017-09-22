@@ -40,7 +40,7 @@ def subpipe():
             newdata = os.read(stdout_fd, 1024)
             if len(newdata):
                 print '>> ' + newdata,
-        elif stderr_fd in indata:
+        elif stderrfd in indata:
             newdata = os.read(stderr_fd, 1024)
             if len(newdata):
                 print '*> ' + newdata,
@@ -116,11 +116,3 @@ subpipe1_thread.join()
 
 sys.exit(0)
 
-'''
-0000: D0 0A 07 C9 00 05 01 00 00 00 1F 88 04 00 D0 08 
-0016: 07 C1 00 06 11 88 88 33 00 40 D0 00 07 E2 00 19 
-0032: 40 11 88 88 57 00 00 00 F0 00 00 00 3C 40 0C 6E 
-0048: 65 77 2D 6C 6F 63 2D 64 61 74 61 D0 00 07 A2 00 
-0064: 15 40 11 88 88 13 04 00 00 F9 00 00 00 20 21 08 
-0080: 73 65 72 69 61 6C 23 31 
-'''

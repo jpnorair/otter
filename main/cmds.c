@@ -411,8 +411,7 @@ int cmd_hbcc(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstma
         /// 3. If not an argument, the command is an API command (not a control)
         ///    and thus has the normal codeword+bintex format.
         else {
-            uint8_t temp_buffer[64];
-            
+            uint8_t temp_buffer[128];
             bytesout = bintex_ss((unsigned char*)cursor, (unsigned char*)temp_buffer, (int)sizeof(temp_buffer));
             
 #           if 0 || (defined(__PRINT_BINTEX))
@@ -424,8 +423,6 @@ int cmd_hbcc(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstma
             if ((bytesout == 0) && is_eos) {
                 bytesout = hbcc_flush();
             }
-            
-            fprintf(stderr, "bytesout = %d\n", bytesout);
         }
 
         return bytesout;
