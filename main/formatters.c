@@ -251,7 +251,7 @@ void fmt_fprintalp(mpipe_printer_t puts_fn, cJSON* msgcall, uint8_t* src, size_t
                     
             // Message with UTF-8 data
             case 0x05: 
-                _output_hexlog(puts_fn, payload, length);
+                _output_textlog(puts_fn, payload, length);
                 break;
             
             // Message with Unicode (UTF-16) data
@@ -263,7 +263,7 @@ void fmt_fprintalp(mpipe_printer_t puts_fn, cJSON* msgcall, uint8_t* src, size_t
             // Message with UTF-8 encoded Hex data
             ///@todo have this print out hex in similar output to fmt_printhex
             case 0x07: 
-                _output_hexlog(puts_fn, payload, length);
+                _output_textlog(puts_fn, payload, length);
                 break;
             
             default: 
