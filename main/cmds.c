@@ -431,6 +431,11 @@ int cmd_hbcc(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstma
             //fprintf(stderr, "hbcc called, generated %d bytes\n", bytesout);
         }
 
+        ///@todo add verbose to this condition
+        if (bytesout > 0) {
+            fprintf(stdout, "--> hbcc packetizing %d bytes\n", bytesout);
+        }
+
         return bytesout;
     }
     
