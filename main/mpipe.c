@@ -468,6 +468,12 @@ void* mpipe_writer(void* args) {
                 cursor      = txpkt->buffer;
                 bytes_left  = (int)txpkt->size;
                 
+                //fprintf(stderr, "Writing %d bytes to tty\n", bytes_left);
+                //for (int i=0; i<bytes_left; i++) {
+                //    fprintf(stderr, "%02X ", cursor[i]);
+                //}
+                //fprintf(stderr, "\n");
+                
                 while (bytes_left > 0) {
                     bytes_sent  = (int)write(mpctl.tty_fd, cursor, bytes_left);
                     cursor     += bytes_sent;

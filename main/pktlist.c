@@ -71,7 +71,7 @@ int pktlist_add(pktlist_t* plist, bool write_header, uint8_t* data, size_t size)
         newpkt->buffer[1]   = 0x55;
         newpkt->buffer[2]   = 0;
         newpkt->buffer[3]   = 0;
-        newpkt->buffer[4]   = size >> 8;
+        newpkt->buffer[4]   = (size >> 8) & 0xff;
         newpkt->buffer[5]   = size & 0xff;
         newpkt->buffer[6]   = 0;
         newpkt->buffer[7]   = 0;            ///@todo Set Control Field here based on Cli.
@@ -105,7 +105,7 @@ int pktlist_add(pktlist_t* plist, bool write_header, uint8_t* data, size_t size)
         uint16_t crcval;
         newpkt->buffer[6]   = newpkt->sequence;
         crcval              = crc_calc_block(&newpkt->buffer[4], newpkt->size - 4);
-        newpkt->buffer[2]   = crcval >> 8;
+        newpkt->buffer[2]   = (crcval >> 8) & 0xff;
         newpkt->buffer[3]   = crcval & 0xff;
     }
     

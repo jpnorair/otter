@@ -73,7 +73,7 @@ def subpipe1():
 
 sequence1 = "hbcc session_init [01 11 00 88]\n" \
             "hbcc new_adv [40 0400]\n" \
-            "hbcc new_inventory [40 01 0000]\n" \
+            "hbcc new_inventory [40 0100 0000]\n" \
             "hbcc collect_file_on_token [40 0C F0 0A 3C 2000 0000] \"new-loc-data\"\n" \
             "hbcc collect_auth_on_serial [00 08 20 04 00] \"serial#1\""
 

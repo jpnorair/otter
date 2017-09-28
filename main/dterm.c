@@ -488,6 +488,7 @@ void* dterm_prompter(void* args) {
                                         // to send to MPipe.
                                         else if (outbytes > 0) {
                                             int list_size;
+                                            //fprintf(stderr, "packet added to tlist, size = %d bytes\n", outbytes);
                                             pthread_mutex_lock(tlist_mutex);
                                             list_size = pktlist_add(tlist, true, protocol_buf, outbytes);
                                             pthread_mutex_unlock(tlist_mutex);

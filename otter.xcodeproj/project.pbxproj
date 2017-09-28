@@ -351,6 +351,7 @@
 			buildSettings = {
 				HEADER_SEARCH_PATHS = "$(PROJECT_DIR)/../HBuilder-lib";
 				LIBRARY_SEARCH_PATHS = "$(PROJECT_DIR)/../HBuilder-lib";
+				MACOSX_DEPLOYMENT_TARGET = 10.12;
 				OTHER_LDFLAGS = "";
 				OTHER_LIBTOOLFLAGS = "";
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -362,6 +363,7 @@
 			buildSettings = {
 				HEADER_SEARCH_PATHS = "$(PROJECT_DIR)/../HBuilder-lib";
 				LIBRARY_SEARCH_PATHS = "$(PROJECT_DIR)/../HBuilder-lib";
+				MACOSX_DEPLOYMENT_TARGET = 10.12;
 				OTHER_LDFLAGS = "";
 				OTHER_LIBTOOLFLAGS = "";
 				PRODUCT_NAME = "$(TARGET_NAME)";

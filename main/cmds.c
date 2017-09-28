@@ -410,19 +410,25 @@ int cmd_hbcc(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstma
         
         /// 3. If not an argument, the command is an API command (not a control)
         ///    and thus has the normal codeword+bintex format.
+        
         else {
             uint8_t temp_buffer[128];
             bytesout = bintex_ss((unsigned char*)cursor, (unsigned char*)temp_buffer, (int)sizeof(temp_buffer));
             
-#           if 0 || (defined(__PRINT_BINTEX))
+#           if (defined(__PRINT_BINTEX))
             test_dumpbytes(temp_buffer, bytesout, "HBCC Partial Bintex output");
 #           endif
             
+            /// hbcc_generate() will create the complete, ALP-framed API message.
+            /// - It will return 0 until the command stream is flushed.
+            /// - Flushing occurs automatically when a session is ended through input.
+            /// - Flushing occurs manually when the stream of input commands is ended.
             bytesout = hbcc_generate(dst, dstmax, (char*)src, (size_t)bytesout, temp_buffer);
-            
             if ((bytesout == 0) && is_eos) {
                 bytesout = hbcc_flush();
             }
+            
+            //fprintf(stderr, "hbcc called, generated %d bytes\n", bytesout);
         }
 
         return bytesout;
