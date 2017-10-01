@@ -63,14 +63,18 @@
 
 //Comment-out if not testing: this should ideally be passed into the compiler
 //params, but with XCode that's a mystery.
-//#define __TEST__
+#define __TEST__
 
 #define _OTTER_VERSION      "0.2.0"
 #define _OTTER_DATE         "6.2017"
 #define _DEFAULT_BAUDRATE   115200
 
 
-
+#if defined(__TEST__)
+#   define DEBUG_PRINTF(...) fprintf(stderr, "DEBUG: " __VA_ARGS__)
+#else
+#   define DEBUG_PRINTF(...) do { } while(0)
+#endif
 
 
 
@@ -446,6 +450,7 @@ int otter_main(const char* ttyfile, int baudrate, bool pipe, bool verbose, cJSON
     /// Initialize Thread Mutexes & Conds.  This is finnicky and it must be
     /// done before assignment into the argument containers, possibly due to 
     /// C-compiler foolishly optimizing.
+    
     assert( pthread_mutex_init(&dtwrite_mutex, NULL) == 0 );
     assert( pthread_mutex_init(&rlist_mutex, NULL) == 0 );
     assert( pthread_mutex_init(&tlist_mutex, NULL) == 0 );
@@ -519,64 +524,79 @@ int otter_main(const char* ttyfile, int baudrate, bool pipe, bool verbose, cJSON
     /// be via Ctl+C or Ctl+\, or potentially also through a dterm command.  
     /// Each thread must be be implemented to raise SIGQUIT or SIGINT on exit
     /// i.e. raise(SIGINT).
+    DEBUG_PRINTF("Creating theads\n");
     pthread_create(&thr_mpreader, NULL, &mpipe_reader, (void*)&mpipe_args);
     pthread_create(&thr_mpwriter, NULL, &mpipe_writer, (void*)&mpipe_args);
     pthread_create(&thr_mpparser, NULL, &mpipe_parser, (void*)&mpipe_args);
     pthread_create(&thr_dterm, NULL, dterm_fn, (void*)&dterm_args);
+    DEBUG_PRINTF("Finished creating theads\n");
     
     /// Threads are now running.  The rest of the main() code, below, is
     /// blocked by pthread_cond_wait() until the kill_cond is sent by one of 
     /// the child threads.  This will cause the program to quit.
     pthread_mutex_lock(&cli.kill_mutex);
     pthread_cond_wait(&cli.kill_cond, &cli.kill_mutex);
+    
+    DEBUG_PRINTF("Cancelling Theads\n");
     pthread_cancel(thr_mpreader);
     pthread_cancel(thr_mpwriter);
     pthread_cancel(thr_mpparser);
     pthread_cancel(thr_dterm);
     
     otter_main_TERM:
+    DEBUG_PRINTF("Destroying thread resources\n");
     pthread_mutex_unlock(&dtwrite_mutex);
     pthread_mutex_destroy(&dtwrite_mutex);
+    DEBUG_PRINTF("-- dtwrite_mutex destroyed\n");
     pthread_mutex_unlock(&rlist_mutex);
     pthread_mutex_destroy(&rlist_mutex);
+    DEBUG_PRINTF("-- rlist_mutex destroyed\n");
     pthread_mutex_unlock(&tlist_mutex);
     pthread_mutex_destroy(&tlist_mutex);
-    
+    DEBUG_PRINTF("-- tlist_mutex destroyed\n");
     pthread_mutex_unlock(&tlist_cond_mutex);
     pthread_mutex_destroy(&tlist_cond_mutex);
     pthread_cond_destroy(&tlist_cond);
-    
+    DEBUG_PRINTF("-- tlist_mutex & tlist_cond destroyed\n");
     pthread_mutex_unlock(&pktrx_mutex);
     pthread_mutex_destroy(&pktrx_mutex);
     pthread_cond_destroy(&pktrx_cond);
     
-    pthread_mutex_unlock(&cli.kill_mutex);
-    pthread_mutex_destroy(&cli.kill_mutex);
-    pthread_cond_destroy(&cli.kill_cond);
+    
     
     
     /// Close the drivers/files and free all allocated data objects (primarily 
     /// in mpipe).
     if (pipe == false) {
+        DEBUG_PRINTF("Closing DTerm\n");
         dterm_close(&dterm);
     }
     
     otter_main_TERM2:
+    DEBUG_PRINTF("Closing MPipe\n");
     mpipe_close(&mpipe_ctl);
+    DEBUG_PRINTF("Freeing DTerm and Command History\n");
     dterm_free(&dterm);
     ch_free(&cmd_history);
     
     otter_main_TERM1:
+    DEBUG_PRINTF("Freeing Mpipe Packet Lists\n");
     mpipe_freelists(&mpipe_rlist, &mpipe_tlist);
+    DEBUG_PRINTF("Freeing PPipe lists\n");
     ppipelist_deinit();
     
     // cli.exitcode is set to 0, unless sigint is raised.
-#   ifdef __TEST__
-    fprintf(stderr, "Exiting Cleanly\n"); 
-#   endif
-
+    DEBUG_PRINTF("Exiting cleanly and flushing output buffers\n");
     fflush(stdout);
     fflush(stderr);
+    
+    DEBUG_PRINTF("-- rlist_mutex & rlist_cond destroyed\n");
+    pthread_mutex_unlock(&cli.kill_mutex);
+    DEBUG_PRINTF("-- pthread_mutex_unlock(&cli.kill_mutex)\n");
+    pthread_mutex_destroy(&cli.kill_mutex);
+    DEBUG_PRINTF("-- pthread_mutex_destroy(&cli.kill_mutex)\n");
+    pthread_cond_destroy(&cli.kill_cond);
+    DEBUG_PRINTF("-- cli.kill_mutex & cli.kill_cond destroyed\n");
     
     return cli.exitcode;
 }

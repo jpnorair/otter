@@ -368,6 +368,8 @@ int cmd_hbcc(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstma
 /// HBCC src must be a code-word, then whitespace, then optionally a bintex string.
 /// @todo wrap this into command handling library
     bool is_eos = false;
+    int output_code;
+    size_t bytesout = 0;
 
     /// Initialization
     if (dt == NULL) {
@@ -378,8 +380,7 @@ int cmd_hbcc(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstma
     INPUT_SANITIZE_FLAG_EOS(is_eos);
     
 #   if (1 || defined(__HBUILDER__))
-    {   int         bytesout;
-        size_t      code_len;
+    {   size_t      code_len;
         size_t      code_max;
         uint8_t*    cursor;
     
@@ -405,7 +406,7 @@ int cmd_hbcc(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstma
         if (src[0] == '-') {
             // Process parameter list.  Currently undefined
             //mode = 1;
-            bytesout = 0;
+            output_code = 0;
         }
         
         /// 3. If not an argument, the command is an API command (not a control)
@@ -420,23 +421,25 @@ int cmd_hbcc(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstma
 #           endif
             
             /// hbcc_generate() will create the complete, ALP-framed API message.
-            /// - It will return 0 until the command stream is flushed.
-            /// - Flushing occurs automatically when a session is ended through input.
-            /// - Flushing occurs manually when the stream of input commands is ended.
-            bytesout = hbcc_generate(dst, dstmax, (char*)src, (size_t)bytesout, temp_buffer);
-            if ((bytesout == 0) && is_eos) {
-                bytesout = hbcc_flush();
-            }
+            /// - It will return a negative number on error
+            /// - It returns 0 when command is queued
+            /// - It returns positive number when commands are queued and should
+            ///   be packetized over MPipe.
+            /// - Possible to call 'hbcc flush' anytime to page-out commands.
+            output_code = hbcc_generate(dst, &bytesout, dstmax, (char*)src, (size_t)bytesout, temp_buffer);
             
+            //if ((output_code == 0) && is_eos) {
+            //    bytesout = hbcc_flush();
+            //}
             //fprintf(stderr, "hbcc called, generated %d bytes\n", bytesout);
         }
 
         ///@todo add verbose to this condition
-        if (bytesout > 0) {
-            fprintf(stdout, "--> hbcc packetizing %d bytes\n", bytesout);
+        if (output_code > 0) {
+            fprintf(stdout, "--> hbcc packetizing %zu bytes\n", bytesout);
         }
 
-        return bytesout;
+        return (int)output_code;
     }
     
 #   else
