@@ -563,8 +563,6 @@ int otter_main(const char* ttyfile, int baudrate, bool pipe, bool verbose, cJSON
     pthread_cond_destroy(&pktrx_cond);
     
     
-    
-    
     /// Close the drivers/files and free all allocated data objects (primarily 
     /// in mpipe).
     if (pipe == false) {
@@ -590,6 +588,11 @@ int otter_main(const char* ttyfile, int baudrate, bool pipe, bool verbose, cJSON
     fflush(stdout);
     fflush(stderr);
     
+    ///@todo there is a SIGILL that happens on pthread_cond_destroy(), but only
+    ///      after packets have been TX'ed.
+    ///      - Happens on two different systems
+    ///      - May need to use valgrind to figure out what is happening
+    ///      - after fixed, can move this code block upwards.
     DEBUG_PRINTF("-- rlist_mutex & rlist_cond destroyed\n");
     pthread_mutex_unlock(&cli.kill_mutex);
     DEBUG_PRINTF("-- pthread_mutex_unlock(&cli.kill_mutex)\n");
