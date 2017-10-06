@@ -18,6 +18,7 @@
 #include "cmds.h"
 #include "dterm.h"
 #include "test.h"
+#include "cliopt.h"
 
 // Local Headers/Libraries
 #include "bintex.h"
@@ -434,8 +435,7 @@ int cmd_hbcc(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstma
             //fprintf(stderr, "hbcc called, generated %d bytes\n", bytesout);
         }
 
-        ///@todo add verbose to this condition
-        if (output_code > 0) {
+        if (cliopt_isverbose() && (output_code > 0)) {
             fprintf(stdout, "--> hbcc packetizing %zu bytes\n", bytesout);
         }
 

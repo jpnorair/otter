@@ -22,6 +22,7 @@
 		22E34F9C1985D43600C19BBB /* main.c in Sources */ = {isa = PBXBuildFile; fileRef = 22E34F941985D43600C19BBB /* main.c */; };
 		22E34F9D1985D43600C19BBB /* mpipe.c in Sources */ = {isa = PBXBuildFile; fileRef = 22E34F951985D43600C19BBB /* mpipe.c */; };
 		22E34FA11985D45600C19BBB /* bintex.c in Sources */ = {isa = PBXBuildFile; fileRef = 22E34F9F1985D45600C19BBB /* bintex.c */; };
+		7E926B1F1F88239C00F93E6A /* cliopt.c in Sources */ = {isa = PBXBuildFile; fileRef = 7E926B1D1F88239C00F93E6A /* cliopt.c */; };
 		7E9FE1B21F70388400D360DF /* libhbuilder.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 7E9FE1B11F70388400D360DF /* libhbuilder.a */; };
 		7E9FE1B51F74381500D360DF /* test.c in Sources */ = {isa = PBXBuildFile; fileRef = 7E9FE1B31F74381500D360DF /* test.c */; };
 /* End PBXBuildFile section */
@@ -71,6 +72,8 @@
 		22E34F9F1985D45600C19BBB /* bintex.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = bintex.c; path = ../bintex/bintex.c; sourceTree = "<group>"; };
 		22E34FA01985D45600C19BBB /* bintex.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = bintex.h; path = ../bintex/bintex.h; sourceTree = "<group>"; };
 		22E34FA31985D48C00C19BBB /* m2def.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = m2def.h; path = ../m2def/m2def.h; sourceTree = "<group>"; };
+		7E926B1D1F88239C00F93E6A /* cliopt.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = cliopt.c; path = main/cliopt.c; sourceTree = "<group>"; };
+		7E926B1E1F88239C00F93E6A /* cliopt.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = cliopt.h; path = main/cliopt.h; sourceTree = "<group>"; };
 		7E9FE1B11F70388400D360DF /* libhbuilder.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libhbuilder.a; path = "../hbuilder-lib/libhbuilder.a"; sourceTree = "<group>"; };
 		7E9FE1B31F74381500D360DF /* test.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = test.c; path = main/test.c; sourceTree = "<group>"; };
 		7E9FE1B41F74381500D360DF /* test.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = test.h; path = main/test.h; sourceTree = "<group>"; };
@@ -148,6 +151,8 @@
 		22E34F891985D42C00C19BBB /* main */ = {
 			isa = PBXGroup;
 			children = (
+				7E926B1D1F88239C00F93E6A /* cliopt.c */,
+				7E926B1E1F88239C00F93E6A /* cliopt.h */,
 				22E34F8A1985D43600C19BBB /* cmdhistory.c */,
 				22E34F8B1985D43600C19BBB /* cmdhistory.h */,
 				22E34F8C1985D43600C19BBB /* cmds.c */,
@@ -247,6 +252,7 @@
 				228DF9DA1EE5A9C5004D8D4F /* ppipe.c in Sources */,
 				22E34F981985D43600C19BBB /* cmds.c in Sources */,
 				22E34F9A1985D43600C19BBB /* crc_calc_block.c in Sources */,
+				7E926B1F1F88239C00F93E6A /* cliopt.c in Sources */,
 				22E34F9C1985D43600C19BBB /* main.c in Sources */,
 				22E34FA11985D45600C19BBB /* bintex.c in Sources */,
 				22E34F991985D43600C19BBB /* cmdsearch.c in Sources */,

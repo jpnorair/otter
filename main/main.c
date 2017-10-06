@@ -41,6 +41,7 @@
 #include "ppipelist.h"
 #include "cmdsearch.h"
 #include "cmdhistory.h"
+#include "cliopt.h"
 
 // Local Libraries
 #include "argtable3.h"
@@ -63,7 +64,7 @@
 
 //Comment-out if not testing: this should ideally be passed into the compiler
 //params, but with XCode that's a mystery.
-#define __TEST__
+//#define __TEST__
 
 #define _OTTER_VERSION      "0.2.0"
 #define _OTTER_DATE         "6.2017"
@@ -81,18 +82,7 @@
 // Client Data type
 ///@todo some of this should get merged into MPipe data type
 
-typedef enum {
-    FORMAT_Dynamic  = 0,
-    FORMAT_Bintex   = 1,
-    FORMAT_Hex8     = 2,
-    FORMAT_Hex16    = 3,
-    FORMAT_Hex32    = 4
-} FORMAT_Type;
-
-typedef struct {
-    bool        verbose_on;
-    FORMAT_Type format;
-} cliopt_struct;
+static cliopt_t cliopts;
 
 typedef struct {
     //FILE*           out;
@@ -229,7 +219,7 @@ int main(int argc, const char * argv[]) {
     
     char ttyfile_val[256];
     int  baudrate_val   = _DEFAULT_BAUDRATE;
-    bool verbose_val    = false;
+    bool verbose_val    = true;
     bool pipe_val       = false;
     
     cJSON* json = NULL;
@@ -347,6 +337,7 @@ int main(int argc, const char * argv[]) {
     }
     if (pipe->count != 0) {
         pipe_val = true;
+        verbose_val = false;
     }
     if (verbose->count != 0) {
         verbose_val = true;
@@ -518,6 +509,10 @@ int otter_main(const char* ttyfile, int baudrate, bool pipe, bool verbose, cJSON
     _assign_signal(SIGINT, &sigint_handler);
     _assign_signal(SIGQUIT, &sigquit_handler);
 
+    /// Client Options.  These are read-only from internal modules
+    cliopts.format      = FORMAT_Dynamic;
+    cliopts.verbose_on  = verbose;
+    cliopt_init(&cliopts);
     
     /// Invoke the child threads below.  All of the child threads run
     /// indefinitely until an error occurs or until the user quits.  Quit can 
