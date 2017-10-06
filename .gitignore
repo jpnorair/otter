@@ -3,6 +3,9 @@
 
 legacy_code*
 
+# Used to hide symbolic links to binaries
+*.exe
+
 # Stuff that gets generated from XCode
 *.xcuserstate
 *.xcuserstate
