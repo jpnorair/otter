@@ -9,6 +9,7 @@
 #include "formatters.h"
 
 #include "ppipelist.h"
+#include "cliopt.h"
 
 #include <string.h>
 #include <time.h>
@@ -204,10 +205,27 @@ void fmt_fprintalp(mpipe_printer_t puts_fn, cJSON* msgcall, uint8_t* src, size_t
     
     //fprintf(stderr, "flags=%02x length=%02x cmd=%02x id=%02x\n", flags, length, cmd, id);
     
-    
     ///@note could squelch output for mismatched length
     if (length > src_bytes) {
         length = (int)src_bytes;
+    }
+    
+    ///@todo deal with multiframe ALPs
+    ///      Strategy here is to:
+    ///      - only output when Message-End flag is set
+    ///      - buffer message until Message-End is set
+    ///      - wipe buffer (and start again) whenever Message-Start is set
+    ///
+    ///      Also, make sure that "length" variable becomes length of
+    ///      whole message payload, not just the fragment.
+    ///
+    
+    /// Send the ALP data to an appropriate output pipe.
+    /// If output pipe for this ALP isn't defined, nothing will happen.
+    /// The id/cmd bytes are sent as well
+    {   char str_alpid[8];
+        snprintf(str_alpid, 7, "%d", id);
+        ppipelist_puthex("alp", str_alpid, (char*)&src[2], length+2);
     }
     
     /// If length is 0, print out the ALP header only
@@ -216,10 +234,7 @@ void fmt_fprintalp(mpipe_printer_t puts_fn, cJSON* msgcall, uint8_t* src, size_t
         return;
     }
     
-    
-    ///@todo deal with multiframe ALPs
-    
-    ///@todo deal with anything other than logger
+    ///Logger (id 0x04) has special treatment (it gets logged to stdout)
     if (id == 0x04) {
         switch (cmd) {
             // "Raw" Data.  Print as hex
@@ -273,8 +288,9 @@ void fmt_fprintalp(mpipe_printer_t puts_fn, cJSON* msgcall, uint8_t* src, size_t
         }
     }
     
-    
-    else {
+    /// Dump hex of non-logger ALPs when in verbose mode.
+    /// These ALPs get reported to output pipes in verbose and non-verbose modes.
+    else if (cliopt_isverbose()) {
         fmt_printhex(puts_fn, src, src_bytes, 16);
     }
 }
