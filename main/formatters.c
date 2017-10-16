@@ -132,7 +132,7 @@ void _output_hexlog(mpipe_printer_t puts_fn, uint8_t* payload, int length) {
         *msgbreak++ = 0;
         length -= (msgbreak - payload);
         
-        if (ppipelist_puthex("log", (const char*)payload, (char*)msgbreak, length) != 0) {
+        if (ppipelist_puthex("./pipes/log", (const char*)payload, (char*)msgbreak, length) != 0) {
             puts_fn((char*)payload);
             puts_fn("\n");
             fmt_printhex(puts_fn, msgbreak, length, 16);
@@ -150,7 +150,7 @@ void _output_binarylog(mpipe_printer_t puts_fn, uint8_t* payload, int length) {
         *msgbreak++ = 0;
         length -= (msgbreak - payload);
         
-        if (ppipelist_putbinary("log", (const char*)payload, msgbreak, length) != 0) {
+        if (ppipelist_putbinary("./pipes/log", (const char*)payload, msgbreak, length) != 0) {
             puts_fn((char*)payload);
             puts_fn("\n");
             fmt_printhex(puts_fn, msgbreak, length, 16);
@@ -167,7 +167,7 @@ void _output_textlog(mpipe_printer_t puts_fn, uint8_t* payload, int length) {
         *msgbreak++ = 0;
         length -= (msgbreak - payload);
         
-        if (ppipelist_puttext("log", (const char*)payload, (char*)msgbreak, length) != 0) {
+        if (ppipelist_puttext("./pipes/log", (const char*)payload, (char*)msgbreak, length) != 0) {
             puts_fn((char*)payload);
             puts_fn("\n");
             puts_fn((char*)msgbreak);
@@ -225,7 +225,7 @@ void fmt_fprintalp(mpipe_printer_t puts_fn, cJSON* msgcall, uint8_t* src, size_t
     /// The id/cmd bytes are sent as well
     {   char str_alpid[8];
         snprintf(str_alpid, 7, "%d", id);
-        ppipelist_puthex("alp", str_alpid, (char*)&src[2], length+2);
+        ppipelist_puthex("./pipes/alp", str_alpid, (char*)&src[2], length+2);
     }
     
     /// If length is 0, print out the ALP header only
