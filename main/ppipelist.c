@@ -266,7 +266,7 @@ int ppipelist_puthex(const char* prefix, const char* name, char* src, size_t siz
 /// This is a variant of sub_put()
     ppipe_fifo_t*   fifo;
     int             fd;
-    
+
 #   ifdef USE_BIDIRECTIONAL_PIPES
     ppipelist_search(&fifo, prefix, name, "w");
 #   else
@@ -276,10 +276,10 @@ int ppipelist_puthex(const char* prefix, const char* name, char* src, size_t siz
     if (fifo != NULL) {
         //errno = 0;
         fd = open(fifo->fpath, O_WRONLY|O_NONBLOCK);
+        
         if (fd > 0) {
             close(fd);
             fd = open(fifo->fpath, O_WRONLY);
-            
             while (size-- != 0) {
                 uint8_t hexbuf[2];
                 write(fd, sub_gethex(hexbuf, *src++), 2);
