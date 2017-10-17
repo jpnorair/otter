@@ -16,6 +16,11 @@
 
 
 
+typedef struct {
+    uint8_t     id;
+    size_t      size;
+    uint8_t*    payload;
+} alp_list_t;
 
 
 
@@ -176,123 +181,138 @@ void _output_textlog(mpipe_printer_t puts_fn, uint8_t* payload, int length) {
 }
 
 
+///@todo bypass ALPs that don't have Message-End bit set, save them for later.
+///      Will require building an application buffer and maintaining it for an
+///      ALP ID until Message End or next Message Start is found.
 void fmt_fprintalp(mpipe_printer_t puts_fn, cJSON* msgcall, uint8_t* src, size_t src_bytes) {
     uint8_t* payload;
     int flags;
     int length;
+    int rem_bytes;
     int cmd;
     int id;
 
-    /// Early exit condition
-    if (src_bytes < 4) {
+    /// Early exit conditions
+    if ((src_bytes < 4) || (src_bytes > 65535)) {
         return;
     }
     
-    //fprintf(stderr, "src_bytes=%zu\n", src_bytes);
-
     /// Null Terminate the end
     /// @note this is safe due to the way src buffer is allocated
     src[src_bytes] = 0;
+    
+    //fprintf(stderr, "src_bytes=%zu\n", src_bytes);
+    rem_bytes = (int)src_bytes;
 
-    /// Look at ALP header
-    flags   = src[0];
-    length  = src[1];
-    id      = src[2];
-    cmd     = src[3];
-    
-    payload     = &src[4];
-    src_bytes  -= 4;
-    
-    //fprintf(stderr, "flags=%02x length=%02x cmd=%02x id=%02x\n", flags, length, cmd, id);
-    
-    ///@note could squelch output for mismatched length
-    if (length > src_bytes) {
-        length = (int)src_bytes;
-    }
-    
-    ///@todo deal with multiframe ALPs
-    ///      Strategy here is to:
-    ///      - only output when Message-End flag is set
-    ///      - buffer message until Message-End is set
-    ///      - wipe buffer (and start again) whenever Message-Start is set
-    ///
-    ///      Also, make sure that "length" variable becomes length of
-    ///      whole message payload, not just the fragment.
-    ///
-    
-    /// Send the ALP data to an appropriate output pipe.
-    /// If output pipe for this ALP isn't defined, nothing will happen.
-    /// The id/cmd bytes are sent as well
-    {   char str_alpid[8];
-        snprintf(str_alpid, 7, "%d", id);
-        ppipelist_puthex("./pipes/alp", str_alpid, (char*)&src[2], length+2);
-    }
-    
-    /// If length is 0, print out the ALP header only
-    if (length == 0) {
-        fmt_printhex(puts_fn, src, src_bytes, 16);
-        return;
-    }
-    
-    ///Logger (id 0x04) has special treatment (it gets logged to stdout)
-    if (id == 0x04) {
-        switch (cmd) {
-            // "Raw" Data.  Print as hex
-            case 0x00:
-                fmt_printhex(puts_fn, payload, length, 16);
-                break;
+    do {
+        /// Look at ALP header for this record
+        ///@todo Buffer it if no Message-End.  Discard Buffer on Message-Start.
+        ///      Command value on last record (one with Message-End) will be 
+        ///      the Command that is used.
+        flags   = src[0];
+        length  = src[1];
+        id      = src[2];
+        cmd     = src[3];
         
-            // UTF-8 Unstructured Data
-            case 0x01: 
-                puts_fn((char*)payload);
-                break;
-                    
-            // Unicode (UTF-16) unstructured Data
-            // Not presently supported
-            case 0x02: 
-                fmt_printhex(puts_fn, src, src_bytes, 16);
-                break;
-            
-            // UTF-8 Hex-encoded data
-            ///@todo have this print out hex in similar output to fmt_printhex
-            case 0x03: 
-                puts_fn((char*)payload);
-                break;
-            
-            // Message with raw data
-            case 0x04: {
-                _output_hexlog(puts_fn, payload, length);
-            } break;
-                    
-            // Message with UTF-8 data
-            case 0x05: 
-                _output_textlog(puts_fn, payload, length);
-                break;
-            
-            // Message with Unicode (UTF-16) data
-            // Not presently supported
-            case 0x06: 
-                _output_hexlog(puts_fn, payload, length);
-                break;
-                
-            // Message with UTF-8 encoded Hex data
-            ///@todo have this print out hex in similar output to fmt_printhex
-            case 0x07: 
-                _output_textlog(puts_fn, payload, length);
-                break;
-            
-            default: 
-                logger_HEXOUT:
-                fmt_printhex(puts_fn, payload, length, 16);
-                break;
+        payload     = &src[4];
+        rem_bytes  -= 4;
+        
+        //fprintf(stderr, "flags=%02x length=%02x cmd=%02x id=%02x\n", flags, length, cmd, id);
+        
+        ///@note could squelch output for mismatched length
+        if (length > rem_bytes) {
+            length = (int)rem_bytes;
         }
-    }
-    
-    /// Dump hex of non-logger ALPs when in verbose mode.
-    /// These ALPs get reported to output pipes in verbose and non-verbose modes.
-    else if (cliopt_isverbose()) {
-        fmt_printhex(puts_fn, src, src_bytes, 16);
-    }
+        
+        ///@todo deal with multiframe ALPs
+        ///      Strategy here is to:
+        ///      - only output when Message-End flag is set
+        ///      - buffer message until Message-End is set
+        ///      - wipe buffer (and start again) whenever Message-Start is set
+        ///
+        ///      Also, make sure that "length" variable becomes length of
+        ///      whole message payload, not just the fragment.
+        ///
+        
+        /// Send the ALP data to an appropriate output pipe.
+        /// If output pipe for this ALP isn't defined, nothing will happen.
+        /// The id/cmd bytes are sent as well
+        {   char str_alpid[8];
+            snprintf(str_alpid, 7, "%d", id);
+            ppipelist_puthex("./pipes/alp", str_alpid, (char*)&src[2], length+2);
+        }
+        
+        /// If length is 0, print out the ALP header only
+        if (length == 0) {
+            fmt_printhex(puts_fn, src, 4, 16);
+            return;
+        }
+        
+        ///Logger (id 0x04) has special treatment (it gets logged to stdout)
+        if (id == 0x04) {
+            switch (cmd) {
+                // "Raw" Data.  Print as hex
+                case 0x00:
+                    fmt_printhex(puts_fn, payload, length, 16);
+                    break;
+            
+                // UTF-8 Unstructured Data
+                case 0x01:
+                    puts_fn((char*)payload);
+                    break;
+                        
+                // Unicode (UTF-16) unstructured Data
+                // Not presently supported
+                case 0x02:
+                    fmt_printhex(puts_fn, src, length+4, 16);
+                    break;
+                
+                // UTF-8 Hex-encoded data
+                ///@todo have this print out hex in similar output to fmt_printhex
+                case 0x03:
+                    puts_fn((char*)payload);
+                    break;
+                
+                // Message with raw data
+                case 0x04: {
+                    _output_hexlog(puts_fn, payload, length);
+                } break;
+                        
+                // Message with UTF-8 data
+                case 0x05:
+                    _output_textlog(puts_fn, payload, length);
+                    break;
+                
+                // Message with Unicode (UTF-16) data
+                // Not presently supported
+                case 0x06:
+                    _output_hexlog(puts_fn, payload, length);
+                    break;
+                    
+                // Message with UTF-8 encoded Hex data
+                ///@todo have this print out hex in similar output to fmt_printhex
+                case 0x07:
+                    _output_textlog(puts_fn, payload, length);
+                    break;
+                
+                default:
+                    logger_HEXOUT:
+                    fmt_printhex(puts_fn, payload, length, 16);
+                    break;
+            }
+        }
+        
+        /// Dump hex of non-logger ALPs when in verbose mode.
+        /// These ALPs get reported to output pipes in verbose and non-verbose modes.
+        else if (cliopt_isverbose()) {
+            fmt_printhex(puts_fn, src, length+4, 16);
+        }
+        
+        /// Reduce rem_bytes by length and move src ahead by length+4
+        /// This allows multiple ALPs to get bundled into a single packet.
+        rem_bytes  -= length;
+        src        += length+4;
+    } while (rem_bytes > 0);
 }
 
 
