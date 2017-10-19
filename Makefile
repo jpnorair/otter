@@ -6,42 +6,39 @@ ARGTABLE_H := ./argtable/argtable3.h
 cJSON_C := ./cJSON/cJSON.c
 cJSON_H := ./cJSON/cJSON.h
 
+BINTEX_C := ./../bintex/bintex.c
+BINTEX_H := ./../bintex/bintex.h
+
 MAIN_C := $(wildcard ./main/*.c)
 MAIN_H := $(wildcard ./main/*.h)
 
-OBJ := $(wildcard ./~build/*.o)
+M2DEF_H := ./../m2def/m2def.h
+
+TEST_C := $(wildcard ./test/*.c)
+TEST_H := $(wildcard ./test/*.h)
+
+SOURCES := $(ARGTABLE_C) $(cJSON_C) $(MAIN_C) $(BINTEX_C)
+HEADERS := $(ARGTABLE_H) $(cJSON_H) $(MAIN_H) $(BINTEX_H) $(M2DEF_H) $(TEST_H)
+
+OBJ := $(wildcard ./*.o)
           
-LIBS    = -l./eclipse-paho-mqtt-c/lib -I./eclipse-paho-mqtt-c/include \
-          -l/usr/bin -I/usr/include \
-          -l/usr/local/bin -I/usr/local/include 
-          
+SEARCH := -l./../HBuilder-lib -I./../HBuilder-lib -I./../bintex -I./../m2def -I./cJSON -I./argtable -I./main -I./test
 
-target debug : FLAGS = -Og -g
-target release : FLAGS = -O3
 
-#install:
-#	rm -f 
+#FLAGS = -O -g -Wall
+FLAGS = -O3 -Wall
 
-mathneon_test: mathneon_a.o mathneon_test.o
-	$(COMPILER) $(FLAGS) -o mathtest mathneon_debug.o $(OBJS) -lm
+all: otter
 
-mathneon_a: mathneon_a.o
-	ar rcs libmathneon.a $(OBJS)
+otter: otter.o
+	$(COMPILER) $(FLAGS) $(OBJ) -L./../HBuilder-lib -lhbuilder -o otter.out
 
-mathneon_so: mathneon_so.o
-	rm -f libmathneon.so*
-	$(COMPILER) -shared -Wl,-install_name,libmathneon.so.1 -o libmathneon.so.1.0.0 $(OBJS) -lm
-	
-mathneon_so.o: $(SOURCES) $(HEADERS)
-	$(COMPILER) $(FLAGS) -fPIC -c $(SOURCES) $(HEADERS) 
-
-mathneon_a.o: $(SOURCES) $(HEADERS)
-	$(COMPILER) $(FLAGS) -c $(SOURCES) $(HEADERS) -lm
-	
-mathneon_test.o: mathneon_debug.c $(HEADERS)
-	$(COMPILER) $(FLAGS) -c mathneon_debug.c $(HEADERS) -lm
+otter.o: $(SOURCES) $(HEADERS)
+	$(COMPILER) $(FLAGS) $(SEARCH) -c $(SOURCES) $(HEADERS)
 
 clean:
-	rm -rf ./~build
-	rm -f *.gch
-
+	rm -rf ./*.o
+	rm -f ./*.gch
+	rm -f ./argtable/*.gch
+	rm -f ./cJSON/*.gch
+	rm -f ./main/*.gch

@@ -24,7 +24,6 @@
 		22E34FA11985D45600C19BBB /* bintex.c in Sources */ = {isa = PBXBuildFile; fileRef = 22E34F9F1985D45600C19BBB /* bintex.c */; };
 		7E926B1F1F88239C00F93E6A /* cliopt.c in Sources */ = {isa = PBXBuildFile; fileRef = 7E926B1D1F88239C00F93E6A /* cliopt.c */; };
 		7E9FE1B21F70388400D360DF /* libhbuilder.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 7E9FE1B11F70388400D360DF /* libhbuilder.a */; };
-		7E9FE1B51F74381500D360DF /* test.c in Sources */ = {isa = PBXBuildFile; fileRef = 7E9FE1B31F74381500D360DF /* test.c */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -43,6 +42,7 @@
 /* Begin PBXFileReference section */
 		2219722A1EEF81B70087598A /* cJSON.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = cJSON.c; sourceTree = "<group>"; };
 		2219722B1EEF81B70087598A /* cJSON.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = cJSON.h; sourceTree = "<group>"; };
+		221F2AA41F99339E00ABB61E /* test */ = {isa = PBXFileReference; lastKnownFileType = folder; path = test; sourceTree = "<group>"; };
 		223DE8D51F6B828F00F3639F /* hbuilder.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = hbuilder.h; path = "../HBuilder-lib/hbuilder.h"; sourceTree = "<group>"; };
 		225CD1661F17BF9B00D10812 /* ppipelist.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = ppipelist.c; path = main/ppipelist.c; sourceTree = "<group>"; };
 		225CD1671F17BF9B00D10812 /* ppipelist.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = ppipelist.h; path = main/ppipelist.h; sourceTree = "<group>"; };
@@ -75,8 +75,6 @@
 		7E926B1D1F88239C00F93E6A /* cliopt.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = cliopt.c; path = main/cliopt.c; sourceTree = "<group>"; };
 		7E926B1E1F88239C00F93E6A /* cliopt.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = cliopt.h; path = main/cliopt.h; sourceTree = "<group>"; };
 		7E9FE1B11F70388400D360DF /* libhbuilder.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libhbuilder.a; path = "../hbuilder-lib/libhbuilder.a"; sourceTree = "<group>"; };
-		7E9FE1B31F74381500D360DF /* test.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = test.c; path = main/test.c; sourceTree = "<group>"; };
-		7E9FE1B41F74381500D360DF /* test.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = test.h; path = main/test.h; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -126,6 +124,7 @@
 				22E34FA21985D48200C19BBB /* m2def */,
 				22E34F9E1985D44500C19BBB /* bintex */,
 				22E34F891985D42C00C19BBB /* main */,
+				221F2AA41F99339E00ABB61E /* test */,
 				22E34F7F1985D3ED00C19BBB /* otter */,
 				22E34F7E1985D3ED00C19BBB /* Products */,
 				225181B51F677702006FDA46 /* Frameworks */,
@@ -174,8 +173,6 @@
 				228DF9D91EE5A9C5004D8D4F /* ppipe.h */,
 				225CD1661F17BF9B00D10812 /* ppipelist.c */,
 				225CD1671F17BF9B00D10812 /* ppipelist.h */,
-				7E9FE1B31F74381500D360DF /* test.c */,
-				7E9FE1B41F74381500D360DF /* test.h */,
 			);
 			name = main;
 			sourceTree = "<group>";
@@ -248,7 +245,6 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				7E9FE1B51F74381500D360DF /* test.c in Sources */,
 				228DF9DA1EE5A9C5004D8D4F /* ppipe.c in Sources */,
 				22E34F981985D43600C19BBB /* cmds.c in Sources */,
 				22E34F9A1985D43600C19BBB /* crc_calc_block.c in Sources */,

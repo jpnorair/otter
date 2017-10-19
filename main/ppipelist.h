@@ -24,6 +24,7 @@
 #define ppipelist_h
 
 #include <stdio.h>
+#include <stdint.h>
 
 #include "ppipe.h"
 

@@ -3,8 +3,15 @@
 
 legacy_code*
 
+#Don't add Makefile outputs
+*.gch
+*.o
+otter.out
+
+
 # Used to hide symbolic links to binaries
 *.exe
+
 
 # Stuff that gets generated from XCode
 *.xcuserstate
