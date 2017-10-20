@@ -19,22 +19,27 @@ TEST_H := $(wildcard ./test/*.h)
 
 SOURCES := $(ARGTABLE_C) $(cJSON_C) $(MAIN_C) $(BINTEX_C)
 HEADERS := $(ARGTABLE_H) $(cJSON_H) $(MAIN_H) $(BINTEX_H) $(M2DEF_H) $(TEST_H)
+     
+SEARCH := -I./../HBuilder-lib \
+          -I./../m2def -I./../bintex \
+          -I./cJSON -I./argtable \
+          -I./main -I./test
 
-OBJ := $(wildcard ./*.o)
-          
-SEARCH := -l./../HBuilder-lib -I./../HBuilder-lib -I./../bintex -I./../m2def -I./cJSON -I./argtable -I./main -I./test
 
-
-#FLAGS = -O -g -Wall
-FLAGS = -O3 -Wall
+#FLAGS = -std=gnu99 -O -g -Wall -pthread
+FLAGS = -std=gnu99 -O3 -pthread
 
 all: otter
 
 otter: otter.o
-	$(COMPILER) $(FLAGS) $(OBJ) -L./../HBuilder-lib -lhbuilder -o otter.out
+	$(eval OBJS := $(shell ls ./*.o))
+	$(COMPILER) $(FLAGS) $(OBJS) -I./../HBuilder-lib -L./../HBuilder-lib -lhbuilder -o otter.out
 
 otter.o: $(SOURCES) $(HEADERS)
 	$(COMPILER) $(FLAGS) $(SEARCH) -c $(SOURCES) $(HEADERS)
+
+install:
+	mv otter.out ./../interlink/linux-mint17-i686/otter
 
 clean:
 	rm -rf ./*.o
