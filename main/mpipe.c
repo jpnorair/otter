@@ -38,6 +38,12 @@
 #include <poll.h>
 
 
+/// DEBUG printing for tty read
+#ifdef TTY_DEBUG
+#   define TTY_PRINTF(...)  fprintf(stderr, __VA_ARGS__)
+#else
+#   define TTY_PRINTF(...)  do { } while(0)
+#endif
 
 
 /// Internal Subroutine Prototypes
@@ -258,7 +264,7 @@ void* mpipe_reader(void* args) {
         errcode = 4;
         goto mpipe_reader_ERR;
     }
-    
+
     new_bytes = (int)read(mpctl.tty_fd, &syncinput, 1);
     if (new_bytes < 1) {
         errcode = 1;
@@ -267,6 +273,7 @@ void* mpipe_reader(void* args) {
     if (syncinput != 0xFF) {
         goto mpipe_reader_SYNC0;
     }
+    TTY_PRINTF("TTY: Sync FF Received\n");
     
     /// Now wait for a 55, ignoring FFs
     mpipe_reader_SYNC1:
@@ -291,17 +298,13 @@ void* mpipe_reader(void* args) {
     if (syncinput != 0x55) {
         goto mpipe_reader_SYNC0;
     }
-    
-    //fprintf(stderr, "Sync Found\n");
+    TTY_PRINTF("TTY: Sync 55 Received\n");
+
     
     /// At this point, FF55 was detected.  We get the next 6 bytes of the 
     /// header, which is the rest of the header.  
-    /// @todo Add a timeout mechanism here.
     /// @todo Make header length dynamic based on control field (last byte).
     ///           However, control field is not yet defined.
-    
-    ///@todo Set kill timer for receiving header bytes
-    
     new_bytes       = 0;
     payload_left    = 6;
     rbuf_cursor     = rbuf;
@@ -317,10 +320,9 @@ void* mpipe_reader(void* args) {
         }
     
         new_bytes       = (int)read(mpctl.tty_fd, rbuf_cursor, payload_left);
-        //fprintf(stderr, "new_bytes = %d\n", new_bytes);
         rbuf_cursor    += new_bytes;
         payload_left   -= new_bytes;
-        
+        TTY_PRINTF("header new_bytes = %d\n", new_bytes);
     } while (payload_left > 0);
     
     if (payload_left != 0) {
@@ -348,10 +350,8 @@ void* mpipe_reader(void* args) {
     }
     
     /// Receive the remaining payload bytes
-    ///@todo Re-set kill timer for receiving payload bytes
     ///@note Commented-out parts are buffer printouts for data alignment 
-    ///      validation.
-    ///      
+    ///      validation.    
     payload_left    = payload_length;
     rbuf_cursor     = &rbuf[6];
     while (payload_left > 0) { 
@@ -366,7 +366,7 @@ void* mpipe_reader(void* args) {
         }
     
         new_bytes       = (int)read(mpctl.tty_fd, rbuf_cursor, payload_left);
-        //fprintf(stderr, "new_bytes = %d\n", new_bytes);
+        TTY_PRINTF(stderr, "payload new_bytes = %d\n", new_bytes);
         
 //        fprintf(stderr, "read(): ");
 //        for (int i=0; i<new_bytes; i++) {
@@ -393,17 +393,17 @@ void* mpipe_reader(void* args) {
     /// @todo supply estimated bytes remaining into mpipe_flush()
     mpipe_reader_ERR:
     switch (errcode) {
-        case 0: //fprintf(stderr, "sending packet rx signal\n");
+        case 0: TTY_PRINTF(stderr, "Sending packet rx signal\n");
                 pthread_cond_signal(pktrx_cond);
                 goto mpipe_reader_START;
         
-        case 1: // send error "MPipe Packet Sync could not be retrieved."
+        case 1: TTY_PRINTF(stderr, "MPipe Packet Sync could not be retrieved.\n");
                 goto mpipe_reader_START;
         
-        case 2: // send error "Mpipe Packet Payload Length is out of bounds."
+        case 2: TTY_PRINTF(stderr, "Mpipe Packet Payload Length is out of bounds.\n");
                 goto mpipe_reader_START;
                 
-        case 3: // send error "Mpipe Packet RX timed-out
+        case 3: TTY_PRINTF(stderr, "Mpipe Packet RX timed-out\n");
                 goto mpipe_reader_START;
                 
         case 4: fprintf(stderr, "Connection dropped, quitting now\n");

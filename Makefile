@@ -26,14 +26,17 @@ SEARCH := -I./../HBuilder-lib \
           -I./main -I./test
 
 
-#FLAGS = -std=gnu99 -O -g -Wall -pthread
+#FLAGS = -std=gnu99 -D TTY_DEBUG -O -g -Wall -pthread
 FLAGS = -std=gnu99 -O3 -pthread
 
 all: otter
 
-otter: otter.o
+otter: otter.o hbuilder_lib
 	$(eval OBJS := $(shell ls ./*.o))
 	$(COMPILER) $(FLAGS) $(OBJS) -I./../HBuilder-lib -L./../HBuilder-lib -lhbuilder -o otter.out
+
+hbuilder_lib: 
+	cd ./../HBuilder-lib && $(MAKE) all
 
 otter.o: $(SOURCES) $(HEADERS)
 	$(COMPILER) $(FLAGS) $(SEARCH) -c $(SOURCES) $(HEADERS)
