@@ -186,8 +186,6 @@ int pktlist_getnew(pktlist_t* plist) {
     uint16_t    crc_comp;
     //time_t      seconds;
 
-    ///@todo Is it needed to do mpipe_add() here?  I don't think so
-    
     // packet list is not allocated -- that's a serious error
     if (plist == NULL) {
         return -11;

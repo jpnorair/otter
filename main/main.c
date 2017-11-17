@@ -34,9 +34,13 @@
   ******************************************************************************
   */
 
+// Top Level Configuration Header
+#include "otter_cfg.h"
+
 // Application Headers
 #include "dterm.h"
 #include "mpipe.h"
+#include "modbus.h"
 #include "ppipe.h"
 #include "ppipelist.h"
 #include "cmdsearch.h"
@@ -65,11 +69,6 @@
 //Comment-out if not testing: this should ideally be passed into the compiler
 //params, but with XCode that's a mystery.
 //#define __TEST__
-
-#define _OTTER_VERSION      "0.2.0"
-#define _OTTER_DATE         "6.2017"
-#define _DEFAULT_BAUDRATE   115200
-
 
 #if defined(__TEST__)
 #   define DEBUG_PRINTF(...) fprintf(stderr, "DEBUG: " __VA_ARGS__)
@@ -102,7 +101,11 @@ cli_struct cli;
 
 
 
-
+typedef enum {
+    INTF_mpipe  = 0,
+    INTF_modbus = 1,
+    INTF_max
+} intf_enum;
 
 
 
@@ -138,18 +141,21 @@ void sigquit_handler(int sigcode) {
 }
 
 
-int otter_main( const char* ttyfile,
+int otter_main( intf_enum intf,
+                const char* ttyfile,
                 int baudrate,
                 bool pipe,
                 bool verbose,
                 cJSON* params
                 ); 
 
+intf_enum sub_intf_cmp(const char* s1);
 
 void sub_json_loadargs(cJSON* json, 
                        char* ttyfile, 
                        int* baudrate_val, 
                        bool* pipe_val,
+                       intf_enum* intf_val,
                        bool* verbose_val );
 
 void ppipelist_populate(cJSON* obj);
@@ -194,6 +200,24 @@ int _dtputs(char* str) {
 
 
 
+intf_enum sub_intf_cmp(const char* s1) {
+    intf_enum selected_intf;
+
+    if (strcmp(s1, "modbus") == 0) {
+        selected_intf = INTF_modbus;
+    }
+    else if (0) {
+        ///@todo add future interfaces here
+    }
+    else {
+        selected_intf = INTF_mpipe;
+    }
+    
+    return selected_intf;
+}
+
+
+
 
 
 
@@ -202,6 +226,7 @@ int main(int argc, const char * argv[]) {
     struct arg_file *ttyfile = arg_file1(NULL,NULL,"<ttyfile>",         "path to tty file (e.g. /dev/tty.usbmodem)");
     struct arg_int  *brate   = arg_int0(NULL,NULL,"<baudrate>",         "baudrate, default is 115200");
     struct arg_lit  *pipe    = arg_lit0("p","pipe",                     "use pipe I/O instead of terminal console");
+    struct arg_str  *intf    = arg_str0("i", "intf", "<mpipe|modbus>",  "select \"mpipe\" or \"modbus\" interface (default=mpipe)");
     //struct arg_str  *parsers = arg_str1("p", "parsers", "<msg:parser>", "parser call string with comma-separated msg:parser pairs");
     //struct arg_str  *fparse  = arg_str1("P", "parsefile", "<file>",     "file containing comma-separated msg:parser pairs");
     
@@ -212,15 +237,17 @@ int main(int argc, const char * argv[]) {
     struct arg_lit  *version = arg_lit0(NULL,"version",                 "print version information and exit");
     struct arg_end  *end     = arg_end(20);
     
-    void* argtable[] = {ttyfile,brate,pipe,config,verbose,help,version,end};
+    void* argtable[] = {ttyfile,brate,pipe,intf,config,verbose,help,version,end};
     const char* progname = "otter";
     int nerrors;
     int exitcode = 0;
     
     char ttyfile_val[256];
-    int  baudrate_val   = _DEFAULT_BAUDRATE;
+    int  baudrate_val   = OTTER_PARAM_DEFBAUDRATE;
     bool verbose_val    = true;
     bool pipe_val       = false;
+    
+    intf_enum intf_val  = INTF_mpipe;
     
     cJSON* json = NULL;
     char* buffer = NULL;
@@ -248,7 +275,7 @@ int main(int argc, const char * argv[]) {
 
     /// special case: '--version' takes precedence error reporting 
     if (version->count > 0) {
-        printf("%s -- %s\n", _OTTER_VERSION, _OTTER_DATE);
+        printf("%s -- %s\n", OTTER_PARAM_VERSION, OTTER_PARAM_DATE);
         printf("Designed by JP Norair, Haystack Technologies, Inc.\n");
         
         exitcode = 0;
@@ -318,7 +345,7 @@ int main(int argc, const char * argv[]) {
             goto main_EXIT;
         }
         
-        sub_json_loadargs(json, ttyfile_val, &baudrate_val, &pipe_val, &verbose_val);
+        sub_json_loadargs(json, ttyfile_val, &baudrate_val, &pipe_val, &intf_val, &verbose_val);
     }
     
     /// If no JSON file, then configuration should be through the arguments.
@@ -339,12 +366,16 @@ int main(int argc, const char * argv[]) {
         pipe_val = true;
         verbose_val = false;
     }
+    if (intf->count != 0) {
+        intf_val = sub_intf_cmp(intf->sval[0]);
+    }
     if (verbose->count != 0) {
         verbose_val = true;
     }
     
 
-    exitcode = otter_main(  (const char*)ttyfile_val, 
+    exitcode = otter_main(  intf_val,
+                            (const char*)ttyfile_val, 
                             baudrate_val, 
                             pipe_val,
                             verbose_val,
@@ -367,7 +398,7 @@ int main(int argc, const char * argv[]) {
 
 /// What this should do is start two threads, one for the character I/O on
 /// the dterm side, and one for the serial I/O.
-int otter_main(const char* ttyfile, int baudrate, bool pipe, bool verbose, cJSON* params) {    
+int otter_main(intf_enum intf, const char* ttyfile, int baudrate, bool pipe, bool verbose, cJSON* params) {    
     // MPipe Datastructs
     mpipe_arg_t mpipe_args;
     mpipe_ctl_t mpipe_ctl;
@@ -520,9 +551,20 @@ int otter_main(const char* ttyfile, int baudrate, bool pipe, bool verbose, cJSON
     /// Each thread must be be implemented to raise SIGQUIT or SIGINT on exit
     /// i.e. raise(SIGINT).
     DEBUG_PRINTF("Creating theads\n");
-    pthread_create(&thr_mpreader, NULL, &mpipe_reader, (void*)&mpipe_args);
-    pthread_create(&thr_mpwriter, NULL, &mpipe_writer, (void*)&mpipe_args);
-    pthread_create(&thr_mpparser, NULL, &mpipe_parser, (void*)&mpipe_args);
+    if (0) { }
+#   if (OTTER_FEATURE(MODBUS))    
+    else if (intf == INTF_modbus) {
+        pthread_create(&thr_mpreader, NULL, &modbus_reader, (void*)&mpipe_args);
+        pthread_create(&thr_mpwriter, NULL, &modbus_writer, (void*)&mpipe_args);
+        pthread_create(&thr_mpparser, NULL, &modbus_parser, (void*)&mpipe_args);
+    }
+#   endif
+    else {
+        pthread_create(&thr_mpreader, NULL, &mpipe_reader, (void*)&mpipe_args);
+        pthread_create(&thr_mpwriter, NULL, &mpipe_writer, (void*)&mpipe_args);
+        pthread_create(&thr_mpparser, NULL, &mpipe_parser, (void*)&mpipe_args);
+    }
+    
     pthread_create(&thr_dterm, NULL, dterm_fn, (void*)&dterm_args);
     DEBUG_PRINTF("Finished creating theads\n");
     
@@ -605,7 +647,17 @@ void sub_json_loadargs(cJSON* json,
                        char* ttyfile, 
                        int* baudrate_val, 
                        bool* pipe_val,
+                       intf_enum* intf_val,
                        bool* verbose_val ) {
+
+#   define GET_STRINGENUM_ARG(DST, FUNC, NAME) do { \
+        arg = cJSON_GetObjectItem(json, NAME);  \
+        if (arg != NULL) {  \
+            if (cJSON_IsString(arg) != 0) {    \
+                *DST = FUNC(arg->valuestring); \
+            }   \
+        }   \
+    } while(0)
                        
 #   define GET_STRING_ARG(DST, LIMIT, NAME) do { \
         arg = cJSON_GetObjectItem(json, NAME);  \
@@ -648,6 +700,8 @@ void sub_json_loadargs(cJSON* json,
     GET_INT_ARG(baudrate_val, "baudrate");
 
     GET_BOOL_ARG(pipe_val, "pipe");
+    
+    GET_STRINGENUM_ARG(intf_val, &sub_intf_cmp, "intf");
 
     GET_BOOL_ARG(verbose_val, "verbose");
 }

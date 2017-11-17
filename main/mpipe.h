@@ -69,8 +69,13 @@ int mpipe_open( mpipe_ctl_t* mpctl,
                 int data_bits, char parity, int stop_bits, 
                 int flowctrl, int dtr, int rts    );
 
+void mpipe_flush(mpipe_ctl_t* mpctl, size_t est_rembytes, int queue_selector);
+int mpipe_get_baudrate(int native_baud);
+
+
 
 // Thread Functions
+///@todo move into mpipe_io section
 void* mpipe_reader(void* args);
 void* mpipe_writer(void* args);
 void* mpipe_parser(void* args);

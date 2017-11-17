@@ -11,6 +11,8 @@
 		225CD1681F17BF9B00D10812 /* ppipelist.c in Sources */ = {isa = PBXBuildFile; fileRef = 225CD1661F17BF9B00D10812 /* ppipelist.c */; };
 		225CD16B1F1EF4FE00D10812 /* pktlist.c in Sources */ = {isa = PBXBuildFile; fileRef = 225CD1691F1EF4FE00D10812 /* pktlist.c */; };
 		225CD16E1F1FA88C00D10812 /* formatters.c in Sources */ = {isa = PBXBuildFile; fileRef = 225CD16C1F1FA88C00D10812 /* formatters.c */; };
+		226BE61B1FBE1B8F00EE98BB /* mpipe_io.c in Sources */ = {isa = PBXBuildFile; fileRef = 226BE61A1FBE1B8E00EE98BB /* mpipe_io.c */; };
+		226BE7201FBE7F2F00EE98BB /* modbus.c in Sources */ = {isa = PBXBuildFile; fileRef = 226BE71F1FBE7F2F00EE98BB /* modbus.c */; };
 		228DF9DA1EE5A9C5004D8D4F /* ppipe.c in Sources */ = {isa = PBXBuildFile; fileRef = 228DF9D81EE5A9C5004D8D4F /* ppipe.c */; };
 		228DF9DF1EE64AC7004D8D4F /* argtable3.c in Sources */ = {isa = PBXBuildFile; fileRef = 228DF9DD1EE64AC7004D8D4F /* argtable3.c */; };
 		22E34F831985D3ED00C19BBB /* otter.1 in CopyFiles */ = {isa = PBXBuildFile; fileRef = 22E34F821985D3ED00C19BBB /* otter.1 */; };
@@ -51,6 +53,10 @@
 		225CD16A1F1EF4FE00D10812 /* pktlist.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = pktlist.h; path = main/pktlist.h; sourceTree = "<group>"; };
 		225CD16C1F1FA88C00D10812 /* formatters.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = formatters.c; path = main/formatters.c; sourceTree = "<group>"; };
 		225CD16D1F1FA88C00D10812 /* formatters.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = formatters.h; path = main/formatters.h; sourceTree = "<group>"; };
+		226BE6191FBE1B4D00EE98BB /* otter_cfg.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = otter_cfg.h; path = main/otter_cfg.h; sourceTree = "<group>"; };
+		226BE61A1FBE1B8E00EE98BB /* mpipe_io.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = mpipe_io.c; path = main/mpipe_io.c; sourceTree = "<group>"; };
+		226BE71E1FBE7F2E00EE98BB /* modbus.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = modbus.h; path = main/modbus.h; sourceTree = "<group>"; };
+		226BE71F1FBE7F2F00EE98BB /* modbus.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = modbus.c; path = main/modbus.c; sourceTree = "<group>"; };
 		228DF9D81EE5A9C5004D8D4F /* ppipe.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = ppipe.c; path = main/ppipe.c; sourceTree = "<group>"; };
 		228DF9D91EE5A9C5004D8D4F /* ppipe.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = ppipe.h; path = main/ppipe.h; sourceTree = "<group>"; };
 		228DF9DD1EE64AC7004D8D4F /* argtable3.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = argtable3.c; sourceTree = "<group>"; };
@@ -175,10 +181,14 @@
 				225CD16C1F1FA88C00D10812 /* formatters.c */,
 				225CD16D1F1FA88C00D10812 /* formatters.h */,
 				22E34F941985D43600C19BBB /* main.c */,
+				226BE71F1FBE7F2F00EE98BB /* modbus.c */,
+				226BE71E1FBE7F2E00EE98BB /* modbus.h */,
+				226BE61A1FBE1B8E00EE98BB /* mpipe_io.c */,
 				22E34F951985D43600C19BBB /* mpipe.c */,
 				22E34F961985D43600C19BBB /* mpipe.h */,
 				225CD1691F1EF4FE00D10812 /* pktlist.c */,
 				225CD16A1F1EF4FE00D10812 /* pktlist.h */,
+				226BE6191FBE1B4D00EE98BB /* otter_cfg.h */,
 				228DF9D81EE5A9C5004D8D4F /* ppipe.c */,
 				228DF9D91EE5A9C5004D8D4F /* ppipe.h */,
 				225CD1661F17BF9B00D10812 /* ppipelist.c */,
@@ -263,7 +273,9 @@
 				22E34FA11985D45600C19BBB /* bintex.c in Sources */,
 				22E34F991985D43600C19BBB /* cmdsearch.c in Sources */,
 				225CD1681F17BF9B00D10812 /* ppipelist.c in Sources */,
+				226BE61B1FBE1B8F00EE98BB /* mpipe_io.c in Sources */,
 				22E34F9B1985D43600C19BBB /* dterm.c in Sources */,
+				226BE7201FBE7F2F00EE98BB /* modbus.c in Sources */,
 				225CD16B1F1EF4FE00D10812 /* pktlist.c in Sources */,
 				2219722C1EEF81B70087598A /* cJSON.c in Sources */,
 				225CD16E1F1FA88C00D10812 /* formatters.c in Sources */,
