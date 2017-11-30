@@ -62,8 +62,6 @@ int cmd_raw(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax
 int cmd_hbcc(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax);
 
 
-
-
 /// Application protocol commands sent over the MPipe
 ///@todo These could probably be moved into m2def or something else.
 

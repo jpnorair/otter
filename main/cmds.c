@@ -380,7 +380,7 @@ int cmd_hbcc(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstma
     
     INPUT_SANITIZE_FLAG_EOS(is_eos);
     
-#   if (1 || defined(__HBUILDER__))
+#   if (defined(__HBUILDER__))
     {   size_t      code_len;
         size_t      code_max;
         uint8_t*    cursor;
@@ -473,6 +473,7 @@ int app_null(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstma
 
 // ID = 1
 int app_file(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
+    int         bytesout;
     
     /// dt == NULL is the initialization case.
     /// There may not be an initialization for all command groups.
@@ -481,8 +482,37 @@ int app_file(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstma
     }
     
     INPUT_SANITIZE();
-    fprintf(stderr, "file invoked %s\n", src);
-    return -1;
+    
+    
+    
+    bytesout = bintex_ss((unsigned char*)src, (unsigned char*)dst, (int)dstmax);
+    
+    
+    ///@todo convert the character number into a line and character number
+    if (bytesout < 0) {
+        dterm_printf(dt, "Bintex error on character %d.\n", -bytesout);
+    }
+
+    return bytesout;
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    /// dt == NULL is the initialization case.
+    /// There may not be an initialization for all command groups.
+//    if (dt == NULL) {
+//        return 0;
+//    }
+//    
+//    INPUT_SANITIZE();
+//    fprintf(stderr, "file invoked %s\n", src);
+//    return -1;
 }
 
 
