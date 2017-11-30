@@ -26,17 +26,28 @@
 
 /// Default feature configurations
 #define OTTER_FEATURE(VAL)          OTTER_FEATURE_##VAL
-#define OTTER_FEATURE_MPIPE         ENABLED
-#define OTTER_FEATURE_MODBUS        DISABLED
-
+#ifndef OTTER_FEATURE_MPIPE
+#   define OTTER_FEATURE_MPIPE      ENABLED
+#endif
+#ifndef OTTER_FEATURE_MODBUS
+#   define OTTER_FEATURE_MODBUS     DISABLED
+#endif
 
 /// Parameter configurations
 ///@todo redefine 
 #define OTTER_PARAM(VAL)            OTTER_PARAM_##VAL
-#define OTTER_PARAM_VERSION         "0.2.0"
-#define OTTER_PARAM_DATE            __DATE__
-#define OTTER_PARAM_DEFBAUDRATE     115200
-
+#ifndef OTTER_PARAM_NAME
+#   define OTTER_PARAM_NAME         "otter"
+#endif
+#ifndef OTTER_PARAM_VERSION 
+#   define OTTER_PARAM_VERSION      "0.2.0"
+#endif
+#ifndef OTTER_PARAM_DATE
+#   define OTTER_PARAM_DATE         __DATE__
+#endif
+#ifndef OTTER_PARAM_DEFBAUDRATE
+#   define OTTER_PARAM_DEFBAUDRATE  115200
+#endif
 
 
 /// Automatic Checks

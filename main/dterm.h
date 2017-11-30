@@ -17,6 +17,9 @@
 #ifndef dterm_h
 #define dterm_h
 
+// Configuration Header
+#include "otter_cfg.h"
+
 // Application Headers
 #include "cmdhistory.h"
 #include "mpipe.h"
@@ -36,10 +39,10 @@
 #define CMDSIZE             LINESIZE        //CMDSIZE is deprecated
 #define READSIZE            3
 
-#define NAME                "otter v0.0\n"
-#define PROMPT_ROOT         "otter# "
-#define PROMPT_USER         "otter$ "
-#define PROMPT_GUEST        "otter~ "
+#define APP_NAME            (OTTER_PARAM(NAME) " " OTTER_PARAM(VERSION))
+#define PROMPT_ROOT         OTTER_PARAM(NAME)"# "
+#define PROMPT_USER         OTTER_PARAM(NAME)"$ "
+#define PROMPT_GUEST        OTTER_PARAM(NAME)"~ "
 #define PROMPT              PROMPT_GUEST
 #define INV                 PROMPT
 
