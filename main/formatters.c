@@ -248,6 +248,14 @@ void fmt_fprintalp(mpipe_printer_t puts_fn, cJSON* msgcall, uint8_t* src, size_t
             return;
         }
         
+        /// File Data Protocol Formatter (From HBUILDER)
+#       ifdef __HBUILDER__
+        if (id == 0x01) {
+            fdp_formatter(cmd, length, payload);
+        }
+        else
+#       endif
+        
         ///Logger (id 0x04) has special treatment (it gets logged to stdout)
         if (id == 0x04) {
             switch (cmd) {
