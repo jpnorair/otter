@@ -20,7 +20,7 @@ TEST_H := $(wildcard ./test/*.h)
 SOURCES := $(ARGTABLE_C) $(cJSON_C) $(MAIN_C) $(BINTEX_C)
 HEADERS := $(ARGTABLE_H) $(cJSON_H) $(MAIN_H) $(BINTEX_H) $(M2DEF_H) $(TEST_H)
      
-SEARCH := -I./../HBuilder-lib \
+SEARCH := -I./../HBuilder-lib/lib \
           -I./../m2def -I./../bintex \
           -I./cJSON -I./argtable \
           -I./main -I./test
@@ -33,7 +33,7 @@ all: otter
 
 otter: otter.o hbuilder_lib
 	$(eval OBJS := $(shell ls ./*.o))
-	$(COMPILER) $(FLAGS) $(OBJS) -I./../HBuilder-lib -L./../HBuilder-lib -lhbuilder -o otter.out
+	$(COMPILER) $(FLAGS) $(OBJS) -I./../HBuilder-lib/lib -L./../HBuilder-lib/lib -lhbuilder -o otter.out
 
 hbuilder_lib: 
 	cd ./../HBuilder-lib && $(MAKE) all

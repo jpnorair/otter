@@ -32,10 +32,8 @@
 // HBuilder is part of Haystack HDO and it is not open source as of 08.2017.
 // HBuilder provides a library of DASH7/OpenTag communication API functions 
 // that are easy to use.
-#define __HBUILDER__
-
 #ifdef __HBUILDER__
-#include "hbuilder.h"
+#   include "hbuilder.h"
 #endif
 
 
@@ -66,6 +64,47 @@ int home_path_len               = 2;
 ///@todo have a way to make this dynamic based on cli parameters, or mode params
 uint8_t user_key[16];
 
+
+
+
+
+uint8_t* sub_markstring(uint8_t** psrc, int* search_limit, int string_limit) {
+    size_t      code_len;
+    size_t      code_max;
+    uint8_t*    cursor;
+    uint8_t*    front;
+    
+    /// 1. Set search limit on the string to mark within the source string
+    code_max    = (*search_limit < string_limit) ? *search_limit : string_limit; 
+    front       = *psrc;
+    
+    /// 2. Go past whitespace in the front of the source string if there is any.
+    ///    This updates the position of the source string itself, so the caller
+    ///    must save the position of the source string if it wishes to go back.
+    while (isspace(**psrc)) { 
+        (*psrc)++; 
+    }
+    
+    /// 3. Put a Null Terminator where whitespace is found after the marked
+    ///    string.
+    for (code_len=0, cursor=*psrc; (code_len < code_max); code_len++, cursor++) {
+        if (isspace(*cursor)) {
+            *cursor = 0;
+            cursor++;
+            break;
+        }
+    }
+    
+    /// 4. Go past any whitespace after the cursor position, and update cursor.
+    while (isspace(*cursor)) { 
+        cursor++; 
+    }
+    
+    /// 5. reduce the message limit counter given the bytes we've gone past.
+    *search_limit -= (cursor - front);
+    
+    return cursor;
+}
 
 
 
@@ -381,25 +420,15 @@ int cmd_hbcc(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstma
     INPUT_SANITIZE_FLAG_EOS(is_eos);
     
 #   if (defined(__HBUILDER__))
-    {   size_t      code_len;
-        size_t      code_max;
+    {   //size_t      code_len;
+        //size_t      code_max;
         uint8_t*    cursor;
     
-        /// 1. Get codeword.  It will be a string followed by some whitespace.
-        ///    code_max should have some upper bound that's not currently defined,
-        ///    but it's 32 chars at the moment
-        code_max = (dstmax < 32) ? dstmax : 32; 
-        
-        // Go past whitespace in the front of the codeword if there is any.
-        while (isspace(*src)) { src++; }
-        
-        for (code_len=0, cursor=src; (code_len < code_max); code_len++, cursor++) {
-            if (isspace(*cursor)) {
-                *cursor = 0;
-                cursor++;
-                break;
-            }
-        }
+        /// 1. This routine will isolate the command or argument string within
+        ///    the input string.  It updates the the position of src to remove
+        ///    preceding whitespace, and returns the position after the command
+        ///    or argument string.
+        cursor = sub_markstring(&src, inbytes, 32);
         
         /// 2. The code word might be an argument preceded by a hyphen ('-').
         ///    This is of the typical format for unix command line apps.
@@ -427,7 +456,7 @@ int cmd_hbcc(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstma
             /// - It returns positive number when commands are queued and should
             ///   be packetized over MPipe.
             /// - Possible to call 'hbcc flush' anytime to page-out commands.
-            output_code = hbcc_generate(dst, &bytesout, dstmax, (char*)src, (size_t)bytesout, temp_buffer);
+            output_code = hbcc_generate(dst, &bytesout, dstmax, (const char*)src, (size_t)bytesout, temp_buffer);
             
             //if ((output_code == 0) && is_eos) {
             //    bytesout = hbcc_flush();
@@ -471,9 +500,17 @@ int app_null(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstma
 }
 
 
+
+
+
 // ID = 1
 int app_file(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
-    int         bytesout;
+/// Syntax is: command [-block] bintex
+/// See HBuilder documentation for more information
+    uint8_t temp_buffer[256];
+    int bytesout;
+    uint8_t* cmd;
+    uint8_t* block;
     
     /// dt == NULL is the initialization case.
     /// There may not be an initialization for all command groups.
@@ -483,36 +520,41 @@ int app_file(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstma
     
     INPUT_SANITIZE();
     
+#   if (defined(__HBUILDER__))
     
+    /// 1. Get the command 
+    cmd = src;
+    src = sub_markstring(&cmd, inbytes, 10);
     
-    bytesout = bintex_ss((unsigned char*)src, (unsigned char*)dst, (int)dstmax);
+    /// 2. Get the argument, if it exists.
+    if (src[0] == '-') {
+        block   = src+1;
+        src     = sub_markstring(&block, inbytes, 10);
+    }
+    else {
+        block   = NULL;
+    }
+        
+    /// 3. Process the bintex into raw data
+    ///    bytesout is used to store the amount of bytes in the raw byte output
+    bytesout = bintex_ss((unsigned char*)src, (unsigned char*)temp_buffer, (int)sizeof(temp_buffer));
+        
+    /// 4. Send the command to HBuilder FDP generator
+    ///    bytesout is used to store the amount of bytes in the raw ALP output
+    bytesout = fdp_generate(dst, dstmax, (const char*)cmd, (const char*)block, (size_t)bytesout, src);
     
-    
-    ///@todo convert the character number into a line and character number
-    if (bytesout < 0) {
-        dterm_printf(dt, "Bintex error on character %d.\n", -bytesout);
+    if (cliopt_isverbose() && (bytesout > 0)) {
+        fprintf(stdout, "--> fdp packetizing %d bytes\n", bytesout);
     }
 
-    return bytesout;
+    return (int)bytesout;
     
+#   else
+    /// HBuilder not available, so just report FDP invocation
+    fprintf(stderr, "fdp invoked %s\n", src);
+    return -2;
     
-    
-    
-    
-    
-    
-    
-    
-    
-    /// dt == NULL is the initialization case.
-    /// There may not be an initialization for all command groups.
-//    if (dt == NULL) {
-//        return 0;
-//    }
-//    
-//    INPUT_SANITIZE();
-//    fprintf(stderr, "file invoked %s\n", src);
-//    return -1;
+#   endif
 }
 
 

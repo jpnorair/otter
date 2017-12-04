@@ -155,7 +155,7 @@ void sub_json_loadargs(cJSON* json,
                        char* ttyfile, 
                        int* baudrate_val, 
                        bool* pipe_val,
-                       intf_enum* intf_val,
+                       int* intf_val,
                        bool* verbose_val );
 
 void ppipelist_populate(cJSON* obj);
@@ -345,7 +345,10 @@ int main(int argc, const char * argv[]) {
             goto main_EXIT;
         }
         
-        sub_json_loadargs(json, ttyfile_val, &baudrate_val, &pipe_val, &intf_val, &verbose_val);
+        {   int tmp_intf;
+            sub_json_loadargs(json, ttyfile_val, &baudrate_val, &pipe_val, &tmp_intf, &verbose_val);
+            intf_val = tmp_intf;
+        }
     }
     
     /// If no JSON file, then configuration should be through the arguments.
@@ -647,7 +650,7 @@ void sub_json_loadargs(cJSON* json,
                        char* ttyfile, 
                        int* baudrate_val, 
                        bool* pipe_val,
-                       intf_enum* intf_val,
+                       int* intf_val,
                        bool* verbose_val ) {
 
 #   define GET_STRINGENUM_ARG(DST, FUNC, NAME) do { \
@@ -701,7 +704,15 @@ void sub_json_loadargs(cJSON* json,
 
     GET_BOOL_ARG(pipe_val, "pipe");
     
-    GET_STRINGENUM_ARG(intf_val, &sub_intf_cmp, "intf");
+    GET_STRINGENUM_ARG(intf_val, sub_intf_cmp, "intf");
+//    {
+//    arg = cJSON_GetObjectItem(json, "intf");  
+//        if (arg != NULL) {  
+//            if (cJSON_IsString(arg) != 0) {    
+//                *intf_val = sub_intf_cmp(arg->valuestring); 
+//            } 
+//        } 
+//    }
 
     GET_BOOL_ARG(verbose_val, "verbose");
 }

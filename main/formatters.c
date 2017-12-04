@@ -15,6 +15,13 @@
 #include <time.h>
 
 
+// HBuilder is part of Haystack HDO and it is not open source as of 08.2017.
+// HBuilder provides a library of DASH7/OpenTag communication API functions 
+// that are easy to use.
+#ifdef __HBUILDER__
+#   include "hbuilder.h"
+#endif
+
 
 typedef struct {
     uint8_t     id;
@@ -251,7 +258,7 @@ void fmt_fprintalp(mpipe_printer_t puts_fn, cJSON* msgcall, uint8_t* src, size_t
         /// File Data Protocol Formatter (From HBUILDER)
 #       ifdef __HBUILDER__
         if (id == 0x01) {
-            fdp_formatter(cmd, length, payload);
+            fdp_formatter(puts_fn, cmd, payload, length);
         }
         else
 #       endif
