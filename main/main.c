@@ -221,7 +221,7 @@ intf_enum sub_intf_cmp(const char* s1) {
 
 
 
-int main(int argc, const char * argv[]) {
+int main(int argc, char* argv[]) {
 /// ArgTable params: These define the input argument behavior
     struct arg_file *ttyfile = arg_file1(NULL,NULL,"<ttyfile>",         "path to tty file (e.g. /dev/tty.usbmodem)");
     struct arg_int  *brate   = arg_int0(NULL,NULL,"<baudrate>",         "baudrate, default is 115200");

@@ -413,13 +413,15 @@ int cmd_hbcc(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstma
 
     /// Initialization
     if (dt == NULL) {
+#       if defined(__HBUILDER__)
         hbcc_init();
+#       endif
         return 0;
     }
     
     INPUT_SANITIZE_FLAG_EOS(is_eos);
     
-#   if (defined(__HBUILDER__))
+#   if defined(__HBUILDER__)
     {   //size_t      code_len;
         //size_t      code_max;
         uint8_t*    cursor;

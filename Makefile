@@ -20,23 +20,23 @@ TEST_H := $(wildcard ./test/*.h)
 SOURCES := $(ARGTABLE_C) $(cJSON_C) $(MAIN_C) $(BINTEX_C)
 HEADERS := $(ARGTABLE_H) $(cJSON_H) $(MAIN_H) $(BINTEX_H) $(M2DEF_H) $(TEST_H)
      
-SEARCH := -I./../HBuilder-lib/lib \
+SEARCH := -I./../hbuilder-lib \
           -I./../m2def -I./../bintex \
           -I./cJSON -I./argtable \
           -I./main -I./test
 
 
 #FLAGS = -std=gnu99 -D TTY_DEBUG -O -g -Wall -pthread
-FLAGS = -std=gnu99 -O3 -pthread
+FLAGS = -std=gnu99 -O3 -pthread -D__HBUILDER__
 
 all: otter
 
 otter: otter.o hbuilder_lib
 	$(eval OBJS := $(shell ls ./*.o))
-	$(COMPILER) $(FLAGS) $(OBJS) -I./../HBuilder-lib/lib -L./../HBuilder-lib/lib -lhbuilder -o otter.out
+	$(COMPILER) $(FLAGS) $(OBJS) -I./../hbuilder-lib -L./../hbuilder-lib -lhbuilder -o otter.out
 
 hbuilder_lib: 
-	cd ./../HBuilder-lib && $(MAKE) all
+	cd ./../hbuilder-lib && $(MAKE) all
 
 otter.o: $(SOURCES) $(HEADERS)
 	$(COMPILER) $(FLAGS) $(SEARCH) -c $(SOURCES) $(HEADERS)
