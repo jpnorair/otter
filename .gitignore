@@ -8,21 +8,10 @@ legacy_code*
 *.o
 otter.out
 
-
 # Used to hide symbolic links to binaries
 *.exe
 
-
-# Stuff that gets generated from XCode
-*.xcuserstate
-*.xcuserstate
-xcuserdata
-*xcuserdata*
-project.xcworkspace
-/Build
-DerivedData/*
-parsers/*
-otter_pkg/*
-debug/*
-bin/*
-archives/*
+# Stuff that gets generated
+/build
+/bin
+/xcode_otter

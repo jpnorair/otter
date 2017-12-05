@@ -1,52 +1,53 @@
-COMPILER=gcc
+CC=gcc
 
-ARGTABLE_C := ./argtable/argtable3.c
-ARGTABLE_H := ./argtable/argtable3.h
+TARGET      := otter
 
-cJSON_C := ./cJSON/cJSON.c
-cJSON_H := ./cJSON/cJSON.h
+LIBMODULES  := bintex hbuilder-lib
+SUBMODULES  := argtable cJSON main
 
-BINTEX_C := ./../bintex/bintex.c
-BINTEX_H := ./../bintex/bintex.h
+BUILDDIR    := build
+TARGETDIR   := bin
+SRCEXT      := c
+DEPEXT      := d
+OBJEXT      := o
 
-MAIN_C := $(wildcard ./main/*.c)
-MAIN_H := $(wildcard ./main/*.h)
+#CFLAGS      := -std=gnu99 -O -g -Wall -pthread -D__HBUILDER__
+CFLAGS      := -std=gnu99 -O3 -pthread -D__HBUILDER__
+LIB         := -lhbuilder -lbintex -L./../hbuilder-lib -L./../bintex
+INC         := -I$(INCDIR)
+INCDEP      := -I$(INCDIR)
+          
+#OBJECTS     := $(shell find $(BUILDDIR) -type f -name "*.$(OBJEXT)")
+#MODULES     := $(SUBMODULES) + $(LIBMODULES)
 
-M2DEF_H := ./../m2def/m2def.h
+all: directories $(TARGET)
+remake: cleaner all
+	
 
-TEST_C := $(wildcard ./test/*.c)
-TEST_H := $(wildcard ./test/*.h)
+directories:
+	@mkdir -p $(TARGETDIR)
+	@mkdir -p $(BUILDDIR)
 
-SOURCES := $(ARGTABLE_C) $(cJSON_C) $(MAIN_C) $(BINTEX_C)
-HEADERS := $(ARGTABLE_H) $(cJSON_H) $(MAIN_H) $(BINTEX_H) $(M2DEF_H) $(TEST_H)
-     
-SEARCH := -I./../hbuilder-lib \
-          -I./../m2def -I./../bintex \
-          -I./cJSON -I./argtable \
-          -I./main -I./test
-
-
-#FLAGS = -std=gnu99 -D TTY_DEBUG -O -g -Wall -pthread
-FLAGS = -std=gnu99 -O3 -pthread -D__HBUILDER__
-
-all: otter
-
-otter: otter.o hbuilder_lib
-	$(eval OBJS := $(shell ls ./*.o))
-	$(COMPILER) $(FLAGS) $(OBJS) -I./../hbuilder-lib -L./../hbuilder-lib -lhbuilder -o otter.out
-
-hbuilder_lib: 
-	cd ./../hbuilder-lib && $(MAKE) all
-
-otter.o: $(SOURCES) $(HEADERS)
-	$(COMPILER) $(FLAGS) $(SEARCH) -c $(SOURCES) $(HEADERS)
-
-install:
-	mv otter.out ./../interlink/linux-mint17-i686/otter
-
+#Clean only Objects
 clean:
-	rm -rf ./*.o
-	rm -f ./*.gch
-	rm -f ./argtable/*.gch
-	rm -f ./cJSON/*.gch
-	rm -f ./main/*.gch
+	@$(RM) -rf $(BUILDDIR)
+
+#Full Clean, Objects and Binaries
+cleaner: clean
+	@$(RM) -rf $(TARGETDIR)
+
+#Linker
+$(TARGET): $(SUBMODULES) $(LIBMODULES)
+	$(eval OBJECTS := $(shell find $(BUILDDIR) -type f -name "*.$(OBJEXT)"))
+	$(CC) $(CFLAGS) -o $(TARGETDIR)/$(TARGET) $(OBJECTS) $(LIB)
+
+$(LIBMODULES): %: 
+	cd ./../$@ && $(MAKE) all
+	
+$(SUBMODULES): %: $(LIBMODULES) directories
+	cd ./$@ && $(MAKE) -f $@.mk obj
+
+#Non-File Targets
+.PHONY: all remake clean cleaner
+
+
