@@ -1,6 +1,7 @@
 CC=gcc
 
 TARGET      := cJSON
+OTTER_DEF   ?= 
 
 #CFLAGS      := -std=gnu99 -O -g -Wall
 CFLAGS      := -std=gnu99 -O3
@@ -46,8 +47,8 @@ $(TARGET): $(OBJECTS)
 #Compile Stages
 $(BUILDDIR)/%.$(OBJEXT): ./%.$(SRCEXT)
 	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) -c -o $@ $<
-	@$(CC) $(CFLAGS) -MM ./$*.$(SRCEXT) > $(BUILDDIR)/$*.$(DEPEXT)
+	$(CC) $(CFLAGS) $(OTTER_DEF) -c -o $@ $<
+	@$(CC) $(CFLAGS) $(OTTER_DEF) -MM ./$*.$(SRCEXT) > $(BUILDDIR)/$*.$(DEPEXT)
 	@cp -f $(BUILDDIR)/$*.$(DEPEXT) $(BUILDDIR)/$*.$(DEPEXT).tmp
 	@sed -e 's|.*:|$(BUILDDIR)/$*.$(OBJEXT):|' < $(BUILDDIR)/$*.$(DEPEXT).tmp > $(BUILDDIR)/$*.$(DEPEXT)
 	@sed -e 's/.*://' -e 's/\\$$//' < $(BUILDDIR)/$*.$(DEPEXT).tmp | fmt -1 | sed -e 's/^ *//' -e 's/$$/:/' >> $(BUILDDIR)/$*.$(DEPEXT)
