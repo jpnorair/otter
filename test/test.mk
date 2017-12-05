@@ -1,17 +1,17 @@
 CC=gcc
 
-TARGET      := main
+TARGET      := test
 
-#CFLAGS      := -std=gnu99 -O -g -Wall -pthread -D__HBUILDER__
-CFLAGS      := -std=gnu99 -O3 -pthread -D__HBUILDER__
+#CFLAGS      := -std=gnu99 -O -g -Wall
+CFLAGS      := -std=gnu99 -O3
 
 BUILDDIR    := ../build/$(TARGET)
-TARGETDIR   := .
+TARGETDIR   := ./
 SRCEXT      := c
 DEPEXT      := d
 OBJEXT      := o
-LIB         := -lhbuilder -lbintex -L./../../hbuilder-lib -L./../../bintex
-INC         := -I./../../hbuilder-lib -I./../../bintex -I./../cJSON -I./../argtable -I./../test -I./../../m2def
+LIB         := 
+INC         := 
 INCDEP      := $(INC)
 
 SOURCES     := $(shell find . -type f -name "*.$(SRCEXT)")

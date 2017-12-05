@@ -1,17 +1,19 @@
 
+# Garbage
 .DS_Store
+/legacy_code
 
-legacy_code*
+# Runtime
+/pipes
+/parsers
 
-#Don't add Makefile outputs
+#Don't add Build Files
+/build
+/bin
 *.gch
 *.o
 otter.out
 
-# Used to hide symbolic links to binaries
-*.exe
 
-# Stuff that gets generated
-/build
-/bin
+# XCode project, and archives
 /xcode_otter

@@ -3,7 +3,7 @@ CC=gcc
 TARGET      := otter
 
 LIBMODULES  := bintex hbuilder-lib
-SUBMODULES  := argtable cJSON main
+SUBMODULES  := argtable cJSON main test
 
 BUILDDIR    := build
 TARGETDIR   := bin
