@@ -2,6 +2,8 @@ CC=gcc
 
 TARGET      := cJSON
 OTTER_DEF   ?= 
+OTTER_INC   ?=
+OTTER_LIB   ?= 
 
 #CFLAGS      := -std=gnu99 -O -g -Wall
 CFLAGS      := -std=gnu99 -O3
@@ -11,7 +13,6 @@ TARGETDIR   := bin
 SRCEXT      := c
 DEPEXT      := d
 OBJEXT      := o
-LIB         := 
 SOURCES     := $(shell find . -type f -name "*.$(SRCEXT)")
 OBJECTS     := $(patsubst ./%,$(BUILDDIR)/%,$(SOURCES:.$(SRCEXT)=.$(OBJEXT)))
 
@@ -42,7 +43,7 @@ cleaner: clean
 
 #Direct build of the test app with objects
 $(TARGET): $(OBJECTS)
-	$(CC) -o $(TARGETDIR)/$(TARGET) $^ $(LIB)
+	$(CC) -o $(TARGETDIR)/$(TARGET) $^ $(OTTER_LIB)
 
 #Compile Stages
 $(BUILDDIR)/%.$(OBJEXT): ./%.$(SRCEXT)

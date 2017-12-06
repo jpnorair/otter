@@ -2,6 +2,8 @@ CC=gcc
 
 TARGET      := main
 OTTER_DEF   ?= -D__HBUILDER__
+OTTER_INC   ?=
+OTTER_LIB   ?= 
 
 #CFLAGS      := -std=gnu99 -O -g -Wall -pthread 
 CFLAGS      := -std=gnu99 -O3 -pthread
@@ -11,8 +13,8 @@ TARGETDIR   := .
 SRCEXT      := c
 DEPEXT      := d
 OBJEXT      := o
-LIB         := -lhbuilder -lbintex -L./../../hbuilder-lib -L./../../bintex
-INC         := -I./../../hbuilder-lib -I./../../bintex -I./../cJSON -I./../argtable -I./../test -I./../../m2def
+LIB         := -lhbuilder -lbintex -L./../../hbuilder-lib -L./../../bintex $(OTTER_LIB)
+INC         := -I./../../hbuilder-lib -I./../../bintex -I./../cJSON -I./../argtable -I./../test -I./../../m2def $(OTTER_INC)
 INCDEP      := $(INC)
 
 SOURCES     := $(shell find . -type f -name "*.$(SRCEXT)")
