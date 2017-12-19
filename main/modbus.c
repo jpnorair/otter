@@ -19,16 +19,17 @@
 #if (OTTER_FEATURE(MODBUS) == ENABLED)
 
 // Application Includes
+#include "cliopt.h"
 #include "mpipe.h"
 #include "modbus.h"
 #include "ppipelist.h"
 
+// OT Filesystem modular library
+#include <otfs.h>
+
 // SMUT Library that has modbus protocol processing
 // SMUT is external to otter.
 #include <smut.h>
-
-// OT Filesystem modular library
-#include <otfs.h>
 
 // Standard C & POSIX libraries
 #include <fcntl.h>
@@ -113,7 +114,7 @@ void* modbus_reader(void* args) {
     
     // Receive the first byte
     // If returns an error, exit
-    pollcode = poll(fds, 1, 0);
+    pollcode = poll(fds, 1, -1);
     if (pollcode <= 0) {
         errcode = 4;
         goto modbus_reader_ERR;
@@ -143,7 +144,7 @@ void* modbus_reader(void* args) {
     frame_length  = rbuf_cursor - rbuf;
     
     /// Now do some checks to prevent malformed packets.
-    if (((unsigned int)frame_length < 4) \ 
+    if (((unsigned int)frame_length < 4) \
     ||  ((unsigned int)frame_length > 256)) {
         errcode = 2;
         goto modbus_reader_ERR;
@@ -367,7 +368,7 @@ void* modbus_parser(void* args) {
             /// CRC bytes (2) are stripped
             proc_result = smut_resp_proc(putsbuf, rlist->cursor->buffer, &output_bytes, rlist->cursor->size-2);
             if ((proc_result == 0) && (output_bytes == 0)) {
-                fmt_fprintalp(_PUTS, msgcall, putsbuf, payload_bytes);
+                fmt_fprintalp(_PUTS, msgcall, putsbuf, output_bytes);
             }
 
             // clear_rpkt will always be true.  It means that the received 
@@ -377,11 +378,12 @@ void* modbus_parser(void* args) {
                 pktlist_del(rlist, scratch);
             }
             
+            ///@note this code was from copy paste.  I don't think it is needed.
             // Clear the tpkt if it exists
-            if (tpkt != NULL) {
-                pktlist_del(tlist, tpkt);
-            }
-        } 
+            //if (tpkt != NULL) {
+            //    pktlist_del(tlist, tpkt);
+            //}
+        }
         
         mpipe_parser_END:
         pthread_mutex_unlock(tlist_mutex); 

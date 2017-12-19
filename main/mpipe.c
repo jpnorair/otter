@@ -92,11 +92,11 @@ int mpipe_open( mpipe_ctl_t* mpctl,
     }
     
     // Make sure byte encoding is compatible with MPipe spec
-    if ((data_bits != 8) || (parity != 'N') || (stop_bits != 1)) {
-        fprintf(stderr, "In current MPipe implementation, byte encoding MUST be 8N1.  You specifed: %d%c%d\n", 
-                    data_bits, parity, stop_bits);
-        return -1;
-    }
+//     if ((data_bits != 8) || (parity != 'N') || (stop_bits != 1)) {
+//         fprintf(stderr, "In current MPipe implementation, byte encoding MUST be 8N1.  You specifed: %d%c%d\n", 
+//                     data_bits, parity, stop_bits);
+//         return -1;
+//     }
     
     // Make sure all flow control is compatible with MPipe spec (i.e. disabled)
     if ((flowctrl != 0) || (dtr != 0) || (rts != 0)) {

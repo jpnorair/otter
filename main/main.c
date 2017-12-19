@@ -238,7 +238,7 @@ int main(int argc, char* argv[]) {
     struct arg_end  *end     = arg_end(20);
     
     void* argtable[] = {ttyfile,brate,pipe,intf,config,verbose,help,version,end};
-    const char* progname = "otter";
+    const char* progname = OTTER_PARAM(NAME);
     int nerrors;
     int exitcode = 0;
     
@@ -247,7 +247,7 @@ int main(int argc, char* argv[]) {
     bool verbose_val    = true;
     bool pipe_val       = false;
     
-    intf_enum intf_val  = INTF_mpipe;
+    intf_enum intf_val  = OTTER_FEATURE(MPIPE) ? INTF_mpipe : INTF_modbus;
     
     cJSON* json = NULL;
     char* buffer = NULL;
@@ -431,6 +431,9 @@ int otter_main(intf_enum intf, const char* ttyfile, int baudrate, bool pipe, boo
     pthread_cond_t  pktrx_cond;
     pthread_mutex_t pktrx_mutex;
     
+    // Parameters
+    int parity_bits;
+    
     
     /// JSON params construct should contain the following objects
     /// - "msgcall": { "msgname1":"call string 1", "msgname2":"call string 2" }
@@ -503,7 +506,15 @@ int otter_main(intf_enum intf, const char* ttyfile, int baudrate, bool pipe, boo
     mpipe_args.pktrx_cond       = &pktrx_cond;
     mpipe_args.kill_mutex       = &cli.kill_mutex;
     mpipe_args.kill_cond        = &cli.kill_cond;
-    if (mpipe_open(&mpipe_ctl, ttyfile, baudrate, 8, 'N', 1, 0, 0, 0) < 0) {
+    
+    if (intf == INTF_modbus) {
+        parity_bits = 2;
+    }
+    else {
+        parity_bits = 1;
+    }
+    
+    if (mpipe_open(&mpipe_ctl, ttyfile, baudrate, 8, 'N', parity_bits, 0, 0, 0) < 0) {
         cli.exitcode = -1;
         goto otter_main_TERM1;
     }
@@ -554,18 +565,21 @@ int otter_main(intf_enum intf, const char* ttyfile, int baudrate, bool pipe, boo
     /// Each thread must be be implemented to raise SIGQUIT or SIGINT on exit
     /// i.e. raise(SIGINT).
     DEBUG_PRINTF("Creating theads\n");
-    if (0) { }
-#   if (OTTER_FEATURE(MODBUS))    
-    else if (intf == INTF_modbus) {
+    if (OTTER_FEATURE(MODBUS) && (intf == INTF_modbus)) {
+        DEBUG_PRINTF("Opening Modbus Interface\n");
         pthread_create(&thr_mpreader, NULL, &modbus_reader, (void*)&mpipe_args);
         pthread_create(&thr_mpwriter, NULL, &modbus_writer, (void*)&mpipe_args);
         pthread_create(&thr_mpparser, NULL, &modbus_parser, (void*)&mpipe_args);
     }
-#   endif
-    else {
+    else if (OTTER_FEATURE(MPIPE) && (intf == INTF_mpipe)) {
+        DEBUG_PRINTF("Opening Mpipe Interface\n");
         pthread_create(&thr_mpreader, NULL, &mpipe_reader, (void*)&mpipe_args);
         pthread_create(&thr_mpwriter, NULL, &mpipe_writer, (void*)&mpipe_args);
         pthread_create(&thr_mpparser, NULL, &mpipe_parser, (void*)&mpipe_args);
+    }
+    else {
+        DEBUG_PRINTF("No active interface is available\n");
+        goto otter_main_TERM2;
     }
     
     pthread_create(&thr_dterm, NULL, dterm_fn, (void*)&dterm_args);
