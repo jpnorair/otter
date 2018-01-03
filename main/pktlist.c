@@ -7,6 +7,7 @@
 //
 
 #include "pktlist.h"
+#include "cliopt.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -32,10 +33,55 @@ int pktlist_init(pktlist_t* plist) {
 
 
 
+void sub_writeheader_null(pkt_t* newpkt, uint8_t* data, size_t datalen) {
+    memcpy(&newpkt->buffer[0], data, datalen);
+}
+
+void sub_writeheader_mpipe(pkt_t* newpkt, uint8_t* data, size_t datalen) {
+    newpkt->buffer[0] = 0xff;
+    newpkt->buffer[1] = 0x55;
+    newpkt->buffer[2] = 0;
+    newpkt->buffer[3] = 0;
+    newpkt->buffer[4] = (datalen >> 8) & 0xff;
+    newpkt->buffer[5] = datalen & 0xff;
+    newpkt->buffer[6] = 0;
+    newpkt->buffer[7] = 0;            ///@todo Set Control Field here based on Cli
+    
+    memcpy(&newpkt->buffer[8], data, datalen);
+}
+
+
+void sub_writefooter_null(pkt_t* newpkt) {
+}
+
+void sub_writefooter_mpipe(pkt_t* newpkt) {
+    uint16_t crcval;
+    
+    newpkt->buffer[6]   = newpkt->sequence;
+    crcval              = crc_calc_block(&newpkt->buffer[4], newpkt->size - 4);
+    newpkt->buffer[2]   = (crcval >> 8) & 0xff;
+    newpkt->buffer[3]   = crcval & 0xff;
+}
+
+void sub_writefooter_crc16(pkt_t* newpkt) {
+    uint16_t crcval;
+    size_t crcpos;
+    crcpos  = newpkt->size - 2;
+    crcval  = crc_calc_block(&newpkt->buffer[0], crcpos);
+    
+    newpkt->buffer[crcpos]      = (crcval >> 8) & 0xff;
+    newpkt->buffer[crcpos+1]    = crcval & 0xff;
+}
+
+
+
 
 int pktlist_add(pktlist_t* plist, bool write_header, uint8_t* data, size_t size) {
     pkt_t* newpkt;
     size_t offset;
+    size_t overhead;
+    void (*put_header)(pkt_t*, uint8_t*, size_t);
+    void (*put_footer)(pkt_t*);
     
     if (plist == NULL) {
         return -1;
@@ -47,7 +93,37 @@ int pktlist_add(pktlist_t* plist, bool write_header, uint8_t* data, size_t size)
     }
     
     // Offset is dependent if we are writing a header (8 bytes) or not.
-    offset = (write_header) ? 8 : 0;
+    if (write_header) {
+        switch (cliopt_getintf()) {
+            case INTF_mpipe:    
+                offset      = 8; 
+                overhead    = 8;
+                put_header  = &sub_writeheader_mpipe;
+                put_footer  = &sub_writefooter_mpipe;
+                break;
+            
+            case INTF_modbus:
+                offset      = 0; 
+                overhead    = 2;
+                put_header  = &sub_writeheader_null;
+                put_footer  = &sub_writefooter_crc16;
+                break;
+            
+            default:
+                offset      = 0;
+                overhead    = 0;
+                put_header  = &sub_writeheader_null;
+                put_footer  = &sub_writefooter_null;
+                break;
+        }
+    }
+    else {
+        offset      = 0;
+        overhead    = 0;
+        put_header  = &sub_writeheader_null;
+        put_footer  = &sub_writefooter_null;
+    }
+
     
     // Setup list connections for the new packet
     // Also allocate the buffer of the new packet
@@ -56,26 +132,19 @@ int pktlist_add(pktlist_t* plist, bool write_header, uint8_t* data, size_t size)
     ///      Dynamic header isn't implemented yet, so no rush.
     newpkt->prev    = plist->last;
     newpkt->next    = NULL;
-    newpkt->size    = size + offset;
+    newpkt->size    = size + overhead;
     newpkt->buffer  = malloc(newpkt->size);
     if (newpkt->buffer == NULL) {
         return -3;
     }
     
-    // Copy Payload into Packet buffer
+    // Copy Payload into Packet buffer at data offset
+    //memcpy(&newpkt->buffer[offset], data, newpkt->size);
+              //
+    
     // If "write_header" is set, then we need to write our own header (e.g. for
     // TX'ing).  If not, we copy the data directly.
-    memcpy(&newpkt->buffer[offset], data, newpkt->size);
-    if (write_header) {
-        newpkt->buffer[0]   = 0xff;
-        newpkt->buffer[1]   = 0x55;
-        newpkt->buffer[2]   = 0;
-        newpkt->buffer[3]   = 0;
-        newpkt->buffer[4]   = (size >> 8) & 0xff;
-        newpkt->buffer[5]   = size & 0xff;
-        newpkt->buffer[6]   = 0;
-        newpkt->buffer[7]   = 0;            ///@todo Set Control Field here based on Cli.
-    }
+    put_header(newpkt, data, size);        ///@todo Set Control Field here based on Cli (instead of NULL)
 
     // List is empty, so start the list
     if (plist->last == NULL) {
@@ -101,13 +170,7 @@ int pktlist_add(pktlist_t* plist, bool write_header, uint8_t* data, size_t size)
     
     ///@todo Move Sequence Number entry and CRC entry to somewhere in writer
     ///      thread, so that it can be retransmitted with new sequence
-    if (write_header) {
-        uint16_t crcval;
-        newpkt->buffer[6]   = newpkt->sequence;
-        crcval              = crc_calc_block(&newpkt->buffer[4], newpkt->size - 4);
-        newpkt->buffer[2]   = (crcval >> 8) & 0xff;
-        newpkt->buffer[3]   = crcval & 0xff;
-    }
+    put_footer(newpkt);
     
     // Increment the list size to account for new packet
     plist->size++;

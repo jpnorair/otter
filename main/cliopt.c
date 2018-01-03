@@ -34,3 +34,6 @@ FORMAT_Type cliopt_getformat(void) {
     return master->format;
 }
 
+INTF_Type cliopt_getintf(void) {
+    return master->intf;
+}

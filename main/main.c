@@ -68,7 +68,7 @@
 
 //Comment-out if not testing: this should ideally be passed into the compiler
 //params, but with XCode that's a mystery.
-//#define __TEST__
+#define __TEST__
 
 #if defined(__TEST__)
 #   define DEBUG_PRINTF(...) fprintf(stderr, "DEBUG: " __VA_ARGS__)
@@ -99,13 +99,6 @@ typedef struct {
 
 cli_struct cli;
 
-
-
-typedef enum {
-    INTF_mpipe  = 0,
-    INTF_modbus = 1,
-    INTF_max
-} intf_enum;
 
 
 
@@ -141,7 +134,7 @@ void sigquit_handler(int sigcode) {
 }
 
 
-int otter_main( intf_enum intf,
+int otter_main( INTF_Type intf,
                 const char* ttyfile,
                 int baudrate,
                 bool pipe,
@@ -149,7 +142,7 @@ int otter_main( intf_enum intf,
                 cJSON* params
                 ); 
 
-intf_enum sub_intf_cmp(const char* s1);
+INTF_Type sub_intf_cmp(const char* s1);
 
 void sub_json_loadargs(cJSON* json, 
                        char* ttyfile, 
@@ -200,8 +193,8 @@ int _dtputs(char* str) {
 
 
 
-intf_enum sub_intf_cmp(const char* s1) {
-    intf_enum selected_intf;
+INTF_Type sub_intf_cmp(const char* s1) {
+    INTF_Type selected_intf;
 
     if (strcmp(s1, "modbus") == 0) {
         selected_intf = INTF_modbus;
@@ -247,7 +240,7 @@ int main(int argc, char* argv[]) {
     bool verbose_val    = true;
     bool pipe_val       = false;
     
-    intf_enum intf_val  = OTTER_FEATURE(MPIPE) ? INTF_mpipe : INTF_modbus;
+    INTF_Type intf_val  = OTTER_FEATURE(MPIPE) ? INTF_mpipe : INTF_modbus;
     
     cJSON* json = NULL;
     char* buffer = NULL;
@@ -401,7 +394,7 @@ int main(int argc, char* argv[]) {
 
 /// What this should do is start two threads, one for the character I/O on
 /// the dterm side, and one for the serial I/O.
-int otter_main(intf_enum intf, const char* ttyfile, int baudrate, bool pipe, bool verbose, cJSON* params) {    
+int otter_main(INTF_Type intf, const char* ttyfile, int baudrate, bool pipe, bool verbose, cJSON* params) {    
     // MPipe Datastructs
     mpipe_arg_t mpipe_args;
     mpipe_ctl_t mpipe_ctl;
@@ -432,7 +425,7 @@ int otter_main(intf_enum intf, const char* ttyfile, int baudrate, bool pipe, boo
     pthread_mutex_t pktrx_mutex;
     
     // Parameters
-    int parity_bits;
+    int stop_bits;
     
     
     /// JSON params construct should contain the following objects
@@ -508,13 +501,13 @@ int otter_main(intf_enum intf, const char* ttyfile, int baudrate, bool pipe, boo
     mpipe_args.kill_cond        = &cli.kill_cond;
     
     if (intf == INTF_modbus) {
-        parity_bits = 2;
+        stop_bits = 2;
     }
     else {
-        parity_bits = 1;
+        stop_bits = 1;
     }
     
-    if (mpipe_open(&mpipe_ctl, ttyfile, baudrate, 8, 'N', parity_bits, 0, 0, 0) < 0) {
+    if (mpipe_open(&mpipe_ctl, ttyfile, baudrate, 8, 'N', stop_bits, 0, 0, 0) < 0) {
         cli.exitcode = -1;
         goto otter_main_TERM1;
     }
@@ -557,6 +550,7 @@ int otter_main(intf_enum intf, const char* ttyfile, int baudrate, bool pipe, boo
     /// Client Options.  These are read-only from internal modules
     cliopts.format      = FORMAT_Dynamic;
     cliopts.verbose_on  = verbose;
+    cliopts.intf        = intf;
     cliopt_init(&cliopts);
     
     /// Invoke the child threads below.  All of the child threads run
