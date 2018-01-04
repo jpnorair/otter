@@ -67,10 +67,12 @@ void sub_writefooter_crc16(pkt_t* newpkt) {
     uint16_t crcval;
     size_t crcpos;
     crcpos  = newpkt->size - 2;
-    crcval  = crc_calc_block(&newpkt->buffer[0], crcpos);
     
-    newpkt->buffer[crcpos]      = (crcval >> 8) & 0xff;
-    newpkt->buffer[crcpos+1]    = crcval & 0xff;
+    //crcval  = crc_calc_block(&newpkt->buffer[0], crcpos);
+    crcval = mbcrc_calc_block(&newpkt->buffer[0], crcpos);
+    
+    newpkt->buffer[crcpos]      = crcval & 0xff;
+    newpkt->buffer[crcpos+1]    = (crcval >> 8) & 0xff;
 }
 
 
@@ -245,8 +247,7 @@ int pktlist_del(pktlist_t* plist, pkt_t* pkt) {
 
 
 int pktlist_getnew(pktlist_t* plist) {
-    uint16_t    crc_val;
-    uint16_t    crc_comp;
+    INTF_Type intf;
     //time_t      seconds;
 
     // packet list is not allocated -- that's a serious error
@@ -259,15 +260,28 @@ int pktlist_getnew(pktlist_t* plist) {
         return -1;
     }
     
-    // Save Timestamp and Sequence ID parameters
+    // Save Timestamp 
     plist->cursor->tstamp   = time(NULL);   //;localtime(&seconds);
-    plist->cursor->sequence = plist->cursor->buffer[4];
     
-    // Determine CRC quality of the received packet
-    crc_val                 = (plist->cursor->buffer[0] << 8) + plist->cursor->buffer[1];
-    crc_comp                = crc_calc_block(&plist->cursor->buffer[2], plist->cursor->size-2);
-    plist->cursor->crcqual  = (crc_comp - crc_val);
+    intf = cliopt_getintf();
     
+    // Sequence ID is present in MPipe only
+    if (intf == INTF_mpipe) {
+        uint16_t    crc_val;
+        uint16_t    crc_comp;
+    
+        plist->cursor->sequence = plist->cursor->buffer[4];
+        crc_val                 = (plist->cursor->buffer[0] << 8) + plist->cursor->buffer[1];
+        crc_comp                = crc_calc_block(&plist->cursor->buffer[2], plist->cursor->size-2);
+        plist->cursor->crcqual  = (crc_comp - crc_val);
+    }
+    else if (intf == INTF_modbus) {
+        plist->cursor->crcqual  = mbcrc_calc_block(&plist->cursor->buffer, plist->cursor->size);
+    }
+    else {
+        plist->cursor->crcqual  = 0;
+    }
+
     // return 0 on account that nothing went wrong.  So far, no checks.
     return 0;
 }

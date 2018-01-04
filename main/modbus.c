@@ -368,7 +368,7 @@ void* modbus_parser(void* args) {
             /// CRC bytes (2) are stripped
             proc_result = smut_resp_proc(putsbuf, rlist->cursor->buffer, &output_bytes, rlist->cursor->size-2);
             if ((proc_result == 0) && (output_bytes == 0)) {
-                fmt_fprintalp(_PUTS, msgcall, putsbuf, output_bytes);
+                fmt_fprintalp(_PUTS, msgcall, (uint8_t*)putsbuf, output_bytes);
             }
 
             // clear_rpkt will always be true.  It means that the received 
