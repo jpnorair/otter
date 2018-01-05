@@ -80,7 +80,6 @@ void sub_writefooter_crc16(pkt_t* newpkt) {
 
 int pktlist_add(pktlist_t* plist, bool write_header, uint8_t* data, size_t size) {
     pkt_t* newpkt;
-    size_t offset;
     size_t overhead;
     void (*put_header)(pkt_t*, uint8_t*, size_t);
     void (*put_footer)(pkt_t*);
@@ -98,21 +97,18 @@ int pktlist_add(pktlist_t* plist, bool write_header, uint8_t* data, size_t size)
     if (write_header) {
         switch (cliopt_getintf()) {
             case INTF_mpipe:    
-                offset      = 8; 
                 overhead    = 8;
                 put_header  = &sub_writeheader_mpipe;
                 put_footer  = &sub_writefooter_mpipe;
                 break;
             
             case INTF_modbus:
-                offset      = 0; 
                 overhead    = 2;
                 put_header  = &sub_writeheader_null;
                 put_footer  = &sub_writefooter_crc16;
                 break;
             
             default:
-                offset      = 0;
                 overhead    = 0;
                 put_header  = &sub_writeheader_null;
                 put_footer  = &sub_writefooter_null;
@@ -120,7 +116,6 @@ int pktlist_add(pktlist_t* plist, bool write_header, uint8_t* data, size_t size)
         }
     }
     else {
-        offset      = 0;
         overhead    = 0;
         put_header  = &sub_writeheader_null;
         put_footer  = &sub_writefooter_null;
@@ -276,7 +271,7 @@ int pktlist_getnew(pktlist_t* plist) {
         plist->cursor->crcqual  = (crc_comp - crc_val);
     }
     else if (intf == INTF_modbus) {
-        plist->cursor->crcqual  = mbcrc_calc_block(&plist->cursor->buffer, plist->cursor->size);
+        plist->cursor->crcqual  = mbcrc_calc_block(&plist->cursor->buffer[0], plist->cursor->size);
     }
     else {
         plist->cursor->crcqual  = 0;

@@ -68,7 +68,7 @@
 
 //Comment-out if not testing: this should ideally be passed into the compiler
 //params, but with XCode that's a mystery.
-#define __TEST__
+//#define __TEST__
 
 #if defined(__TEST__)
 #   define DEBUG_PRINTF(...) fprintf(stderr, "DEBUG: " __VA_ARGS__)
