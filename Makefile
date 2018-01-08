@@ -26,7 +26,7 @@ OTTER_INC   := $(INC) $(EXT_INC)
 OTTER_LIB   := $(LIB) $(EXT_LIBS)
 
 #OBJECTS     := $(shell find $(BUILDDIR) -type f -name "*.$(OBJEXT)")
-#MODULES     := $(SUBMODULES) + $(LIBMODULES)
+#MODULES     := $(SUBMODULES) $(LIBMODULES)
 
 
 # Export the following variables to the shell: will affect submodules
