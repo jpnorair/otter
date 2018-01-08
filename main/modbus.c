@@ -19,16 +19,17 @@
 #if (OTTER_FEATURE(MODBUS) == ENABLED)
 
 // Application Includes
+#include "cliopt.h"
 #include "mpipe.h"
 #include "modbus.h"
 #include "ppipelist.h"
 
+// OT Filesystem modular library
+#include <otfs.h>
+
 // SMUT Library that has modbus protocol processing
 // SMUT is external to otter.
 #include <smut.h>
-
-// OT Filesystem modular library
-#include <otfs.h>
 
 // Standard C & POSIX libraries
 #include <fcntl.h>
@@ -46,12 +47,19 @@
 
 
 /// DEBUG printing for tty read
-#ifdef TTY_DEBUG
-#   define TTY_PRINTF(...)  fprintf(stderr, __VA_ARGS__)
-#else
-#   define TTY_PRINTF(...)  do { } while(0)
-#endif
+//#define TTY_TX_DEBUG
+//#define TTY_RX_DEBUG
 
+#ifdef TTY_TX_DEBUG
+#   define TTY_TX_PRINTF(...)  fprintf(stderr, __VA_ARGS__)
+#else
+#   define TTY_TX_PRINTF(...)  do { } while(0)
+#endif
+#ifdef TTY_RX_DEBUG
+#   define TTY_RX_PRINTF(...)  fprintf(stderr, __VA_ARGS__)
+#else
+#   define TTY_RX_PRINTF(...)  do { } while(0)
+#endif
 
 
 
@@ -82,6 +90,7 @@ void* modbus_reader(void* args) {
     
     uint8_t rbuf[1024];
     uint8_t* rbuf_cursor;
+    int read_limit;
     int frame_length;
     int errcode;
     
@@ -113,7 +122,7 @@ void* modbus_reader(void* args) {
     
     // Receive the first byte
     // If returns an error, exit
-    pollcode = poll(fds, 1, 0);
+    pollcode = poll(fds, 1, -1);
     if (pollcode <= 0) {
         errcode = 4;
         goto modbus_reader_ERR;
@@ -121,14 +130,23 @@ void* modbus_reader(void* args) {
     
     // Receive subsequent bytes
     // abort when there's a long-enough break in reception
-    while (1) {
-        read(mpctl.tty_fd, rbuf_cursor++, 1);
+    rbuf_cursor = rbuf;
+    read_limit  = 1024;
+    while (read_limit > 0) {
+        int new_bytes;
         
-        pollcode = poll(fds, 1, 1);
+        // 1. Read all bytes that have been received, but don't go beyond limit
+        new_bytes       = read(mpctl.tty_fd, rbuf_cursor, read_limit);
+        rbuf_cursor    += new_bytes;
+        read_limit     -= new_bytes;
+        
+        // 2. Poll function will do a timeout waiting for next byte(s).  In Modbus, 
+        //    data timeout means end-of-frame.
+        pollcode = poll(fds, 1, OTTER_PARAM(MBTIMEOUT));
         
         if (pollcode == 0) {
             // delay limit detected: frame is over
-            errcode = 3;
+            //errcode = 3;
             break;
         }
         else if (pollcode < 0) {
@@ -143,7 +161,7 @@ void* modbus_reader(void* args) {
     frame_length  = rbuf_cursor - rbuf;
     
     /// Now do some checks to prevent malformed packets.
-    if (((unsigned int)frame_length < 4) \ 
+    if (((unsigned int)frame_length < 4) \
     ||  ((unsigned int)frame_length > 256)) {
         errcode = 2;
         goto modbus_reader_ERR;
@@ -158,14 +176,14 @@ void* modbus_reader(void* args) {
     /// @todo supply estimated bytes remaining into mpipe_flush()
     modbus_reader_ERR:
     switch (errcode) {
-        case 0: TTY_PRINTF(stderr, "Sending packet rx signal\n");
+        case 0: TTY_RX_PRINTF("Packet Received Successfully (%d bytes).\n", frame_length);
                 pthread_cond_signal(pktrx_cond);
                 goto modbus_reader_START;
         
-        case 2: TTY_PRINTF(stderr, "Modbus Packet Payload Length is out of bounds.\n");
+        case 2: TTY_RX_PRINTF("Modbus Packet Payload Length (%d bytes) is out of bounds.\n", frame_length);
                 goto modbus_reader_START;
                 
-        case 3: TTY_PRINTF(stderr, "Modbus Packet RX timed-out\n");
+        case 3: TTY_RX_PRINTF("Modbus Packet RX timed-out\n");
                 goto modbus_reader_START;
                 
         case 4: fprintf(stderr, "Connection dropped, quitting now\n");
@@ -235,7 +253,7 @@ void* modbus_writer(void* args) {
                 cursor      = txpkt->buffer;
                 bytes_left  = (int)txpkt->size;
                 
-#               ifdef TTY_DEBUG
+#               ifdef TTY_TX_DEBUG
                 fprintf(stderr, "Writing %d bytes to tty\n", bytes_left);
                 for (int i=0; i<bytes_left; i++) {
                     fprintf(stderr, "%02X ", cursor[i]);
@@ -294,6 +312,9 @@ void* modbus_parser(void* args) {
     pthread_mutex_t* pktrx_mutex    = ((mpipe_arg_t*)args)->pktrx_mutex;
     cJSON* msgcall                  = ((mpipe_arg_t*)args)->msgcall;
     
+    /// In order to parse messages from modbus through smut, smut must be initialized.
+    /// This thread runs only once and just loops.
+    smut_init();
 
     while (1) {
         int pkt_condition;  // tracks some error conditions
@@ -365,9 +386,12 @@ void* modbus_parser(void* args) {
             
             /// CRC is good, so send packet to Modbus processor.
             /// CRC bytes (2) are stripped
+            
+            ///@todo validate resp_proc for master.  Currently crashes, presumably on 
+            ///      filesystem lookup stage.
             proc_result = smut_resp_proc(putsbuf, rlist->cursor->buffer, &output_bytes, rlist->cursor->size-2);
-            if ((proc_result == 0) && (output_bytes == 0)) {
-                fmt_fprintalp(_PUTS, msgcall, putsbuf, payload_bytes);
+            if ((proc_result == 0) && (output_bytes != 0)) {
+                fmt_fprintalp(_PUTS, msgcall, (uint8_t*)putsbuf, output_bytes);
             }
 
             // clear_rpkt will always be true.  It means that the received 
@@ -377,11 +401,12 @@ void* modbus_parser(void* args) {
                 pktlist_del(rlist, scratch);
             }
             
+            ///@note this code was from copy paste.  I don't think it is needed.
             // Clear the tpkt if it exists
-            if (tpkt != NULL) {
-                pktlist_del(tlist, tpkt);
-            }
-        } 
+            //if (tpkt != NULL) {
+            //    pktlist_del(tlist, tpkt);
+            //}
+        }
         
         mpipe_parser_END:
         pthread_mutex_unlock(tlist_mutex); 

@@ -20,3 +20,5 @@
 
 // CRC Calculation function
 uint16_t crc_calc_block(uint8_t* src, size_t size);
+
+uint16_t mbcrc_calc_block(uint8_t *src, size_t size);

@@ -396,6 +396,9 @@ int cmd_raw(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax
     if (bytesout < 0) {
         dterm_printf(dt, "Bintex error on character %d.\n", -bytesout);
     }
+    else if (cliopt_isverbose() && (bytesout > 0)) {
+        fprintf(stdout, "--> raw packetizing %zu bytes (max=%zu)\n", bytesout, dstmax);
+    }
 
     return bytesout;
 }

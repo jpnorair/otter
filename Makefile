@@ -4,7 +4,8 @@ TARGET      ?= otter
 TARGETDIR   ?= bin
 EXT_DEF     ?= 
 EXT_INC     ?= 
-EXT_LIBS    ?= 
+EXT_LIBFLAGS    ?= 
+EXT_LIBS ?= 
 
 DEFAULT_DEF := -D__HBUILDER__
 LIBMODULES  := bintex hbuilder-lib $(EXT_LIBS)
@@ -18,12 +19,13 @@ OBJEXT      := o
 
 #CFLAGS      := -std=gnu99 -O -g -Wall -pthread
 CFLAGS      := -std=gnu99 -O3 -pthread
-INC         := -I$(INCDIR)
-INCDEP      := -I$(INCDIR)
+INC         := -I.
+INCDEP      := -I.
 LIB         := -lhbuilder -lbintex -L./../hbuilder-lib -L./../bintex
 OTTER_DEF   := $(DEFAULT_DEF) $(EXT_DEF)
 OTTER_INC   := $(INC) $(EXT_INC)
-OTTER_LIB   := $(LIB) $(EXT_LIBS)
+OTTER_LIB   := $(LIB) $(EXT_LIBFLAGS)
+
 
 #OBJECTS     := $(shell find $(BUILDDIR) -type f -name "*.$(OBJEXT)")
 #MODULES     := $(SUBMODULES) $(LIBMODULES)

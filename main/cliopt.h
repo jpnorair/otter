@@ -22,6 +22,12 @@
 #include <stdint.h>
 
 typedef enum {
+    INTF_mpipe  = 0,
+    INTF_modbus = 1,
+    INTF_max
+} INTF_Type;
+
+typedef enum {
     FORMAT_Dynamic  = 0,
     FORMAT_Bintex   = 1,
     FORMAT_Hex8     = 2,
@@ -32,6 +38,7 @@ typedef enum {
 typedef struct {
     bool        verbose_on;
     FORMAT_Type format;
+    INTF_Type   intf;
 } cliopt_t;
 
 
@@ -40,6 +47,8 @@ cliopt_t* cliopt_init(cliopt_t* new_master);
 bool cliopt_isverbose(void);
 
 FORMAT_Type cliopt_getformat(void);
+
+INTF_Type cliopt_getintf(void);
 
 
 #endif /* cliopt_h */

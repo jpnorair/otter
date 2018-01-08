@@ -48,6 +48,9 @@
 #ifndef OTTER_PARAM_DEFBAUDRATE
 #   define OTTER_PARAM_DEFBAUDRATE  115200
 #endif
+#ifndef OTTER_PARAM_MBTIMEOUT
+#   define OTTER_PARAM_MBTIMEOUT    20
+#endif
 
 
 /// Automatic Checks

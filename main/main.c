@@ -101,13 +101,6 @@ cli_struct cli;
 
 
 
-typedef enum {
-    INTF_mpipe  = 0,
-    INTF_modbus = 1,
-    INTF_max
-} intf_enum;
-
-
 
 
 
@@ -141,7 +134,7 @@ void sigquit_handler(int sigcode) {
 }
 
 
-int otter_main( intf_enum intf,
+int otter_main( INTF_Type intf,
                 const char* ttyfile,
                 int baudrate,
                 bool pipe,
@@ -149,7 +142,7 @@ int otter_main( intf_enum intf,
                 cJSON* params
                 ); 
 
-intf_enum sub_intf_cmp(const char* s1);
+INTF_Type sub_intf_cmp(const char* s1);
 
 void sub_json_loadargs(cJSON* json, 
                        char* ttyfile, 
@@ -200,8 +193,8 @@ int _dtputs(char* str) {
 
 
 
-intf_enum sub_intf_cmp(const char* s1) {
-    intf_enum selected_intf;
+INTF_Type sub_intf_cmp(const char* s1) {
+    INTF_Type selected_intf;
 
     if (strcmp(s1, "modbus") == 0) {
         selected_intf = INTF_modbus;
@@ -238,7 +231,7 @@ int main(int argc, char* argv[]) {
     struct arg_end  *end     = arg_end(20);
     
     void* argtable[] = {ttyfile,brate,pipe,intf,config,verbose,help,version,end};
-    const char* progname = "otter";
+    const char* progname = OTTER_PARAM(NAME);
     int nerrors;
     int exitcode = 0;
     
@@ -247,7 +240,7 @@ int main(int argc, char* argv[]) {
     bool verbose_val    = true;
     bool pipe_val       = false;
     
-    intf_enum intf_val  = INTF_mpipe;
+    INTF_Type intf_val  = OTTER_FEATURE(MPIPE) ? INTF_mpipe : INTF_modbus;
     
     cJSON* json = NULL;
     char* buffer = NULL;
@@ -401,7 +394,7 @@ int main(int argc, char* argv[]) {
 
 /// What this should do is start two threads, one for the character I/O on
 /// the dterm side, and one for the serial I/O.
-int otter_main(intf_enum intf, const char* ttyfile, int baudrate, bool pipe, bool verbose, cJSON* params) {    
+int otter_main(INTF_Type intf, const char* ttyfile, int baudrate, bool pipe, bool verbose, cJSON* params) {    
     // MPipe Datastructs
     mpipe_arg_t mpipe_args;
     mpipe_ctl_t mpipe_ctl;
@@ -430,6 +423,9 @@ int otter_main(intf_enum intf, const char* ttyfile, int baudrate, bool pipe, boo
     pthread_mutex_t tlist_cond_mutex;
     pthread_cond_t  pktrx_cond;
     pthread_mutex_t pktrx_mutex;
+    
+    // Parameters
+    int stop_bits;
     
     
     /// JSON params construct should contain the following objects
@@ -503,7 +499,15 @@ int otter_main(intf_enum intf, const char* ttyfile, int baudrate, bool pipe, boo
     mpipe_args.pktrx_cond       = &pktrx_cond;
     mpipe_args.kill_mutex       = &cli.kill_mutex;
     mpipe_args.kill_cond        = &cli.kill_cond;
-    if (mpipe_open(&mpipe_ctl, ttyfile, baudrate, 8, 'N', 1, 0, 0, 0) < 0) {
+    
+    if (intf == INTF_modbus) {
+        stop_bits = 2;
+    }
+    else {
+        stop_bits = 1;
+    }
+    
+    if (mpipe_open(&mpipe_ctl, ttyfile, baudrate, 8, 'N', stop_bits, 0, 0, 0) < 0) {
         cli.exitcode = -1;
         goto otter_main_TERM1;
     }
@@ -546,6 +550,7 @@ int otter_main(intf_enum intf, const char* ttyfile, int baudrate, bool pipe, boo
     /// Client Options.  These are read-only from internal modules
     cliopts.format      = FORMAT_Dynamic;
     cliopts.verbose_on  = verbose;
+    cliopts.intf        = intf;
     cliopt_init(&cliopts);
     
     /// Invoke the child threads below.  All of the child threads run
@@ -554,18 +559,21 @@ int otter_main(intf_enum intf, const char* ttyfile, int baudrate, bool pipe, boo
     /// Each thread must be be implemented to raise SIGQUIT or SIGINT on exit
     /// i.e. raise(SIGINT).
     DEBUG_PRINTF("Creating theads\n");
-    if (0) { }
-#   if (OTTER_FEATURE(MODBUS))    
-    else if (intf == INTF_modbus) {
+    if (OTTER_FEATURE(MODBUS) && (intf == INTF_modbus)) {
+        DEBUG_PRINTF("Opening Modbus Interface\n");
         pthread_create(&thr_mpreader, NULL, &modbus_reader, (void*)&mpipe_args);
         pthread_create(&thr_mpwriter, NULL, &modbus_writer, (void*)&mpipe_args);
         pthread_create(&thr_mpparser, NULL, &modbus_parser, (void*)&mpipe_args);
     }
-#   endif
-    else {
+    else if (OTTER_FEATURE(MPIPE) && (intf == INTF_mpipe)) {
+        DEBUG_PRINTF("Opening Mpipe Interface\n");
         pthread_create(&thr_mpreader, NULL, &mpipe_reader, (void*)&mpipe_args);
         pthread_create(&thr_mpwriter, NULL, &mpipe_writer, (void*)&mpipe_args);
         pthread_create(&thr_mpparser, NULL, &mpipe_parser, (void*)&mpipe_args);
+    }
+    else {
+        DEBUG_PRINTF("No active interface is available\n");
+        goto otter_main_TERM2;
     }
     
     pthread_create(&thr_dterm, NULL, dterm_fn, (void*)&dterm_args);
