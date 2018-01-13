@@ -397,7 +397,7 @@ int cmd_raw(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax
         dterm_printf(dt, "Bintex error on character %d.\n", -bytesout);
     }
     else if (cliopt_isverbose() && (bytesout > 0)) {
-        fprintf(stdout, "--> raw packetizing %zu bytes (max=%zu)\n", bytesout, dstmax);
+        fprintf(stdout, "--> raw packetizing %d bytes (max=%zu)\n", bytesout, dstmax);
     }
 
     return bytesout;
@@ -530,6 +530,7 @@ int app_file(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstma
     /// 1. Get the command 
     cmd = src;
     src = sub_markstring(&cmd, inbytes, 10);
+    fprintf(stderr, "--> cmd=%s\n", cmd);
     
     /// 2. Get the argument, if it exists.
     if (src[0] == '-') {
