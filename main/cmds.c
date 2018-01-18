@@ -547,7 +547,7 @@ int app_file(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstma
         
     /// 4. Send the command to HBuilder FDP generator
     ///    bytesout is used to store the amount of bytes in the raw ALP output
-    bytesout = fdp_generate(dst, dstmax, (const char*)cmd, (const char*)block, (size_t)bytesout, src);
+    bytesout = fdp_generate(dst, dstmax, (const char*)cmd, (const char*)block, (size_t)bytesout, temp_buffer);
     
     if (cliopt_isverbose() && (bytesout > 0)) {
         fprintf(stdout, "--> fdp packetizing %d bytes\n", bytesout);
