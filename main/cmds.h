@@ -48,6 +48,7 @@ typedef struct cmd_s {
 
 int cmd_quit(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax);
 
+// To be deprecated and linked to cmd_set
 int cmd_sethome(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax);
 
 int cmd_su(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax);
@@ -56,6 +57,9 @@ int cmd_whoami(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dst
 
 // Raw Protocol Entry: 
 int cmd_raw(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax);
+
+// Set an Otter environment variable
+int cmd_set(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax);
 
 // HBCC is a client-side generator of sequential ASAPI Calls into simple, 
 // atomic API messages

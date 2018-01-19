@@ -38,10 +38,9 @@
 
 
 /// Variables used across shell commands
+
 ///@todo put these into some form of data structure, potentially the "cli" 
 ///      datastructure.
-int user_id                     = 2;            // Guest
-
 const char user_str_guest[]     = "guest";
 const char user_str_admin[]     = "admin";
 const char user_str_root[]      = "root";
@@ -530,7 +529,6 @@ int app_file(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstma
     /// 1. Get the command 
     cmd = src;
     src = sub_markstring(&cmd, inbytes, 10);
-    fprintf(stderr, "--> cmd=%s\n", cmd);
     
     /// 2. Get the argument, if it exists.
     if (src[0] == '-') {
@@ -544,15 +542,18 @@ int app_file(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstma
     /// 3. Process the bintex into raw data
     ///    bytesout is used to store the amount of bytes in the raw byte output
     bytesout = bintex_ss((unsigned char*)src, (unsigned char*)temp_buffer, (int)sizeof(temp_buffer));
-        
-    /// 4. Send the command to HBuilder FDP generator
-    ///    bytesout is used to store the amount of bytes in the raw ALP output
-    bytesout = fdp_generate(dst, dstmax, (const char*)cmd, (const char*)block, (size_t)bytesout, temp_buffer);
-    
-    if (cliopt_isverbose() && (bytesout > 0)) {
-        fprintf(stdout, "--> fdp packetizing %d bytes\n", bytesout);
+    if (bytesout < 0) {
+        dterm_printf(dt, "Bintex error on character %d.\n", -bytesout);
     }
-
+    else {
+        /// 4. Send the command to HBuilder FDP generator
+        ///    bytesout is used to store the amount of bytes in the raw ALP output
+        bytesout = fdp_generate(dst, dstmax, (const char*)cmd, (const char*)block, (size_t)bytesout, temp_buffer);
+        if ((bytesout > 0) && cliopt_isverbose()) {
+            fprintf(stdout, "--> fdp packetizing %d bytes\n", bytesout);
+        }
+    }
+    
     return (int)bytesout;
     
 #   else
