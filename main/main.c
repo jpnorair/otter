@@ -439,6 +439,11 @@ int otter_main(INTF_Type intf, const char* ttyfile, int baudrate, bool pipe, boo
     ///      something dynamic as such.
     cmdsearch_init(NULL);
     
+    /// Initialize Otter Environment Variables
+    ///@todo in the future, let's pull this from an initialization file or
+    ///      something dynamic as such.
+    
+    
     
     /// Initialize packet lists for transmitted packets and received packets
     pktlist_init(&mpipe_rlist);
