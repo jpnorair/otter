@@ -233,7 +233,7 @@ void* dterm_piper(void* args) {
             ///@todo spruce-up the command error reporting, maybe even with
             ///      a cursor showing where the first error was found.
             if (bytesout < 0) {
-                dterm_puts(dt, "--> unknown command error\n");
+                dterm_puts(dt, "--> command execution error\n");
             }
             
             // If there are bytes to send to MPipe, do that.
@@ -480,7 +480,7 @@ void* dterm_prompter(void* args) {
                                         ///@todo spruce-up the command error reporting, maybe even with
                                         ///      a cursor showing where the first error was found.
                                         if (outbytes < 0) {
-                                            dterm_puts(dt, "--> unknown command error\n");
+                                            dterm_puts(dt, "--> command execution error\n");
                                         }
                                         
                                         // If there are bytes to send to MPipe, do that.
