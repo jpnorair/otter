@@ -47,6 +47,7 @@ static const cmd_t commands[CMD_COUNT] = {
     { "raw",        &cmd_raw,       NULL, NULL },
     { "sec",        &app_sec,       NULL, NULL },
     { "sensor",     &app_sensor,    NULL, NULL },
+    { "set",        &cmd_set,       NULL, NULL },
     { "sethome",    &cmd_sethome,   NULL, NULL },
     { "su",         &cmd_su,        NULL, NULL },
     { "whoami",     &cmd_whoami,    NULL, NULL },
