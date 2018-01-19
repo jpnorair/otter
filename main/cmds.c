@@ -159,8 +159,27 @@ int cmd_quit(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstma
 
 
 
-int cmd_sethome(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
+int cmd_set(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
+///@todo This will do setting of Otter Env Variables.
     
+    /// dt == NULL is the initialization case.
+    /// There may not be an initialization for all command groups.
+    if (dt == NULL) {
+        return 0;
+    }
+    
+    INPUT_SANITIZE();
+    
+    fprintf(stderr, "\"set\" command not yet implemented\n");
+
+    return 0;
+}
+
+
+int cmd_sethome(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
+///@todo make this a recipient for "set HOME" or simply remove it.  Must be aligned
+///      with environment variable module.
+
     /// dt == NULL is the initialization case.
     /// There may not be an initialization for all command groups.
     if (dt == NULL) {

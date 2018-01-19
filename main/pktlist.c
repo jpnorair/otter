@@ -40,12 +40,13 @@ void sub_writeheader_null(pkt_t* newpkt, uint8_t* data, size_t datalen) {
 
 
 void sub_writeheader_modbus(pkt_t* newpkt, uint8_t* data, size_t datalen) {
+/// Adds 1, 3, or 10 bytes to packet depending on conditions
     int user_id;
-    int offset;
+    int hdr_size;
     
     /// Basic Modbus just puts the destination address.
     newpkt->buffer[0]   = cliopt_getdstaddr() & 0xFF;
-    offset              = 1;
+    hdr_size            = 1;
     
     /// Enhanced Modbus uses commands 68, 69, 70.
     /// MPipe/ALP encapsulation uses these commands.
@@ -55,7 +56,7 @@ void sub_writeheader_modbus(pkt_t* newpkt, uint8_t* data, size_t datalen) {
         user_id             = cliopt_getuser();
         newpkt->buffer[1]   = 68 + (user_id & 3);
         newpkt->buffer[2]   = cliopt_getsrcaddr() & 0xFF;;
-        offset              = 3;
+        hdr_size            = 3;
     
         if (user_id < 2) {   
             uint32_t epoch = (uint32_t)time(NULL);
@@ -73,15 +74,19 @@ void sub_writeheader_modbus(pkt_t* newpkt, uint8_t* data, size_t datalen) {
             
             ///@todo do encryption on payload
             
-            offset = 10;
+            hdr_size = 10;
         }
     }
     
-    memcpy(&newpkt->buffer[offset], data, datalen);
+    // need to add header length to size value
+    newpkt->size += hdr_size;
+    
+    memcpy(&newpkt->buffer[hdr_size], data, datalen);
 }
 
 
 void sub_writeheader_mpipe(pkt_t* newpkt, uint8_t* data, size_t datalen) {
+/// Adds 8 bytes to packet
     newpkt->buffer[0] = 0xff;
     newpkt->buffer[1] = 0x55;
     newpkt->buffer[2] = 0;
@@ -89,7 +94,9 @@ void sub_writeheader_mpipe(pkt_t* newpkt, uint8_t* data, size_t datalen) {
     newpkt->buffer[4] = (datalen >> 8) & 0xff;
     newpkt->buffer[5] = datalen & 0xff;
     newpkt->buffer[6] = 0;
-    newpkt->buffer[7] = 0;            ///@todo Set Control Field here based on Cli
+    newpkt->buffer[7] = 0;      ///@todo Set Control Field here based on Cli
+    
+    newpkt->size     += 8;      // Header is 8 bytes, need to add this to size value.
     
     memcpy(&newpkt->buffer[8], data, datalen);
 }
@@ -100,8 +107,8 @@ void sub_writefooter_null(pkt_t* newpkt) {
 
 
 void sub_writefooter_mpipe(pkt_t* newpkt) {
+/// Adds no bytes to packet
     uint16_t crcval;
-    
     newpkt->buffer[6]   = newpkt->sequence;
     crcval              = crc_calc_block(&newpkt->buffer[4], newpkt->size - 4);
     newpkt->buffer[2]   = (crcval >> 8) & 0xff;
@@ -110,13 +117,10 @@ void sub_writefooter_mpipe(pkt_t* newpkt) {
 
 
 void sub_writefooter_modbus(pkt_t* newpkt) {
-    uint16_t crcval;
-    size_t crcpos;
-    crcpos  = newpkt->size - 2;
-    
-    //crcval  = crc_calc_block(&newpkt->buffer[0], crcpos);
-    crcval = mbcrc_calc_block(&newpkt->buffer[0], crcpos);
-    
+/// Adds two bytes to packet
+    size_t crcpos               = newpkt->size;
+    uint16_t crcval             = mbcrc_calc_block(&newpkt->buffer[0], newpkt->size);
+    newpkt->size               += 2;
     newpkt->buffer[crcpos]      = crcval & 0xff;
     newpkt->buffer[crcpos+1]    = (crcval >> 8) & 0xff;
 }
@@ -126,7 +130,7 @@ void sub_writefooter_modbus(pkt_t* newpkt) {
 
 int pktlist_add(pktlist_t* plist, bool write_header, uint8_t* data, size_t size) {
     pkt_t* newpkt;
-    size_t overhead;
+    size_t max_overhead;
     void (*put_header)(pkt_t*, uint8_t*, size_t);
     void (*put_footer)(pkt_t*);
     
@@ -143,13 +147,13 @@ int pktlist_add(pktlist_t* plist, bool write_header, uint8_t* data, size_t size)
     if (write_header) {
         switch (cliopt_getintf()) {
             case INTF_mpipe:    
-                overhead    = 8;
+                max_overhead= 8;
                 put_header  = &sub_writeheader_mpipe;
                 put_footer  = &sub_writefooter_mpipe;
                 break;
             
             case INTF_modbus:
-                overhead    = 2;
+                max_overhead= 12;
                 put_header  = &sub_writeheader_modbus;
                 put_footer  = &sub_writefooter_modbus;
                 break;
@@ -160,7 +164,7 @@ int pktlist_add(pktlist_t* plist, bool write_header, uint8_t* data, size_t size)
     }
     else {
     pktlist_add_SETNULL:
-        overhead    = 0;
+        max_overhead= 0;
         put_header  = &sub_writeheader_null;
         put_footer  = &sub_writefooter_null;
     }
@@ -172,8 +176,8 @@ int pktlist_add(pktlist_t* plist, bool write_header, uint8_t* data, size_t size)
     ///      Dynamic header isn't implemented yet, so no rush.
     newpkt->prev    = plist->last;
     newpkt->next    = NULL;
-    newpkt->size    = size + overhead;
-    newpkt->buffer  = malloc(newpkt->size);
+    newpkt->size    = size;
+    newpkt->buffer  = malloc(size + max_overhead);
     if (newpkt->buffer == NULL) {
         return -3;
     }

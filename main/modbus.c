@@ -177,6 +177,12 @@ void* modbus_reader(void* args) {
     modbus_reader_ERR:
     switch (errcode) {
         case 0: TTY_RX_PRINTF("Packet Received Successfully (%d bytes).\n", frame_length);
+#               ifdef TTY_RX_DEBUG
+                for (int i=0; i<frame_length; i++) {
+                    fprintf(stderr, "%02X ", rbuf[i]);
+                }
+                fprintf(stderr, "\n");
+#               endif
                 pthread_cond_signal(pktrx_cond);
                 goto modbus_reader_START;
         

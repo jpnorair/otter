@@ -28,7 +28,7 @@
 
 
 #define CMD_NAMESIZE    8
-#define CMD_COUNT       15
+#define CMD_COUNT       16
 
 // arg1: dst buffer
 // arg2: src buffer

@@ -31,6 +31,69 @@ typedef struct {
 
 
 
+
+// Pipe interface input uses hex encoding (deprecated)
+#ifdef HEX_OVER_PIPE
+static const uint8_t hexlut0[128] = {
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
+    0, 16, 32, 48, 64, 80, 96,112,128,144, 0, 0, 0, 0, 0, 0, 
+    0,160,176,192,208,224,240,  0,  0,  0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0,160,176,192,208,224,240,  0,  0,  0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+};
+
+static const uint8_t hexlut1[128] = {
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
+    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 0, 0, 0, 0, 0, 
+    0,10,11,12,13,14,15, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0,10,11,12,13,14,15, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+};
+
+int pipe_gethex(struct pollfd *pubfd, uint8_t* dst, size_t max) {
+    int pollcode;
+    uint8_t* start;
+    uint8_t* end;
+    uint8_t byte;
+    uint8_t hexbuf[2];
+    
+    start = dst;
+    end = dst + max;
+    
+    pollcode = poll(pubfd, 1, 100);
+    if (pollcode <= 0) {
+        goto pipe_gethex_SCRAP;
+    }
+    else if (pubfd[0].revents & (POLLERR | POLLHUP | POLLNVAL)) {
+        goto pipe_gethex_SCRAP;
+    }
+    
+    while ( (read(pubfd->fd, hexbuf, 2) > 0) && (max--) ) {
+        //printf("%c%c (%zu)\n", hexbuf[0], hexbuf[1], max); fflush(stdout);
+        byte    = hexlut0[(hexbuf[0]&0x7f)];
+        byte   += hexlut1[(hexbuf[1]&0x7f)];
+        *dst++  = byte;
+    }
+
+    return (int)(dst - start);
+    
+    pipe_gethex_SCRAP:
+    return pollcode;
+}
+#endif //ifdef HEX_OVER_PIPE
+
+
+
+
+
+
+
 void fmt_printhex(mpipe_printer_t puts_fn, uint8_t* src, size_t src_bytes, size_t cols) {
     const char convert[] = "0123456789ABCDEF";
     size_t i;
@@ -79,60 +142,6 @@ char* _loggermsg_findbreak(char* msg, size_t limit) {
     return pos;
 }
 
-
-
-static const uint8_t hexlut0[128] = {
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
-    0, 16, 32, 48, 64, 80, 96,112,128,144, 0, 0, 0, 0, 0, 0, 
-    0,160,176,192,208,224,240,  0,  0,  0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0,160,176,192,208,224,240,  0,  0,  0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
-};
-
-static const uint8_t hexlut1[128] = {
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
-    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 0, 0, 0, 0, 0, 
-    0,10,11,12,13,14,15, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0,10,11,12,13,14,15, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
-};
-
-//int pipe_gethex(struct pollfd *pubfd, uint8_t* dst, size_t max) {
-//    int pollcode;
-//    uint8_t* start;
-//    uint8_t* end;
-//    uint8_t byte;
-//    uint8_t hexbuf[2];
-//    
-//    start = dst;
-//    end = dst + max;
-//    
-//    pollcode = poll(pubfd, 1, 100);
-//    if (pollcode <= 0) {
-//        goto pipe_gethex_SCRAP;
-//    }
-//    else if (pubfd[0].revents & (POLLERR | POLLHUP | POLLNVAL)) {
-//        goto pipe_gethex_SCRAP;
-//    }
-//    
-//    while ( (read(pubfd->fd, hexbuf, 2) > 0) && (max--) ) {
-//        //printf("%c%c (%zu)\n", hexbuf[0], hexbuf[1], max); fflush(stdout);
-//        byte    = hexlut0[(hexbuf[0]&0x7f)];
-//        byte   += hexlut1[(hexbuf[1]&0x7f)];
-//        *dst++  = byte;
-//    }
-//
-//    return (int)(dst - start);
-//    
-//    pipe_gethex_SCRAP:
-//    return pollcode;
-//}
 
 
 void _output_hexlog(mpipe_printer_t puts_fn, uint8_t* payload, int length) {
