@@ -49,11 +49,20 @@ INTF_Type cliopt_getintf(void) {
 int cliopt_getuser(void) {
     return master->user_id;
 }
+void cliopt_setuser(int user_id) {
+    master->user_id = user_id;
+}
 
 int cliopt_getdstaddr(void) {
     return master->dst_addr;
 }
+void cliopt_setdstaddr(int addr) {
+    master->dst_addr = addr;
+}
 
 int cliopt_getsrcaddr(void) {
     return master->src_addr;
+}
+void cliopt_setsrcaddr(int addr) {
+    master->src_addr = addr;
 }

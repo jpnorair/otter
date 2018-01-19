@@ -302,7 +302,9 @@ int cmd_su(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax)
         /// Note that these might not properly authenticate with the target, in
         /// which case an Auth Response from the target should cause the user to 
         /// be dropped back into guest on failure.
-        user_id     = test_id;
+        //user_id     = test_id;
+        cliopt_setuser(test_id);
+        
         user_str    = user_str_lookup[test_id];
         user_prompt = user_prompt_lookup[test_id];
     }
@@ -336,7 +338,7 @@ int cmd_whoami(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dst
         
         /// @todo indicate if authentication response has been successfully
         ///       received from the target.
-        if (user_id < 2) {
+        if (cliopt_getuser() < 2) {
             dterm_puts(dt, " [no auth available yet]");
         }
         

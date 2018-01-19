@@ -57,10 +57,12 @@ FORMAT_Type cliopt_getformat(void);
 INTF_Type cliopt_getintf(void);
 
 int cliopt_getuser(void);
-
 int cliopt_getdstaddr(void);
-
 int cliopt_getsrcaddr(void);
+
+void cliopt_setuser(int user_id);
+void cliopt_setdstaddr(int addr);
+void cliopt_setsrcaddr(int addr);
 
 
 
