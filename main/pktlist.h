@@ -31,6 +31,7 @@ typedef struct {
     pkt_t*  cursor;
     pkt_t*  marker;
     size_t  size;
+    int     txnonce;
 } pktlist_t;
 
 

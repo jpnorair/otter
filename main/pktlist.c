@@ -27,6 +27,7 @@ int pktlist_init(pktlist_t* plist) {
     plist->cursor   = NULL;
     plist->marker   = NULL;
     plist->size     = 0;
+    plist->txnonce  = 0;
     
     return 0;
 }
@@ -36,6 +37,49 @@ int pktlist_init(pktlist_t* plist) {
 void sub_writeheader_null(pkt_t* newpkt, uint8_t* data, size_t datalen) {
     memcpy(&newpkt->buffer[0], data, datalen);
 }
+
+
+void sub_writeheader_modbus(pkt_t* newpkt, uint8_t* data, size_t datalen) {
+    int user_id;
+    int offset;
+    
+    /// Basic Modbus just puts the destination address.
+    newpkt->buffer[0]   = cliopt_getdstaddr() & 0xFF;
+    offset              = 1;
+    
+    /// Enhanced Modbus uses commands 68, 69, 70.
+    /// MPipe/ALP encapsulation uses these commands.
+    /// We know it's enhanced modbus if first byte is 0xC0, which is the ALP
+    /// Specifier as well as an illegal Function ID in regular modbus.
+    if (data[0] == 0xC0) {
+        user_id             = cliopt_getuser();
+        newpkt->buffer[1]   = 68 + (user_id & 3);
+        newpkt->buffer[2]   = cliopt_getsrcaddr() & 0xFF;;
+        offset              = 3;
+    
+        if (user_id < 2) {   
+            uint32_t epoch = (uint32_t)time(NULL);
+            
+            // 56 bit nonce
+            // bytes 3:6 are 32bit epoch
+            // bytes 7:9 are sequence number
+            newpkt->buffer[3] = (epoch >> 24) & 0xFF;
+            newpkt->buffer[4] = (epoch >> 16) & 0xFF;
+            newpkt->buffer[5] = (epoch >> 8) & 0xFF;
+            newpkt->buffer[6] = (epoch >> 0) & 0xFF;
+            newpkt->buffer[7] = (newpkt->sequence >> 16) & 0xFF;
+            newpkt->buffer[8] = (newpkt->sequence >> 8) & 0xFF;
+            newpkt->buffer[9] = (newpkt->sequence >> 0) & 0xFF;
+            
+            ///@todo do encryption on payload
+            
+            offset = 10;
+        }
+    }
+    
+    memcpy(&newpkt->buffer[offset], data, datalen);
+}
+
 
 void sub_writeheader_mpipe(pkt_t* newpkt, uint8_t* data, size_t datalen) {
     newpkt->buffer[0] = 0xff;
@@ -54,6 +98,7 @@ void sub_writeheader_mpipe(pkt_t* newpkt, uint8_t* data, size_t datalen) {
 void sub_writefooter_null(pkt_t* newpkt) {
 }
 
+
 void sub_writefooter_mpipe(pkt_t* newpkt) {
     uint16_t crcval;
     
@@ -63,7 +108,8 @@ void sub_writefooter_mpipe(pkt_t* newpkt) {
     newpkt->buffer[3]   = crcval & 0xff;
 }
 
-void sub_writefooter_crc16(pkt_t* newpkt) {
+
+void sub_writefooter_modbus(pkt_t* newpkt) {
     uint16_t crcval;
     size_t crcpos;
     crcpos  = newpkt->size - 2;
@@ -104,24 +150,21 @@ int pktlist_add(pktlist_t* plist, bool write_header, uint8_t* data, size_t size)
             
             case INTF_modbus:
                 overhead    = 2;
-                put_header  = &sub_writeheader_null;
-                put_footer  = &sub_writefooter_crc16;
+                put_header  = &sub_writeheader_modbus;
+                put_footer  = &sub_writefooter_modbus;
                 break;
             
             default:
-                overhead    = 0;
-                put_header  = &sub_writeheader_null;
-                put_footer  = &sub_writefooter_null;
-                break;
+                goto pktlist_add_SETNULL;
         }
     }
     else {
+    pktlist_add_SETNULL:
         overhead    = 0;
         put_header  = &sub_writeheader_null;
         put_footer  = &sub_writefooter_null;
     }
 
-    
     // Setup list connections for the new packet
     // Also allocate the buffer of the new packet
     ///@todo Change the hardcoded +8 to a dynamic detection of the header
@@ -135,9 +178,11 @@ int pktlist_add(pktlist_t* plist, bool write_header, uint8_t* data, size_t size)
         return -3;
     }
     
-    // Copy Payload into Packet buffer at data offset
-    //memcpy(&newpkt->buffer[offset], data, newpkt->size);
-              //
+    // Save timestamp: this may or may not get used, but it's saved anyway.
+    // The default sequence (which is available to header generation) is
+    // from the rotating nonce of the plist.
+    newpkt->tstamp      = time(NULL);
+    newpkt->sequence    = plist->txnonce++;
     
     // If "write_header" is set, then we need to write our own header (e.g. for
     // TX'ing).  If not, we copy the data directly.
@@ -260,7 +305,7 @@ int pktlist_getnew(pktlist_t* plist) {
     
     intf = cliopt_getintf();
     
-    // Sequence ID is present in MPipe only
+    // MPipe uses Sequence-ID for message matching
     if (intf == INTF_mpipe) {
         uint16_t    crc_val;
         uint16_t    crc_comp;
