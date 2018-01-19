@@ -23,6 +23,14 @@ static cliopt_t* master;
 cliopt_t* cliopt_init(cliopt_t* new_master) {
     master = new_master;
     
+    ///@note settings for modbus addressing, and perhaps future versions of
+    ///      MPipe that have encryption.
+    master->src_addr    = 0;
+    master->dst_addr    = 1;
+    
+    ///@note this is for default guest access
+    master->user_id     = 2;
+    
     return master;
 }
 
@@ -36,4 +44,16 @@ FORMAT_Type cliopt_getformat(void) {
 
 INTF_Type cliopt_getintf(void) {
     return master->intf;
+}
+
+int cliopt_getuser(void) {
+    return master->user_id;
+}
+
+int cliopt_getdstaddr(void) {
+    return master->dst_addr;
+}
+
+int cliopt_getsrcaddr(void) {
+    return master->src_addr;
 }
