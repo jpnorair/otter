@@ -23,6 +23,7 @@
 #include "mpipe.h"
 #include "modbus.h"
 #include "ppipelist.h"
+#include "formatters.h"
 
 // OT Filesystem modular library
 #include <otfs.h>
@@ -376,13 +377,6 @@ void* modbus_parser(void* args) {
                             fmt_time(&rlist->cursor->tstamp),
                             fmt_crc(rlist->cursor->crcqual)
                         );
-            
-                ///@note temporary data dump.
-                for (int i=0; i<rlist->cursor->size; i++) {
-                    fprintf(stderr, "%02X ", rlist->cursor->buffer[i]);
-                }
-                fprintf(stderr, "\n");
-                        
             }
             else {
                 char crc_symbol = (rlist->cursor->crcqual == 0) ? 'v' : 'x';
@@ -403,9 +397,18 @@ void* modbus_parser(void* args) {
             ///@todo validate resp_proc for master.  Currently crashes, presumably on 
             ///      filesystem lookup stage.
             proc_result = smut_resp_proc(putsbuf, rlist->cursor->buffer, &output_bytes, rlist->cursor->size-2);
-            if ((proc_result == 0) && (output_bytes != 0)) {
-                fmt_fprintalp(_PUTS, msgcall, (uint8_t*)putsbuf, output_bytes);
+            if (proc_result == 0) {
+                if (output_bytes != 0) {
+                    fmt_fprintalp(_PUTS, msgcall, (uint8_t*)putsbuf, output_bytes);
+                }
+                else {
+                    _PUTS(putsbuf);
+                }
             }
+            else {
+                fmt_printhex(_PUTS, rlist->cursor->buffer, rlist->cursor->size-2, 16);
+            }
+
 
             // clear_rpkt will always be true.  It means that the received 
             // packet should be cleared from the packet list.
