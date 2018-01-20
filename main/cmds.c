@@ -433,7 +433,7 @@ int cmd_hbcc(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstma
     bool is_eos = false;
     int output_code;
     size_t bytesout = 0;
-
+    
     /// Initialization
     if (dt == NULL) {
 #       if defined(__HBUILDER__)
@@ -534,6 +534,7 @@ int app_file(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstma
 /// See HBuilder documentation for more information
     uint8_t temp_buffer[256];
     int bytesout;
+    int bytes_left;
     uint8_t* cmd;
     uint8_t* block;
     
@@ -545,16 +546,20 @@ int app_file(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstma
     
     INPUT_SANITIZE();
     
+    /// Bytes left is used for continued parsing.
+    ///@todo bury all the string processing into hbuilder.
+    bytes_left = *inbytes;
+    
 #   if (defined(__HBUILDER__))
     
     /// 1. Get the command 
     cmd = src;
-    src = sub_markstring(&cmd, inbytes, 10);
+    src = sub_markstring(&cmd, &bytes_left, 10);
     
     /// 2. Get the argument, if it exists.
     if (src[0] == '-') {
         block   = src+1;
-        src     = sub_markstring(&block, inbytes, 10);
+        src     = sub_markstring(&block, &bytes_left, 10);
     }
     else {
         block   = NULL;

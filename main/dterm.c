@@ -107,25 +107,30 @@ void dterm_free(dterm_t* dt) {
 
 
 
-int dterm_open(dterm_t* dt) {
+int dterm_open(dterm_t* dt, bool use_pipe) {
     int retcode;
     
-    retcode = tcgetattr(dt->fd_in, &(dt->oldter));
-    if (retcode < 0) {
-        fprintf(stderr, "Unable to access active termios settings for fd = %d\n", dt->fd_in);
-        return retcode;
+    if (!use_pipe) {
+        retcode = tcgetattr(dt->fd_in, &(dt->oldter));
+        if (retcode < 0) {
+            fprintf(stderr, "Unable to access active termios settings for fd = %d\n", dt->fd_in);
+            return retcode;
+        }
+        
+        retcode = tcgetattr(dt->fd_in, &(dt->curter));
+        if (retcode < 0) {
+            fprintf(stderr, "Unable to access application termios settings for fd = %d\n", dt->fd_in);
+            return retcode;
+        }
+        
+        dt->curter.c_lflag     &= ~(ICANON | ECHO);
+        dt->curter.c_cc[VMIN]   = 1;
+        dt->curter.c_cc[VTIME]  = 0;
+        retcode                 = tcsetattr(dt->fd_in, TCSAFLUSH, &(dt->curter));
     }
-    
-    retcode = tcgetattr(dt->fd_in, &(dt->curter));
-    if (retcode < 0) {
-        fprintf(stderr, "Unable to access application termios settings for fd = %d\n", dt->fd_in);
-        return retcode;
+    else {
+        retcode = 0;
     }
-    
-    dt->curter.c_lflag     &= ~(ICANON | ECHO);
-    dt->curter.c_cc[VMIN]   = 1;
-    dt->curter.c_cc[VTIME]  = 0;
-    retcode                 = tcsetattr(dt->fd_in, TCSAFLUSH, &(dt->curter));
     
     dterm_reset(dt);
     
@@ -191,8 +196,8 @@ void* dterm_piper(void* args) {
     
         if (linelen <= 0) {
             dterm_reset(dt);
-            linelen         = (int)read(dt->fd_in, dt->linebuf, 1024);
-            linebuf         = dt->linebuf;
+            linelen = (int)read(dt->fd_in, dt->linebuf, 1024);
+            linebuf = dt->linebuf;
         }
         
         // Burn whitespace ahead of command, then search/get command in list.

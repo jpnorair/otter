@@ -376,6 +376,13 @@ void* modbus_parser(void* args) {
                             fmt_time(&rlist->cursor->tstamp),
                             fmt_crc(rlist->cursor->crcqual)
                         );
+            
+                ///@note temporary data dump.
+                for (int i=0; i<rlist->cursor->size; i++) {
+                    fprintf(stderr, "%02X ", rlist->cursor->buffer[i]);
+                }
+                fprintf(stderr, "\n");
+                        
             }
             else {
                 char crc_symbol = (rlist->cursor->crcqual == 0) ? 'v' : 'x';

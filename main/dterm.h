@@ -129,7 +129,7 @@ typedef enum {
 
 
 
-int dterm_open(dterm_t* dt);
+int dterm_open(dterm_t* dt, bool use_pipe);
 int dterm_close(dterm_t* dt);
 void dterm_free(dterm_t* dt);
 

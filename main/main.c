@@ -512,6 +512,9 @@ int otter_main(INTF_Type intf, const char* ttyfile, int baudrate, bool pipe, boo
         stop_bits = 1;
     }
     
+    //Non standard
+    stop_bits = 1;
+    
     if (mpipe_open(&mpipe_ctl, ttyfile, baudrate, 8, 'N', stop_bits, 0, 0, 0) < 0) {
         cli.exitcode = -1;
         goto otter_main_TERM1;
@@ -534,15 +537,11 @@ int otter_main(INTF_Type intf, const char* ttyfile, int baudrate, bool pipe, boo
     dterm_args.kill_cond        = &cli.kill_cond;
     dterm_fn                    = (pipe == false) ? &dterm_prompter : &dterm_piper;
     
-    if (pipe == false) {
-        if (dterm_open(&dterm) < 0) {
-            cli.exitcode = -2;
-            goto otter_main_TERM2;
-        }
+    if (dterm_open(&dterm, pipe) < 0) {
+        cli.exitcode = -2;
+        goto otter_main_TERM2;
     }
-    else {
-        dterm_reset(&dterm);
-    }
+
     
     /// Initialize the signal handlers for this process.
     /// These are activated by Ctl+C (SIGINT) and Ctl+\ (SIGQUIT) as is
