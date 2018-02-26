@@ -8,7 +8,7 @@ EXT_LIBFLAGS    ?=
 EXT_LIBS ?= 
 
 DEFAULT_DEF := -D__HBUILDER__
-LIBMODULES  := bintex hbuilder-lib $(EXT_LIBS)
+LIBMODULES  := libotfs bintex hbuilder-lib $(EXT_LIBS)
 SUBMODULES  := argtable cJSON main test
 
 BUILDDIR    := build
@@ -19,9 +19,9 @@ OBJEXT      := o
 
 #CFLAGS      := -std=gnu99 -O -g -Wall -pthread
 CFLAGS      := -std=gnu99 -O3 -pthread
-INC         := -I.
+INC         := -I. -I./../_hbpkg/libotfs-stdc
 INCDEP      := -I.
-LIB         := -lhbuilder -lbintex -L./../hbuilder-lib -L./../bintex
+LIB         := -lotfs -lhbuilder -lbintex -L./../_hbpkg/libotfs-stdc -L./../hbuilder-lib -L./../bintex
 OTTER_DEF   := $(DEFAULT_DEF) $(EXT_DEF)
 OTTER_INC   := $(INC) $(EXT_INC)
 OTTER_LIB   := $(LIB) $(EXT_LIBFLAGS)
