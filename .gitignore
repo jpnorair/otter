@@ -9,6 +9,7 @@
 
 #Don't add Build Files
 /build
+/app
 /bin
 *.gch
 *.o
