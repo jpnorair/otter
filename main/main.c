@@ -137,6 +137,7 @@ void sigquit_handler(int sigcode) {
 int otter_main( INTF_Type intf,
                 const char* ttyfile,
                 int baudrate,
+                int enc_bits, int enc_parity, int enc_stopbits,
                 bool pipe,
                 bool verbose,
                 cJSON* params
@@ -149,6 +150,9 @@ void sub_json_loadargs(cJSON* json,
                        int* baudrate_val, 
                        bool* pipe_val,
                        int* intf_val,
+                       int* enc_bits,
+                       int* enc_parity,
+                       int* enc_stop,
                        bool* verbose_val );
 
 void ppipelist_populate(cJSON* obj);
@@ -218,6 +222,7 @@ int main(int argc, char* argv[]) {
 /// ArgTable params: These define the input argument behavior
     struct arg_file *ttyfile = arg_file1(NULL,NULL,"<ttyfile>",         "path to tty file (e.g. /dev/tty.usbmodem)");
     struct arg_int  *brate   = arg_int0(NULL,NULL,"<baudrate>",         "baudrate, default is 115200");
+    struct arg_str  *ttyenc  = arg_str0("e", "encoding", "e.g. 8N1",    "Manual-entry for TTY encoding (default mpipe:8N1, modbus:8N2)");
     struct arg_lit  *pipe    = arg_lit0("p","pipe",                     "use pipe I/O instead of terminal console");
     struct arg_str  *intf    = arg_str0("i", "intf", "<mpipe|modbus>",  "select \"mpipe\" or \"modbus\" interface (default=mpipe)");
     //struct arg_str  *parsers = arg_str1("p", "parsers", "<msg:parser>", "parser call string with comma-separated msg:parser pairs");
@@ -230,7 +235,7 @@ int main(int argc, char* argv[]) {
     struct arg_lit  *version = arg_lit0(NULL,"version",                 "print version information and exit");
     struct arg_end  *end     = arg_end(20);
     
-    void* argtable[] = {ttyfile,brate,pipe,intf,config,verbose,help,version,end};
+    void* argtable[] = {ttyfile,brate,pipe,ttyenc,intf,config,verbose,help,version,end};
     const char* progname = OTTER_PARAM(NAME);
     int nerrors;
     int exitcode = 0;
@@ -241,6 +246,9 @@ int main(int argc, char* argv[]) {
     bool pipe_val       = false;
     
     INTF_Type intf_val  = OTTER_FEATURE(MPIPE) ? INTF_mpipe : INTF_modbus;
+    int enc_bits        = 8;
+    int enc_parity      = (int)'N';
+    int enc_stopbits    = (intf_val == INTF_modbus) ? 2 : 1;
     
     cJSON* json = NULL;
     char* buffer = NULL;
@@ -339,7 +347,16 @@ int main(int argc, char* argv[]) {
         }
         
         {   int tmp_intf;
-            sub_json_loadargs(json, ttyfile_val, &baudrate_val, &pipe_val, &tmp_intf, &verbose_val);
+            sub_json_loadargs(  json, 
+                                ttyfile_val, 
+                                &baudrate_val, 
+                                &pipe_val, 
+                                &tmp_intf, 
+                                &enc_bits, 
+                                &enc_parity, 
+                                &enc_stopbits, 
+                                &verbose_val
+                            );
             intf_val = tmp_intf;
         }
     }
@@ -358,6 +375,11 @@ int main(int argc, char* argv[]) {
     if (brate->count != 0) {
         baudrate_val = brate->ival[0];
     }
+    if (ttyenc->count != 0) {
+        enc_bits        = (int)ttyenc->sval[0][0];
+        enc_parity      = (int)ttyenc->sval[0][1];
+        enc_stopbits    = (int)ttyenc->sval[0][2];
+    }
     if (pipe->count != 0) {
         pipe_val = true;
         verbose_val = false;
@@ -369,10 +391,10 @@ int main(int argc, char* argv[]) {
         verbose_val = true;
     }
     
-
     exitcode = otter_main(  intf_val,
                             (const char*)ttyfile_val, 
                             baudrate_val, 
+                            enc_bits, enc_parity, enc_stopbits,
                             pipe_val,
                             verbose_val,
                             json);
@@ -394,7 +416,14 @@ int main(int argc, char* argv[]) {
 
 /// What this should do is start two threads, one for the character I/O on
 /// the dterm side, and one for the serial I/O.
-int otter_main(INTF_Type intf, const char* ttyfile, int baudrate, bool pipe, bool verbose, cJSON* params) {    
+int otter_main( INTF_Type intf, 
+                const char* ttyfile, 
+                int baudrate, 
+                int enc_bits, int enc_parity, int enc_stopbits,
+                bool pipe, 
+                bool verbose, 
+                cJSON* params) {    
+    
     // MPipe Datastructs
     mpipe_arg_t mpipe_args;
     mpipe_ctl_t mpipe_ctl;
@@ -423,10 +452,6 @@ int otter_main(INTF_Type intf, const char* ttyfile, int baudrate, bool pipe, boo
     pthread_mutex_t tlist_cond_mutex;
     pthread_cond_t  pktrx_cond;
     pthread_mutex_t pktrx_mutex;
-    
-    // Parameters
-    int stop_bits;
-    
     
     /// JSON params construct should contain the following objects
     /// - "msgcall": { "msgname1":"call string 1", "msgname2":"call string 2" }
@@ -505,17 +530,7 @@ int otter_main(INTF_Type intf, const char* ttyfile, int baudrate, bool pipe, boo
     mpipe_args.kill_mutex       = &cli.kill_mutex;
     mpipe_args.kill_cond        = &cli.kill_cond;
     
-    if (intf == INTF_modbus) {
-        stop_bits = 2;
-    }
-    else {
-        stop_bits = 1;
-    }
-    
-    //Non standard
-    stop_bits = 1;
-    
-    if (mpipe_open(&mpipe_ctl, ttyfile, baudrate, 8, 'N', stop_bits, 0, 0, 0) < 0) {
+    if (mpipe_open(&mpipe_ctl, ttyfile, baudrate, enc_bits, enc_parity, enc_stopbits, 0, 0, 0) < 0) {
         cli.exitcode = -1;
         goto otter_main_TERM1;
     }
@@ -663,6 +678,9 @@ void sub_json_loadargs(cJSON* json,
                        int* baudrate_val, 
                        bool* pipe_val,
                        int* intf_val,
+                       int* enc_bits,
+                       int* enc_parity,
+                       int* enc_stop,
                        bool* verbose_val ) {
 
 #   define GET_STRINGENUM_ARG(DST, FUNC, NAME) do { \
@@ -679,6 +697,15 @@ void sub_json_loadargs(cJSON* json,
         if (arg != NULL) {  \
             if (cJSON_IsString(arg) != 0) {    \
                 strncpy(DST, arg->valuestring, LIMIT);   \
+            }   \
+        }   \
+    } while(0)
+    
+#   define GET_CHAR_ARG(DST, NAME) do { \
+        arg = cJSON_GetObjectItem(json, NAME);  \
+        if (arg != NULL) {  \
+            if (cJSON_IsString(arg) != 0) {    \
+                *DST = arg->valuestring[0]; \
             }   \
         }   \
     } while(0)
@@ -717,14 +744,10 @@ void sub_json_loadargs(cJSON* json,
     GET_BOOL_ARG(pipe_val, "pipe");
     
     GET_STRINGENUM_ARG(intf_val, sub_intf_cmp, "intf");
-//    {
-//    arg = cJSON_GetObjectItem(json, "intf");  
-//        if (arg != NULL) {  
-//            if (cJSON_IsString(arg) != 0) {    
-//                *intf_val = sub_intf_cmp(arg->valuestring); 
-//            } 
-//        } 
-//    }
+    
+    GET_INT_ARG(enc_bits, "tty_bits");
+    GET_CHAR_ARG(enc_parity, "tty_parity");
+    GET_INT_ARG(enc_stop, "tty_stopbits");
 
     GET_BOOL_ARG(verbose_val, "verbose");
 }
