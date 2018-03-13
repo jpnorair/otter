@@ -1,10 +1,14 @@
 CC=gcc
 
+THISMACHINE := $(shell uname -srm | sed -e 's/ /-/g')
+THISSYSTEM	:= $(shell uname -s)
+
 TARGET      ?= otter
 TARGETDIR   ?= bin
+PKGDIR      ?= ../_hbpkg/$(THISMACHINE)
 EXT_DEF     ?= 
 EXT_INC     ?= 
-EXT_LIBFLAGS    ?= 
+EXT_LIBFLAGS ?= 
 EXT_LIBS ?= 
 
 DEFAULT_DEF := -D__HBUILDER__
@@ -19,17 +23,15 @@ OBJEXT      := o
 
 #CFLAGS      := -std=gnu99 -O -g -Wall -pthread
 CFLAGS      := -std=gnu99 -O3 -pthread
-INC         := -I. -I./../_hbpkg/libotfs-stdc
+INC         := -I. -I./$(PKGDIR)/libotfs
 INCDEP      := -I.
-LIB         := -lotfs -lhbuilder -lbintex -L./../_hbpkg/libotfs-stdc -L./../hbuilder-lib -L./../bintex
+LIB         := -lotfs -lhbuilder -lbintex -L./$(PKGDIR)/libotfs -L./$(PKGDIR)/hbuilder -L./$(PKGDIR)/bintex
 OTTER_DEF   := $(DEFAULT_DEF) $(EXT_DEF)
 OTTER_INC   := $(INC) $(EXT_INC)
 OTTER_LIB   := $(LIB) $(EXT_LIBFLAGS)
 
-
 #OBJECTS     := $(shell find $(BUILDDIR) -type f -name "*.$(OBJEXT)")
 #MODULES     := $(SUBMODULES) $(LIBMODULES)
-
 
 # Export the following variables to the shell: will affect submodules
 export OTTER_DEF
@@ -60,7 +62,7 @@ $(TARGET): $(SUBMODULES) $(LIBMODULES)
 
 #Library dependencies (not in otter sources)
 $(LIBMODULES): %: 
-	cd ./../$@ && $(MAKE) all
+	cd ./../$@ && $(MAKE) all && $(MAKE) install
 
 #otter submodules
 $(SUBMODULES): %: $(LIBMODULES) directories
