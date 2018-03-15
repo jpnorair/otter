@@ -37,6 +37,7 @@ typedef enum {
 
 typedef struct {
     bool        verbose_on;
+    bool        debug_on;
     FORMAT_Type format;
     INTF_Type   intf;
     
@@ -51,6 +52,7 @@ typedef struct {
 cliopt_t* cliopt_init(cliopt_t* new_master);
 
 bool cliopt_isverbose(void);
+bool cliopt_isdebug(void);
 
 FORMAT_Type cliopt_getformat(void);
 

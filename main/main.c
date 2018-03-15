@@ -46,6 +46,7 @@
 #include "cmdsearch.h"
 #include "cmdhistory.h"
 #include "cliopt.h"
+#include "debug.h"
 
 // Local Libraries
 #include "argtable3.h"
@@ -62,19 +63,6 @@
 #include <string.h>
 
 #include <assert.h>
-
-
-
-
-//Comment-out if not testing: this should ideally be passed into the compiler
-//params, but with XCode that's a mystery.
-//#define __TEST__
-
-#if defined(__TEST__)
-#   define DEBUG_PRINTF(...) fprintf(stderr, "DEBUG: " __VA_ARGS__)
-#else
-#   define DEBUG_PRINTF(...) do { } while(0)
-#endif
 
 
 
@@ -134,12 +122,10 @@ void sigquit_handler(int sigcode) {
 }
 
 
-int otter_main( INTF_Type intf,
-                const char* ttyfile,
+int otter_main( const char* ttyfile,
                 int baudrate,
                 int enc_bits, int enc_parity, int enc_stopbits,
                 bool pipe,
-                bool verbose,
                 cJSON* params
                 ); 
 
@@ -222,7 +208,7 @@ int main(int argc, char* argv[]) {
 /// ArgTable params: These define the input argument behavior
     struct arg_file *ttyfile = arg_file1(NULL,NULL,"<ttyfile>",         "path to tty file (e.g. /dev/tty.usbmodem)");
     struct arg_int  *brate   = arg_int0(NULL,NULL,"<baudrate>",         "baudrate, default is 115200");
-    struct arg_str  *ttyenc  = arg_str0("e", "encoding", "e.g. 8N1",    "Manual-entry for TTY encoding (default mpipe:8N1, modbus:8N2)");
+    struct arg_str  *ttyenc  = arg_str0("e", "encoding", "<e.g. 8N1>",  "Manual-entry for TTY encoding (default mpipe:8N1, modbus:8N2)");
     struct arg_lit  *pipe    = arg_lit0("p","pipe",                     "use pipe I/O instead of terminal console");
     struct arg_str  *intf    = arg_str0("i", "intf", "<mpipe|modbus>",  "select \"mpipe\" or \"modbus\" interface (default=mpipe)");
     //struct arg_str  *parsers = arg_str1("p", "parsers", "<msg:parser>", "parser call string with comma-separated msg:parser pairs");
@@ -231,11 +217,12 @@ int main(int argc, char* argv[]) {
     // Generic
     struct arg_file *config  = arg_file0("C", "config", "<file.json>",  "JSON based configuration file.");
     struct arg_lit  *verbose = arg_lit0("v","verbose",                  "use verbose mode");
+    struct arg_lit  *debug   = arg_lit0("d","debug",                    "Set debug mode on: requires compiling for debug");
     struct arg_lit  *help    = arg_lit0(NULL,"help",                    "print this help and exit");
     struct arg_lit  *version = arg_lit0(NULL,"version",                 "print version information and exit");
     struct arg_end  *end     = arg_end(20);
     
-    void* argtable[] = {ttyfile,brate,pipe,ttyenc,intf,config,verbose,help,version,end};
+    void* argtable[] = {ttyfile,brate,pipe,ttyenc,intf,config,verbose,debug,help,version,end};
     const char* progname = OTTER_PARAM(NAME);
     int nerrors;
     int exitcode = 0;
@@ -293,7 +280,7 @@ int main(int argc, char* argv[]) {
         goto main_EXIT;
     }
 
-    /// special case: uname with no command line options induces brief help 
+    /// special case: with no command line options induces brief help 
     if (argc==1) {
         printf("Try '%s --help' for more information.\n",progname);
         
@@ -304,7 +291,7 @@ int main(int argc, char* argv[]) {
     /// Do some final checking of input values
     ///@todo Validate that we're looking at something like "/dev/tty.usb..."
     
-        /// Get JSON config input.  Priority is direct input vs. file input
+    /// Get JSON config input.  Priority is direct input vs. file input
     /// 1. There is an "arguments" object that works the same as the command 
     ///    line arguments.  
     /// 2. Any other objects may be used in custom ways by the app itself.
@@ -391,14 +378,26 @@ int main(int argc, char* argv[]) {
         verbose_val = true;
     }
     
-    exitcode = otter_main(  intf_val,
-                            (const char*)ttyfile_val, 
+    /// Client Options.  These are read-only from internal modules
+    cliopts.format      = FORMAT_Dynamic;
+    cliopts.intf        = intf_val;
+    if (debug->count != 0) {
+        cliopts.debug_on    = true;
+        cliopts.verbose_on  = true;
+    }
+    cliopt_init(&cliopts);
+    
+    /// All configuration is done.
+    /// Send all configuration data to program main function.
+    exitcode = otter_main(  (const char*)ttyfile_val, 
                             baudrate_val, 
                             enc_bits, enc_parity, enc_stopbits,
                             pipe_val,
-                            verbose_val,
                             json);
-                            
+    
+    ///@todo some optimization could be realized by putting this ahead of the 
+    ///      call to otter_main, although the JSON part must be kept and freed
+    ///      only after main runs.
     main_EXIT:
     if (json != NULL) {
         cJSON_Delete(json);
@@ -416,12 +415,10 @@ int main(int argc, char* argv[]) {
 
 /// What this should do is start two threads, one for the character I/O on
 /// the dterm side, and one for the serial I/O.
-int otter_main( INTF_Type intf, 
-                const char* ttyfile, 
+int otter_main( const char* ttyfile, 
                 int baudrate, 
                 int enc_bits, int enc_parity, int enc_stopbits,
                 bool pipe, 
-                bool verbose, 
                 cJSON* params) {    
     
     // MPipe Datastructs
@@ -565,12 +562,7 @@ int otter_main( INTF_Type intf,
     cli.exitcode = EXIT_SUCCESS;
     _assign_signal(SIGINT, &sigint_handler);
     _assign_signal(SIGQUIT, &sigquit_handler);
-
-    /// Client Options.  These are read-only from internal modules
-    cliopts.format      = FORMAT_Dynamic;
-    cliopts.verbose_on  = verbose;
-    cliopts.intf        = intf;
-    cliopt_init(&cliopts);
+    
     
     /// Invoke the child threads below.  All of the child threads run
     /// indefinitely until an error occurs or until the user quits.  Quit can 
@@ -578,13 +570,13 @@ int otter_main( INTF_Type intf,
     /// Each thread must be be implemented to raise SIGQUIT or SIGINT on exit
     /// i.e. raise(SIGINT).
     DEBUG_PRINTF("Creating theads\n");
-    if (OTTER_FEATURE(MODBUS) && (intf == INTF_modbus)) {
+    if (OTTER_FEATURE(MODBUS) && (cliopt_getintf() == INTF_modbus)) {
         DEBUG_PRINTF("Opening Modbus Interface\n");
         pthread_create(&thr_mpreader, NULL, &modbus_reader, (void*)&mpipe_args);
         pthread_create(&thr_mpwriter, NULL, &modbus_writer, (void*)&mpipe_args);
         pthread_create(&thr_mpparser, NULL, &modbus_parser, (void*)&mpipe_args);
     }
-    else if (OTTER_FEATURE(MPIPE) && (intf == INTF_mpipe)) {
+    else if (OTTER_FEATURE(MPIPE) && (cliopt_getintf() == INTF_mpipe)) {
         DEBUG_PRINTF("Opening Mpipe Interface\n");
         pthread_create(&thr_mpreader, NULL, &mpipe_reader, (void*)&mpipe_args);
         pthread_create(&thr_mpwriter, NULL, &mpipe_writer, (void*)&mpipe_args);

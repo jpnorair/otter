@@ -16,6 +16,7 @@
 
 // Application Includes
 //#include "crc_calc_block.h"
+#include "debug.h"
 #include "mpipe.h"
 #include "ppipelist.h"
 
@@ -38,12 +39,6 @@
 #include <poll.h>
 
 
-/// DEBUG printing for tty read
-#ifdef TTY_DEBUG
-#   define TTY_PRINTF(...)  fprintf(stderr, __VA_ARGS__)
-#else
-#   define TTY_PRINTF(...)  do { } while(0)
-#endif
 
 
 

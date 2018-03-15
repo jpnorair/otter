@@ -23,6 +23,9 @@ static cliopt_t* master;
 cliopt_t* cliopt_init(cliopt_t* new_master) {
     master = new_master;
     
+    //master->verbose_on  = false;
+    //master->debug_on    = false;
+    
     ///@note settings for modbus addressing, and perhaps future versions of
     ///      MPipe that have encryption.
     master->src_addr    = 0;
@@ -36,6 +39,10 @@ cliopt_t* cliopt_init(cliopt_t* new_master) {
 
 bool cliopt_isverbose(void) {
     return master->verbose_on;
+}
+
+bool cliopt_isdebug(void) {
+    return master->debug_on;
 }
 
 FORMAT_Type cliopt_getformat(void) {

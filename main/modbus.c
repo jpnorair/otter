@@ -20,6 +20,7 @@
 
 // Application Includes
 #include "cliopt.h"
+#include "debug.h"
 #include "mpipe.h"
 #include "modbus.h"
 #include "ppipelist.h"
@@ -47,20 +48,6 @@
 #include <poll.h>
 
 
-/// DEBUG printing for tty read
-//#define TTY_TX_DEBUG
-//#define TTY_RX_DEBUG
-
-#ifdef TTY_TX_DEBUG
-#   define TTY_TX_PRINTF(...)  fprintf(stderr, __VA_ARGS__)
-#else
-#   define TTY_TX_PRINTF(...)  do { } while(0)
-#endif
-#ifdef TTY_RX_DEBUG
-#   define TTY_RX_PRINTF(...)  fprintf(stderr, __VA_ARGS__)
-#else
-#   define TTY_RX_PRINTF(...)  do { } while(0)
-#endif
 
 
 
