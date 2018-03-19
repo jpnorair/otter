@@ -21,7 +21,7 @@ SRCEXT      := c
 DEPEXT      := d
 OBJEXT      := o
 
-#CFLAGS      := -std=gnu99 -O -g -Wall -pthread
+CFLAGS_DEBUG:= -std=gnu99 -O -g -Wall -pthread
 CFLAGS      := -std=gnu99 -O3 -pthread
 INC         := -I. -I./$(PKGDIR)/libotfs
 INCDEP      := -I.
@@ -40,8 +40,14 @@ export OTTER_LIB
 
 
 all: directories $(TARGET)
-remake: cleaner all
+debug: directories $(TARGET).debug
 obj: $(SUBMODULES) $(LIBMODULES) 
+remake: cleaner all
+
+
+install: 
+	@mkdir -p $(PKGDIR)/bin
+	@cp $(TARGETDIR)/$(TARGET) $(PKGDIR)/bin/
 
 directories:
 	@mkdir -p $(TARGETDIR)
@@ -59,6 +65,10 @@ cleaner: clean
 $(TARGET): $(SUBMODULES) $(LIBMODULES)
 	$(eval OBJECTS := $(shell find $(BUILDDIR) -type f -name "*.$(OBJEXT)"))
 	$(CC) $(CFLAGS) $(OTTER_DEF) -o $(TARGETDIR)/$(TARGET) $(OBJECTS) $(OTTER_LIB)
+
+$(TARGET).debug: $(SUBMODULES) $(LIBMODULES)
+	$(eval OBJECTS := $(shell find $(BUILDDIR) -type f -name "*.$(OBJEXT)"))
+	$(CC) $(CFLAGS_DEBUG) $(OTTER_DEF) -D__DEBUG__ -o $(TARGETDIR)/$(TARGET) $(OBJECTS) $(OTTER_LIB)
 
 #Library dependencies (not in otter sources)
 $(LIBMODULES): %: 
