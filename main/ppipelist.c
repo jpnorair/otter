@@ -66,6 +66,8 @@ int sub_addpipe(const char* prefix, const char* name, const char* fmode) {
 }
 
 
+///@note Bidirectional Pipes are specified in some UNIXes, but in practice they
+///      do not work.
 #ifdef USE_BIDIRECTIONAL_PIPES
 int ppipelist_new(const char* prefix, const char* name, const char* fmode) {
     int rc = 0;
@@ -108,45 +110,7 @@ int ppipelist_new(const char* prefix, const char* name, const char* fmode) {
     return rc;
 }
 
-#else
-int ppipelist_new(const char* prefix, const char* name, const char* fmode) {
-    int rc;
-    ppipe_t*        ppipe;
-    ppipe_fifo_t*   newfifo;
-    
-    rc = ppipe_new(prefix, name, fmode);
-    if (rc == 0) {
-        ppipe = ppipe_ref();
-        if (ppipe != NULL) {
-            newfifo = &ppipe->fifo[ppipe->num-1];
-            
-            ///@todo add the node to index
-        }
-    }
-    
-    return rc;
-}
 
-#endif
-
-
-int ppipelist_del(const char* prefix, const char* name) {
-    ppipe_fifo_t*   delfifo;
-    int             ppd;
-    
-    ppd = ppipelist_search(&delfifo, prefix, name);
-    
-    if (ppd >= 0) {
-        ppipe_del(ppd);
-        
-        ///@todo remove from ppipelist
-    }
-    
-    return ppd;
-}
-
-
-#ifdef USE_BIDIRECTIONAL_PIPES
 int ppipelist_search(ppipe_fifo_t** dst, const char* prefix, const char* name, const char* mode) {
 /// Linear search of ppipe array.  This will need to be replaced with an
 /// indexed search at some point.
@@ -175,7 +139,29 @@ int ppipelist_search(ppipe_fifo_t** dst, const char* prefix, const char* name, c
     return ppd;
 }
 
+
+
+///@note The implementation variant below uses unidirectional pipes.
 #else
+int ppipelist_new(const char* prefix, const char* name, const char* fmode) {
+    int rc;
+    ppipe_t*        ppipe;
+    ppipe_fifo_t*   newfifo;
+    
+    rc = ppipe_new(prefix, name, fmode);
+    if (rc == 0) {
+        ppipe = ppipe_ref();
+        if (ppipe != NULL) {
+            newfifo = &ppipe->fifo[ppipe->num-1];
+            
+            ///@todo add the node to index
+        }
+    }
+    
+    return rc;
+}
+
+
 int ppipelist_search(ppipe_fifo_t** dst, const char* prefix, const char* name) {
 /// Linear search of ppipe array.  This will need to be replaced with an
 /// indexed search at some point.
@@ -200,7 +186,27 @@ int ppipelist_search(ppipe_fifo_t** dst, const char* prefix, const char* name) {
     *dst = NULL;
     return ppd;
 }
+
 #endif
+
+
+
+
+int ppipelist_del(const char* prefix, const char* name) {
+    ppipe_fifo_t*   delfifo;
+    int             ppd;
+    
+    ppd = ppipelist_search(&delfifo, prefix, name);
+    
+    if (ppd >= 0) {
+        ppipe_del(ppd);
+        
+        ///@todo remove from ppipelist
+    }
+    
+    return ppd;
+}
+
 
 
 
@@ -292,8 +298,6 @@ int ppipelist_puthex(const char* prefix, const char* name, char* src, size_t siz
     
     return -1;
 }
-
-
 
 
 

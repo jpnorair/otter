@@ -206,23 +206,16 @@ void* mpipe_reader(void* args) {
         }
     
         new_bytes       = (int)read(mpctl.tty_fd, rbuf_cursor, payload_left);
+        // Debugging output
         TTY_PRINTF(stderr, "payload new_bytes = %d\n", new_bytes);
-        
-//        fprintf(stderr, "read(): ");
-//        for (int i=0; i<new_bytes; i++) {
-//            fprintf(stderr, "%02X ", rbuf_cursor[i]);
-//        }
-//        fprintf(stderr, "\n");
+        HEX_DUMP(rbuf_cursor, new_bytes, "read(): ");
         
         rbuf_cursor    += new_bytes;
         payload_left   -= new_bytes;
     };
 
-//    fprintf(stderr, "pkt   : ");
-//    for (int i=0; i<payload_length; i++) {
-//        fprintf(stderr, "%02X ", rbuf[6+i]);
-//    }
-//    fprintf(stderr, "\n");
+    // Debugging output
+    HEX_DUMP(&rbuf[6], payload_length, "pkt   : ");
 
     /// Copy the packet to the rlist and signal mpipe_parser()
     pthread_mutex_lock(rlist_mutex);
@@ -308,11 +301,8 @@ void* mpipe_writer(void* args) {
                 cursor      = txpkt->buffer;
                 bytes_left  = (int)txpkt->size;
                 
-//                fprintf(stderr, "Writing %d bytes to tty\n", bytes_left);
-//                for (int i=0; i<bytes_left; i++) {
-//                    fprintf(stderr, "%02X ", cursor[i]);
-//                }
-//                fprintf(stderr, "\n");
+                // Debugging output
+                HEX_DUMP(cursor, bytes_left, "Writing %d bytes to tty\n", bytes_left);
                 
                 while (bytes_left > 0) {
                     bytes_sent  = (int)write(mpctl.tty_fd, cursor, bytes_left);
@@ -365,6 +355,10 @@ void* mpipe_parser(void* args) {
     cJSON* msgcall                  = ((mpipe_arg_t*)args)->msgcall;
     
 
+    // This looks like an infinite loop, but is not.  The pkt_condition
+    // variable will break the loop if the rlist has no new packets.
+    // Otherwise it will parse all new packets, one at a time, until there
+    // are none remaining.
     while (1) {
         int pkt_condition;  // tracks some error conditions
     
@@ -374,154 +368,142 @@ void* mpipe_parser(void* args) {
         pthread_mutex_lock(rlist_mutex);
         pthread_mutex_lock(tlist_mutex);
         
-        // This looks like an infinite loop, but is not.  The pkt_condition
-        // variable will break the loop if the rlist has no new packets.
-        // Otherwise it will parse all new packets, one at a time, until there
-        // are none remaining.
-        //while (1) {
-            // ===================LOOP CONDITION LOGIC==========================
+        // pktlist_getnew will validate and decrypt the packet:
+        // - It returns 0 if all is well
+        // - It returns -1 if the list is empty
+        // - It returns a positive error code if there is some packet error
+        // - rlist->cursor points to the working packet
+        pkt_condition = pktlist_getnew(rlist);
+        if (pkt_condition < 0) {
+            goto mpipe_parser_END;
+        }
+
+        // If packet has an error of some kind -- delete it and move-on.
+        // Else, print-out the packet.  This can get rich depending on the
+        // internal protocol, and it can result in responses being queued.
+        if (pkt_condition > 0) {
+            ///@todo some sort of error code
+            fprintf(stderr, "A malformed packet was sent for parsing\n");
+            pktlist_del(rlist, rlist->cursor);
+        }
+        else {
+            pkt_t*      tpkt;
+            uint8_t*    payload_front;
+            size_t      payload_bytes;
+            bool        clear_rpkt      = true;
+            bool        rpkt_is_resp    = false;
+            bool        rpkt_is_valid   = false;
             
-            // mpipe_getnew will validate and decrypt the packet:
-            // - It returns 0 if all is well
-            // - It returns -1 if the list is empty
-            // - It returns a positive error code if there is some packet error
-            // - rlist->cursor points to the working packet
-            pkt_condition = pktlist_getnew(rlist);
-            if (pkt_condition < 0) {
-                goto mpipe_parser_END;
+            // Response Packets should match to a sequence number of the last Request.
+            // If there is no match, then there is no response processing, we just 
+            // print the damn packet.
+            tpkt = tlist->front;
+            while (tpkt != NULL) {
+                if (tpkt->sequence == rlist->cursor->sequence) {
+                    // matching transmitted packet: it IS a response
+                    rpkt_is_resp = true;
+                    break;
+                }
+                tpkt = tpkt->next;
             }
-            // =================================================================
             
-            // If packet has an error of some kind -- delete it and move-on.
-            // Else, print-out the packet.  This can get rich depending on the
-            // internal protocol, and it can result in responses being queued.
-            if (pkt_condition > 0) {
-                ///@todo some sort of error code
-                fprintf(stderr, "A malformed packet was sent for parsing\n");
-                pktlist_del(rlist, rlist->cursor);
+            // If Verbose, Print received header in real language
+            // If not Verbose, just print the encoded packet status
+            if (cliopt_isverbose()) {
+                sprintf(putsbuf, "\nRX'ed %zu bytes at %s, %s CRC: %s\n",
+                            rlist->cursor->size,
+                            fmt_time(&rlist->cursor->tstamp),
+                            fmt_crc(rlist->cursor->crcqual),
+                            fmt_hexdump_header(rlist->cursor->buffer)
+                        );
             }
             else {
-                pkt_t*      tpkt;
-                uint8_t*    payload_front;
-                size_t      payload_bytes;
-                bool        clear_rpkt      = true;
-                bool        rpkt_is_resp    = false;
-                bool        rpkt_is_valid   = false;
-                
-                // Response Packets should match to a sequence number of the last Request.
-                // If there is no match, then there is no response processing, we just 
-                // print the damn packet.
-                tpkt = tlist->front;
-                while (tpkt != NULL) {
-                    if (tpkt->sequence == rlist->cursor->sequence) {
-                        // matching transmitted packet: it IS a response
-                        rpkt_is_resp = true;
-                        break;
-                    }
-                    tpkt = tpkt->next;
-                }
-                
-                // If Verbose, Print received header in real language
-                // If not Verbose, just print the encoded packet status
-                ///@todo integrate CLI options
-                if (true) { //(cli.opt.verbose_on) {
-                    sprintf(putsbuf, "\nRX'ed %zu bytes at %s, %s CRC: %s\n",
-                                rlist->cursor->size,
-                                fmt_time(&rlist->cursor->tstamp),
-                                fmt_crc(rlist->cursor->crcqual),
-                                fmt_hexdump_header(rlist->cursor->buffer)
-                            );
-                }
-                else {
-                    char crc_symbol = (rlist->cursor->crcqual == 0) ? 'v' : 'x';
-                    sprintf(putsbuf, "[%c][%03d] ", crc_symbol, rlist->cursor->sequence);
-                }
+                char crc_symbol = (rlist->cursor->crcqual == 0) ? 'v' : 'x';
+                sprintf(putsbuf, "[%c][%03d] ", crc_symbol, rlist->cursor->sequence);
+            }
+            _PUTS(putsbuf);
+            
+            /// If CRC is bad, dump hex of buffer-size and discard the 
+            /// packet now.
+            ///@note in present versions there is some unreliability with
+            ///      CRC: possibly data alignment or something, or might be
+            ///      a problem on the test sender.
+            if (rlist->cursor->crcqual != 0) {
+                fmt_printhex(_PUTS, &rlist->cursor->buffer[6], rlist->cursor->size-6, 16);
+                pktlist_del(rlist, rlist->cursor);
+                goto mpipe_parser_END;
+            }
+            
+            // Here is where decryption would go
+            if (rlist->cursor->buffer[5] & (3<<5)) {
+                ///@todo Deal with encryption here.  When implemented, there
+                /// should be an encryption header at this offset (6), 
+                /// followed by the payload, and then the real data payload.
+                /// The real data payload is followed by a 4 byte Message
+                /// Authentication Check (Crypto-MAC) value.  AES128 EAX
+                /// is the cryptography and cipher used.
+                payload_front = &rlist->cursor->buffer[6];  
+            }
+            else {
+                payload_front = &rlist->cursor->buffer[6];
+            }
+            
+            // Inspect header to see if M2DEF
+            if ((rlist->cursor->buffer[5] & (1<<7)) == 0) {
+                rpkt_is_valid = true;
+                //parse some shit
+                //clear_rpkt = false when there is non-atomic input
+            }
+            
+            // Get Payload Bytes, found in buffer[2:3]
+            // Then print-out the payload.
+            // If it is a M2DEF payload, the print-out can be formatted in different ways
+            payload_bytes   = rlist->cursor->buffer[2] * 256;
+            payload_bytes  += rlist->cursor->buffer[3];
+
+            // Send an error if payload bytes is too big
+            if (payload_bytes > rlist->cursor->size) {
+                sprintf(putsbuf, "... Reported Payload Length (%zu) is larger than buffer (%zu).\n" \
+                                 "... Possible transmission error.\n",
+                                payload_bytes, rlist->cursor->size
+                        );
                 _PUTS(putsbuf);
-                
-                /// If CRC is bad, dump hex of buffer-size and discard the 
-                /// packet now.
-                ///@note in present versions there is some unreliability with
-                ///      CRC: possibly data alignment or something, or might be
-                ///      a problem on the test sender.
-                if (rlist->cursor->crcqual != 0) {
-                    fmt_printhex(_PUTS, &rlist->cursor->buffer[6], rlist->cursor->size-6, 16);
-                    pktlist_del(rlist, rlist->cursor);
-                    goto mpipe_parser_END;
-                }
-                
-                // Here is where decryption would go
-                if (rlist->cursor->buffer[5] & (3<<5)) {
-                    ///@todo Deal with encryption here.  When implemented, there
-                    /// should be an encryption header at this offset (6), 
-                    /// followed by the payload, and then the real data payload.
-                    /// The real data payload is followed by a 4 byte Message
-                    /// Authentication Check (Crypto-MAC) value.  AES128 EAX
-                    /// is the cryptography and cipher used.
-                    payload_front = &rlist->cursor->buffer[6];  
-                }
-                else {
-                    payload_front = &rlist->cursor->buffer[6];
-                }
-                
-                // Inspect header to see if M2DEF
-                if ((rlist->cursor->buffer[5] & (1<<7)) == 0) {
-                    rpkt_is_valid = true;
-                    //parse some shit
-                    //clear_rpkt = false when there is non-atomic input
-                }
-                
-                // Get Payload Bytes, found in buffer[2:3]
-                // Then print-out the payload.
-                // If it is a M2DEF payload, the print-out can be formatted in different ways
-                payload_bytes   = rlist->cursor->buffer[2] * 256;
-                payload_bytes  += rlist->cursor->buffer[3];
-
-                // Send an error if payload bytes is too big
-                if (payload_bytes > rlist->cursor->size) {
-                    sprintf(putsbuf, "... Reported Payload Length (%zu) is larger than buffer (%zu).\n" \
-                                     "... Possible transmission error.\n",
-                                    payload_bytes, rlist->cursor->size
-                            );
-                    _PUTS(putsbuf);
-                }
-                
-                ///@todo implement m2def library
-                else if (rpkt_is_valid)  {
-                    //m2def_sprintf(putsbuf, &rlist->cursor->buffer[6], 2048, "");
-                    //_PUTS(putsbuf)
-                    fmt_fprintalp(_PUTS, msgcall, payload_front, payload_bytes);
-                }
-                
-                /// Dump hex if not using ALP
-                else {
-                    fmt_printhex(_PUTS, payload_front, payload_bytes, 16);
-                }
-
-                // Clear the rpkt if required, and move the cursor to the next
-                if (clear_rpkt) {
-                    pkt_t*  scratch = rlist->cursor;
-                    //rlist->cursor   = rlist->cursor->next;
-                    pktlist_del(rlist, scratch);
-                }
-                
-                // Clear the tpkt if it is matched with an rpkt
-                // Also, clear the oldest tpkt if it's timestamp is of a certain amout.
-                ///@todo Change timestamp so that it is not hardcoded
-                if (rpkt_is_resp == false) {
-                    ///@todo check if old
-                    //if (rlist->front->tstamp == 0) {    
-                    //    tpkt = tlist->front;
-                    //    ---> do routine in else if below
-                    //}
-                }
-                else if (tpkt != NULL) {
-                    pktlist_del(tlist, tpkt);
-                }
-            } 
+            }
             
+            ///@todo implement m2def library
+            else if (rpkt_is_valid)  {
+                //m2def_sprintf(putsbuf, &rlist->cursor->buffer[6], 2048, "");
+                //_PUTS(putsbuf)
+                fmt_fprintalp(_PUTS, msgcall, payload_front, payload_bytes);
+            }
             
+            /// Dump hex if not using ALP
+            else {
+                fmt_printhex(_PUTS, payload_front, payload_bytes, 16);
+            }
+
+            // Clear the rpkt if required, and move the cursor to the next
+            if (clear_rpkt) {
+                pkt_t*  scratch = rlist->cursor;
+                //rlist->cursor   = rlist->cursor->next;
+                pktlist_del(rlist, scratch);
+            }
+            
+            // Clear the tpkt if it is matched with an rpkt
+            // Also, clear the oldest tpkt if it's timestamp is of a certain amout.
+            ///@todo Change timestamp so that it is not hardcoded
+            if (rpkt_is_resp == false) {
+                ///@todo check if old
+                //if (rlist->front->tstamp == 0) {    
+                //    tpkt = tlist->front;
+                //    ---> do routine in else if below
+                //}
+            }
+            else if (tpkt != NULL) {
+                pktlist_del(tlist, tpkt);
+            }
+        } 
         
-        //} // END OF WHILE()
         mpipe_parser_END:
         pthread_mutex_unlock(tlist_mutex); 
         pthread_mutex_unlock(rlist_mutex);

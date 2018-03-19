@@ -11,7 +11,6 @@
   * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
   * See the License for the specific language governing permissions and
   * limitations under the License.
-  *
   */
 
 // Configuration Include
@@ -165,12 +164,8 @@ void* modbus_reader(void* args) {
     modbus_reader_ERR:
     switch (errcode) {
         case 0: TTY_RX_PRINTF("Packet Received Successfully (%d bytes).\n", frame_length);
-#               ifdef TTY_RX_DEBUG
-                for (int i=0; i<frame_length; i++) {
-                    fprintf(stderr, "%02X ", rbuf[i]);
-                }
-                fprintf(stderr, "\n");
-#               endif
+                HEX_DUMP(rbuf, frame_length, "Packet Detected: ");
+
                 pthread_cond_signal(pktrx_cond);
                 goto modbus_reader_START;
         
@@ -247,13 +242,8 @@ void* modbus_writer(void* args) {
                 cursor      = txpkt->buffer;
                 bytes_left  = (int)txpkt->size;
                 
-#               ifdef TTY_TX_DEBUG
-                fprintf(stderr, "Writing %d bytes to tty\n", bytes_left);
-                for (int i=0; i<bytes_left; i++) {
-                    fprintf(stderr, "%02X ", cursor[i]);
-                }
-                fprintf(stderr, "\n");
-#               endif
+                // Debug Output
+                HEX_DUMP(cursor, bytes_left, "Writing %d bytes to tty\n", bytes_left);
 
                 while (bytes_left > 0) {
                     bytes_sent  = (int)write(mpctl.tty_fd, cursor, bytes_left);
