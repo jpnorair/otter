@@ -25,17 +25,28 @@
 
 /// Set __DEBUG__ during compilation to enable debug features (mainly printing)
 
+#define _HEX_(HEX, SIZE, ...)  do { \
+    fprintf(stderr, __VA_ARGS__); \
+    for (int i=0; i<(SIZE); i++) {   \
+        fprintf(stderr, "%02X ", (HEX)[i]);   \
+    } \
+    fprintf(stderr, "\n"); \
+} while (0)
+
+
 #if defined(__DEBUG__)
 #   define DEBUG_PRINTF(...)    do { if (cliopt_isdebug()) fprintf(stderr, "DEBUG: " __VA_ARGS__); } while(0)
 #   define TTY_PRINTF(...)      do { if (cliopt_isdebug()) fprintf(stderr, "TTY: " __VA_ARGS__); } while(0)
 #   define TTY_TX_PRINTF(...)   do { if (cliopt_isdebug()) fprintf(stderr, "TTY_TX: " __VA_ARGS__); } while(0)
 #   define TTY_RX_PRINTF(...)   do { if (cliopt_isdebug()) fprintf(stderr, "TTY_RX: " __VA_ARGS__); } while(0)
+#   define HEX_DUMP(LABEL, HEX, ...) do { if (cliopt_isdebug()) _HEX_(HEX, SIZE, ...) } while(0)
 
 #else
 #   define DEBUG_PRINTF(...)    do { } while(0)
 #   define TTY_PRINTF(...)      do { } while(0)
 #   define TTY_TX_PRINTF(...)   do { } while(0)
 #   define TTY_RX_PRINTF(...)   do { } while(0)
+#   define HEX_DUMP(LABEL, HEX, ...) do { } while(0)
 
 #endif
 
