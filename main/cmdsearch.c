@@ -14,6 +14,9 @@
   *
   */
 
+// cmdtab library header
+#include <cmdtab/cmdtab.h>
+
 // Local Headers
 #include "cmds.h"
 #include "cmdsearch.h"
@@ -34,19 +37,19 @@
 ///@todo this will need to be dynamic and build during startup based on an 
 ///      initialization file and plug-in libraries stored with the app.
 ///
-static const cmd_t commands[CMD_COUNT] = {
-    { "asapi",      &app_asapi },
+typedef struct {
+    const char      name[8]; 
+    cmdaction_t     action; 
+} cmd_t;
+
+static const cmd_t otter_commands[] = {
     { "bye",        &cmd_quit  },
-    { "confit",     &app_confit },
-    { "dforth",     &app_dforth },
-    { "file",       &app_file },
+   /* { "file",       &app_file }, */
    /* { "hbcc",       &cmd_hbcc }, */
     { "log",        &app_log },
     { "null",       &app_null },
     { "quit",       &cmd_quit },
     { "raw",        &cmd_raw },
-    { "sec",        &app_sec },
-    { "sensor",     &app_sensor },
     { "set",        &cmd_set },
     { "sethome",    &cmd_sethome },
     { "su",         &cmd_su },
@@ -54,42 +57,42 @@ static const cmd_t commands[CMD_COUNT] = {
 };
 
 
+///@todo Make this thread safe by adding a mutex here.
+///      It's not technically required yet becaus only one thread in otter uses
+///      cmdsearch, but we should put it in soon, just in case.
+static cmdtab_t cmdtab_default;
+static cmdtab_t* otter_cmdtab;
 
 
 
 
-
-
-
-
-
-
-// comapres two strings by alphabet,
-// returns 0 - if equal, -1 - first one bigger, 1 - 2nd one bigger.
-int local_strcmp(char *s1, char *s2);
-
-
-// comapres first x characters of two strings by alphabet,
-// returns 0 - if equal, -1 - first one bigger, 1 - 2nd one bigger.
-int local_strcmpc(char *s1, char *s2, int x);
-
-
-
-
-
-
-
-int cmdsearch_init(cmd_t* init_table) {
+int cmd_init(cmdtab_t* init_table) {
     
-    ///@todo loading a cmd_table from memory
-    if (init_table != NULL) {
+    otter_cmdtab = (init_table == NULL) ? &cmdtab_default : init_table;
+
+    /// Add Otter commands to the cmdtab.
+    for (int i=0; i<(sizeof(otter_commands)/sizeof(cmd_t)); i++) {
+        int rc;
+        rc = cmdtab_add(otter_cmdtab, otter_commands[i].name, (void*)otter_commands[i].action, NULL);
         
+        if (rc != 0) {
+            fprintf(stderr, "ERROR: cmdtab_add() from %s line %d returned %d.\n", __FUNCTION__, __LINE__, rc);
+            return -1;
+        }
+        
+        /// Run command with dt=NULL to initialize the command
+        ///@note This is specific to otter, it's not a requirement of cmdtab
+        otter_commands[i].action(NULL, NULL, NULL, NULL, 0);
     }
     
-    /// Run all commands with dt=NULL to do command initialization
-    for (int i=0; i<CMD_COUNT; i++) {
-        commands[i].action(NULL, NULL, NULL, NULL, 0);
-    }
+
+    /// If HBuilder is enabled, pass this table into the hbuilder initializer
+#   if OTTER_FEATURE(HBUILDER)
+    
+#   endif
+    
+    /// Any future command lists can be added below
+    
     
     return 0;
 }
@@ -97,25 +100,6 @@ int cmdsearch_init(cmd_t* init_table) {
 
 
 
-
-
-
-
-
-
-///@todo Consider refactoring: this function is ugly, slow, and most likely
-///      un-necessary in its present state
-//int cmd_parse(char* cmdname, char *cmdstr) {
-//	int i = 0;
-//    
-//	while( (i < CMD_NAMESIZE) && (cmdstr[i] != 0) && (cmdstr[i] != ' ') ) {
-//		cmdname[i] = cmdstr[i];
-//        i++;
-//    }
-//    cmdname[i] = 0;
-//
-//    return (i > 0) ? i+1 : -1;
-//}
 
 
 int cmd_getname(char* cmdname, char* cmdline, size_t max_cmdname) {
@@ -131,120 +115,21 @@ int cmd_getname(char* cmdname, char* cmdline, size_t max_cmdname) {
     // Add command string terminator & determine command string length (diff)
     *cmdname    = 0;
     diff        = max_cmdname - diff;
-    return (int)diff;
-    
-    // Go past spaces after the command, being mindful of condition with no
-    // command parameters
-//    while (*cmdline != 0) {
-//        if (*cmdline != ' ') {
-//            break;
-//        }
-//        cmdline++;
-//        diff++;
-//    }
-    
-    // Return position of parameters, or length of command if no parameters.
-//    return (int)diff;
-}
-
-
-
-///@todo Probably a good idea to make the command list a ternary search tree,
-///      or at least a binary tree that can be added-to
-
-
-
-
-
-
-const cmd_t* cmd_search(char *cmdname) {
-/// Verify that cmdname is not a zero-length string, then search for it in the
-/// list of available commands
-    const cmd_t* output = NULL;
-    
-    if (*cmdname != 0) {
-    
-        // This is a binary search across the static array
-        int l           = 0;
-        int r           = CMD_COUNT - 1;
-        int cci;
-        int csc;
-    
-        while (r >= l) {
-            cci = (l + r) >> 1;
-            csc = local_strcmp((char*)commands[cci].name, cmdname);
-            
-            switch (csc) {
-                case -1: r = cci - 1; break;
-                case  1: l = cci + 1; break;
-                default: return &commands[cci];
-            }
-        }
-        
-        /// Search for native otter commands has failed.
-        /// Now search through plug-in libraries, if they are compiled.
-#       if (OTTER_FEATURE(HBUILDER))
-        if (hb_cmd_search(cmdname)) {
-            output = ;
-        }
-#       endif
-    }
-    
-	return output;
-}
-
-
-
-const cmd_t* cmd_subsearch(char *namepart) {
-
-    if (*namepart != 0) {
-        int len = (int)strlen(namepart);
-
-        // try to find single match
-        int l   = 0;
-        int r   = CMD_COUNT - 1;
-        int lr  = -1;
-        int rr  = -1;
-        int cci;
-        int csc;
-        
-        while(r >= l) {
-            cci = (l + r) >> 1;
-            csc = local_strcmpc((char*)commands[cci].name, namepart, len);
-            
-            switch (csc) {
-                case -1: r = cci - 1; break;
-                case  1: l = cci + 1; break;
-                    
-                // check for matches left and right
-                default:
-                    if (cci > 0) {
-                        lr = local_strcmpc((char*)commands[cci - 1].name, namepart, len);
-                    }
-                    if (cci < (CMD_COUNT - 1)) {
-                        rr = local_strcmpc((char*)commands[cci + 1].name, namepart, len);
-                    }
-                    return (lr & rr) ? &commands[cci] : NULL;
-            }
-        }
-    
-    }
-        
-	return NULL;
+    return (int)diff;    
 }
 
 
 
 
-
-
-int local_strcmp(char *s1, char *s2) {
-	for (; (*s1 == *s2) && (*s1 != 0); s1++, s2++);	
-	return (*s1 < *s2) - (*s1 > *s2);
+const cmdtab_item_t* cmd_search(char *cmdname) {
+    return cmdtab_search(otter_cmdtab, cmdname);
 }
 
 
-int local_strcmpc(char *s1, char *s2, int x) {
-    for (int i = 0; (*s1 == *s2) && (*s1 != 0) && (i < x - 1); s1++, s2++, i++) ;
-    return (*s1 < *s2) - (*s1 > *s2);
+
+const cmdtab_item_t* cmd_subsearch(char *namepart) {
+    return cmdtab_subsearch(otter_cmdtab, namepart);
 }
+
+
+

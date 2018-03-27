@@ -22,7 +22,7 @@
 #include "test.h"
 
 // Local Libraries/Headers
-#include "bintex.h"
+#include <bintex/bintex.h>
 #include "m2def.h"
 
 // Standard C & POSIX Libraries
@@ -191,8 +191,8 @@ void* dterm_piper(void* args) {
     
     /// Get each line from the pipe.
     while (1) {
-        int             cmdlen;
-        const cmd_t*    cmdptr;
+        int cmdlen;
+        const cmdtab_item_t* cmdptr;
     
         if (linelen <= 0) {
             dterm_reset(dt);
@@ -218,13 +218,15 @@ void* dterm_piper(void* args) {
         else {
             int bytesout;
             int bytesin = 0;
+            cmdaction_t cmdfn;
 
             linebuf += cmdlen;
             linelen -= cmdlen;
             
             ///@todo final arg is max size of protocol_buf.  It should be changed
             ///      to a non constant.
-            bytesout = cmdptr->action(dt, protocol_buf, &bytesin, (uint8_t*)linebuf, 1024);
+            cmdfn       = (cmdaction_t)cmdptr->action;
+            bytesout    = cmdfn(dt, protocol_buf, &bytesin, (uint8_t*)linebuf, 1024);
             
             /// bytesin is an input that tells how many bytes have been consumed
             /// from the line.  If bytes remain they get treated as the next
@@ -429,10 +431,11 @@ void* dterm_prompter(void* args) {
         // the effect of blocking printout of received messages while the 
         // prompt is up
         else {
-            int             cmdlen;
-            const cmd_t*    cmdptr;
-            char*           cmdstr;
-        
+            int cmdlen;
+            char* cmdstr;
+            const cmdtab_item_t* cmdptr;
+            cmdaction_t cmdfn;
+            
             switch (cmd) {
                 // A printable key is used
                 case ct_key:        dterm_putcmd(dt, &c, 1);
@@ -479,7 +482,8 @@ void* dterm_prompter(void* args) {
                                         uint8_t* cursor = (uint8_t*)&dt->linebuf[cmdlen];
                                         
                                         ///@todo change 1024 to a configured value
-                                        outbytes = cmdptr->action(dt, protocol_buf, &inbytes, cursor, 1024);
+                                        cmdfn       = (cmdaction_t)cmdptr->action;
+                                        outbytes    = cmdfn(dt, protocol_buf, &inbytes, cursor, 1024);
                                         
                                         // Error, print-out protocol_buf as an error message
                                         ///@todo spruce-up the command error reporting, maybe even with

@@ -20,7 +20,7 @@
 // HBuilder provides a library of DASH7/OpenTag communication API functions 
 // that are easy to use.
 #if OTTER_FEATURE(HBUILDER)
-#   include "hbuilder.h"
+#   include <hbuilder/hbuilder.h>
 #endif
 
 

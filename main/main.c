@@ -52,6 +52,9 @@
 #include "argtable3.h"
 #include "cJSON.h"
 
+//Package libraries
+#include <cmdtab/cmdtab.h>
+
 // Standard C & POSIX Libraries
 #include <pthread.h>
 #include <signal.h>

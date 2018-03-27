@@ -35,11 +35,6 @@
 // arg3: dst buffer max size
 typedef int (*cmdaction_t)(dterm_t*, uint8_t*, int*, uint8_t*, size_t);
 
-typedef struct cmd_s {
-	const char      name[8]; 
-	cmdaction_t     action; 
-} cmd_t;
-
 
 
 /// Commands for local otter control

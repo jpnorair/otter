@@ -21,7 +21,7 @@
 #include "ppipelist.h"
 
 // Local Libraries/Includes
-#include "bintex.h"
+#include <bintex/bintex.h>
 #include "m2def.h"
 
 // Standard C & POSIX libraries
