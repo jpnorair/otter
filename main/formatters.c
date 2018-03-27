@@ -10,6 +10,7 @@
 
 #include "ppipelist.h"
 #include "cliopt.h"
+#include "otter_cfg.h"
 
 #include <string.h>
 #include <time.h>
@@ -18,7 +19,7 @@
 // HBuilder is part of Haystack HDO and it is not open source as of 08.2017.
 // HBuilder provides a library of DASH7/OpenTag communication API functions 
 // that are easy to use.
-#ifdef __HBUILDER__
+#if OTTER_FEATURE(HBUILDER)
 #   include "hbuilder.h"
 #endif
 
@@ -264,14 +265,6 @@ void fmt_fprintalp(mpipe_printer_t puts_fn, cJSON* msgcall, uint8_t* src, size_t
             return;
         }
         
-        /// File Data Protocol Formatter (From HBUILDER)
-#       ifdef __HBUILDER__
-        if (id == 0x01) {
-            fdp_formatter(puts_fn, cmd, payload, length);
-        }
-        else
-#       endif
-        
         ///Logger (id 0x04) has special treatment (it gets logged to stdout)
         if (id == 0x04) {
             switch (cmd) {
@@ -325,6 +318,13 @@ void fmt_fprintalp(mpipe_printer_t puts_fn, cJSON* msgcall, uint8_t* src, size_t
                     break;
             }
         }
+        
+        /// Punt non supported ALPs to HBUILDER, if HBUILDER is enabled.
+#       if OTTER_FEATURE(HBUILDER)
+        else if (id != 0) {
+            hb_alp_formatter(puts_fn, id, cmd, payload, length);
+        }
+#       endif
         
         /// Dump hex of non-logger ALPs when in verbose mode.
         /// These ALPs get reported to output pipes in verbose and non-verbose modes.

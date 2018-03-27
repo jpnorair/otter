@@ -35,22 +35,22 @@
 ///      initialization file and plug-in libraries stored with the app.
 ///
 static const cmd_t commands[CMD_COUNT] = {
-    { "asapi",      &app_asapi,     NULL, NULL },
-    { "bye",        &cmd_quit,      NULL, NULL },
-    { "confit",     &app_confit,    NULL, NULL },
-    { "dforth",     &app_dforth,    NULL, NULL },
-    { "file",       &app_file,      NULL, NULL },
-    { "hbcc",       &cmd_hbcc,      NULL, NULL },
-    { "log",        &app_log,       NULL, NULL },
-    { "null",       &app_null,      NULL, NULL },
-    { "quit",       &cmd_quit,      NULL, NULL },
-    { "raw",        &cmd_raw,       NULL, NULL },
-    { "sec",        &app_sec,       NULL, NULL },
-    { "sensor",     &app_sensor,    NULL, NULL },
-    { "set",        &cmd_set,       NULL, NULL },
-    { "sethome",    &cmd_sethome,   NULL, NULL },
-    { "su",         &cmd_su,        NULL, NULL },
-    { "whoami",     &cmd_whoami,    NULL, NULL },
+    { "asapi",      &app_asapi },
+    { "bye",        &cmd_quit  },
+    { "confit",     &app_confit },
+    { "dforth",     &app_dforth },
+    { "file",       &app_file },
+   /* { "hbcc",       &cmd_hbcc }, */
+    { "log",        &app_log },
+    { "null",       &app_null },
+    { "quit",       &cmd_quit },
+    { "raw",        &cmd_raw },
+    { "sec",        &app_sec },
+    { "sensor",     &app_sensor },
+    { "set",        &cmd_set },
+    { "sethome",    &cmd_sethome },
+    { "su",         &cmd_su },
+    { "whoami",     &cmd_whoami },
 };
 
 
@@ -160,6 +160,7 @@ int cmd_getname(char* cmdname, char* cmdline, size_t max_cmdname) {
 const cmd_t* cmd_search(char *cmdname) {
 /// Verify that cmdname is not a zero-length string, then search for it in the
 /// list of available commands
+    const cmd_t* output = NULL;
     
     if (*cmdname != 0) {
     
@@ -179,11 +180,17 @@ const cmd_t* cmd_search(char *cmdname) {
                 default: return &commands[cci];
             }
         }
-        // End of binary search implementation
         
+        /// Search for native otter commands has failed.
+        /// Now search through plug-in libraries, if they are compiled.
+#       if (OTTER_FEATURE(HBUILDER))
+        if (hb_cmd_search(cmdname)) {
+            output = ;
+        }
+#       endif
     }
     
-	return NULL;
+	return output;
 }
 
 

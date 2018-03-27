@@ -32,7 +32,7 @@
 // HBuilder is part of Haystack HDO and it is not open source as of 08.2017.
 // HBuilder provides a library of DASH7/OpenTag communication API functions 
 // that are easy to use.
-#ifdef __HBUILDER__
+#if OTTER_FEATURE(HBUILDER)
 #   include "hbuilder.h"
 #endif
 

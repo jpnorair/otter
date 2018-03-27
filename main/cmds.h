@@ -28,7 +28,7 @@
 
 
 #define CMD_NAMESIZE    8
-#define CMD_COUNT       16
+#define CMD_COUNT       15
 
 // arg1: dst buffer
 // arg2: src buffer
@@ -36,10 +36,8 @@
 typedef int (*cmdaction_t)(dterm_t*, uint8_t*, int*, uint8_t*, size_t);
 
 typedef struct cmd_s {
-	const char      name[CMD_NAMESIZE]; 
+	const char      name[8]; 
 	cmdaction_t     action; 
-    struct cmd_s   *prev;
-    struct cmd_s   *next;
 } cmd_t;
 
 
@@ -60,6 +58,8 @@ int cmd_raw(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax
 
 // Set an Otter environment variable
 int cmd_set(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax);
+
+
 
 // HBCC is a client-side generator of sequential ASAPI Calls into simple, 
 // atomic API messages
