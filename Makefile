@@ -6,10 +6,12 @@ THISSYSTEM	:= $(shell uname -s)
 TARGET      ?= otter
 TARGETDIR   ?= bin
 PKGDIR      ?= ../_hbpkg/$(THISMACHINE)
+SYSDIR      ?= ../_hbsys
 EXT_DEF     ?= 
 EXT_INC     ?= 
 EXT_LIBFLAGS ?= 
 EXT_LIBS ?= 
+VERSION     ?= "0.5.0"
 
 DEFAULT_DEF := -D__HBUILDER__
 LIBMODULES  := libotfs bintex hbuilder-lib $(EXT_LIBS)
@@ -46,8 +48,11 @@ remake: cleaner all
 
 
 install: 
-	@mkdir -p $(PKGDIR)/bin
+	@mkdir -p $(SYSDIR)/bin
+	@mkdir -p $(PKGDIR)
 	@cp $(TARGETDIR)/$(TARGET) $(PKGDIR)/bin/
+	@rm -f $(SYSDIR)/bin/$(TARGET)
+# TODO	@ln -s hbuilder.$(VERSION) ./$(PKGDIR)/otter/bin/$(TARGET)
 
 directories:
 	@mkdir -p $(TARGETDIR)
