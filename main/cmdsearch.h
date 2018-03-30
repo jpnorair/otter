@@ -18,9 +18,14 @@
 #define cmdsearch_h
 
 #include "cmds.h"
+#include "dterm.h"
+
 
 
 int cmd_init(cmdtab_t* init_table);
+
+
+int cmd_run(cmdtab_item_t* cmd, dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax);
 
 
 
@@ -37,6 +42,8 @@ const cmdtab_item_t* cmd_search(char *name);
 // searches for single command which name starts with namepart
 // returns command index or -1 if command not found or there is more than one match
 const cmdtab_item_t* cmd_subsearch(char *namepart);
+
+
 
 
 

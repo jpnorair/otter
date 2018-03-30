@@ -21,7 +21,7 @@
 #include "cliopt.h"
 
 // Local Headers/Libraries
-#include <bintex/bintex.h>
+#include <bintex.h>
 
 // Standard C & POSIX Libraries
 #include <signal.h>
@@ -33,7 +33,7 @@
 // HBuilder provides a library of DASH7/OpenTag communication API functions 
 // that are easy to use.
 #if OTTER_FEATURE(HBUILDER)
-#   include <hbuilder/hbuilder.h>
+#   include <hbuilder.h>
 #endif
 
 
@@ -427,6 +427,40 @@ int cmd_raw(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax
 
 
 
+
+int cmdext_hbuilder(void* hb_handle, void* cmd_handle, dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
+    bool is_eos     = false;
+    size_t bytesout = 0;
+    int rc;
+    
+    INPUT_SANITIZE_FLAG_EOS(is_eos);
+    
+#   if OTTER_FEATURE(HBUILDER)
+    rc = hbuilder_runcmd(hb_handle, cmd_handle, dst, &bytesout, dstmax, src, inbytes);
+    
+    if (rc < 0) {
+        dterm_printf(dt, "HBuilder Command Error (code %d)\n", rc);
+        if (rc == -2) {
+            dterm_printf(dt, "--> Input Error on character %zu\n", bytesout);
+        }
+    }
+    else if ((rc > 0) && cliopt_isverbose()) {
+        fprintf(stdout, "--> HBuilder packetizing %zu bytes\n", bytesout);
+    }
+
+#   else
+    fprintf(stderr, "hbuilder invoked, but not supported.\n--> %s\n", src);
+    rc = -2;
+
+#   endif
+    
+    return rc;
+}
+
+
+
+
+
 int cmd_hbcc(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
 /// HBCC src must be a code-word, then whitespace, then optionally a bintex string.
 /// @todo wrap this into command handling library
@@ -507,8 +541,12 @@ int cmd_hbcc(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstma
 
 
 
-///@todo these commands are simply for test purposes right now. 
 
+
+
+
+
+///@todo these commands are simply for test purposes right now. 
 
 // ID = 0
 int app_null(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
@@ -521,192 +559,6 @@ int app_null(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstma
     
     INPUT_SANITIZE();
     fprintf(stderr, "null invoked %s\n", src);
-    return -1;
-}
-
-
-
-
-
-// ID = 1
-int app_file(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
-/// Syntax is: command [-block] bintex
-/// See HBuilder documentation for more information
-    uint8_t temp_buffer[256];
-    int bytesout;
-    int bytes_left;
-    uint8_t* cmd;
-    uint8_t* block;
-    
-    /// dt == NULL is the initialization case.
-    /// There may not be an initialization for all command groups.
-    if (dt == NULL) {
-        return 0;
-    }
-    
-    INPUT_SANITIZE();
-    
-    /// Bytes left is used for continued parsing.
-    ///@todo bury all the string processing into hbuilder.
-    bytes_left = *inbytes;
-    
-#   if (defined(__HBUILDER__))
-    
-    /// 1. Get the command 
-    cmd = src;
-    src = sub_markstring(&cmd, &bytes_left, 10);
-    
-    /// 2. Get the argument, if it exists.
-    if (src[0] == '-') {
-        block   = src+1;
-        src     = sub_markstring(&block, &bytes_left, 10);
-    }
-    else {
-        block   = NULL;
-    }
-        
-    /// 3. Process the bintex into raw data
-    ///    bytesout is used to store the amount of bytes in the raw byte output
-    bytesout = bintex_ss((unsigned char*)src, (unsigned char*)temp_buffer, (int)sizeof(temp_buffer));
-    if (bytesout < 0) {
-        dterm_printf(dt, "Bintex error on character %d.\n", -bytesout);
-    }
-    else {
-        /// 4. Send the command to HBuilder FDP generator
-        ///    bytesout is used to store the amount of bytes in the raw ALP output
-        bytesout = fdp_generate(dst, dstmax, (const char*)cmd, (const char*)block, (size_t)bytesout, temp_buffer);
-        if ((bytesout > 0) && cliopt_isverbose()) {
-            fprintf(stdout, "--> fdp packetizing %d bytes\n", bytesout);
-        }
-    }
-    
-    return (int)bytesout;
-    
-#   else
-    /// HBuilder not available, so just report FDP invocation
-    fprintf(stderr, "fdp invoked %s\n", src);
-    return -2;
-    
-#   endif
-}
-
-
-// ID = 2
-int app_sensor(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
-    
-    /// dt == NULL is the initialization case.
-    /// There may not be an initialization for all command groups.
-    if (dt == NULL) {
-        return 0;
-    }
-    
-    INPUT_SANITIZE();
-    fprintf(stderr, "sensor invoked %s\n", src);
-    return -1;
-}
-
-
-// ID = 3
-int app_sec(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
-    
-    /// dt == NULL is the initialization case.
-    /// There may not be an initialization for all command groups.
-    if (dt == NULL) {
-        return 0;
-    }
-    
-    INPUT_SANITIZE();
-    fprintf(stderr, "sec invoked %s\n", src);
-    return -1;
-}
-
-
-// ID = 4
-int app_log(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
-    
-    /// dt == NULL is the initialization case.
-    /// There may not be an initialization for all command groups.
-    if (dt == NULL) {
-        return 0;
-    }
-    
-    INPUT_SANITIZE();
-    fprintf(stderr, "logger invoked %s\n", src);
-    return -1;
-}
-
-
-// ID = 5
-int app_dforth(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
-    
-    /// dt == NULL is the initialization case.
-    /// There may not be an initialization for all command groups.
-    if (dt == NULL) {
-        return 0;
-    }
-    
-    INPUT_SANITIZE();
-    fprintf(stderr, "dforth invoked %s\n", src);
-    return -1;
-}
-
-
-// ID = 6
-int app_confit(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
-/// Confit message string is presently undefined.  What is here now is a paste
-/// from the hbcc command handler.
-    
-    /// dt == NULL is the initialization case.
-    /// There may not be an initialization for all command groups.
-    if (dt == NULL) {
-        return 0;
-    }
-    
-    INPUT_SANITIZE();
-    
-#   ifdef __HBUILDER__
-    {   int         bytesout;
-        size_t      code_len;
-        size_t      code_max;
-        uint8_t*    cursor;
-    
-        /// 1. Get codeword.  It will be a string followed by some whitespace.
-        ///    code_max should have some upper bound that's not currently defined,
-        ///    but it's 32 chars at the moment
-        code_max = (dstmax < 32) ? dstmax : 32; 
-        for (code_len=0, cursor=src; (code_len < code_max); code_len++, cursor++) {
-            if (isspace(*cursor)) {
-                *cursor = 0;
-                cursor++;
-                break;
-            }
-        }
-        
-        /// 2. get binary from bintex string input.
-        bytesout = bintex_ss((unsigned char*)cursor, (unsigned char*)dst, (int)dstmax);
-
-        ///@todo confit api
-        return -1; //hbconfit_exec(dst, dstmax, codeword, params);
-    }
-
-#   else
-    fprintf(stderr, "confit invoked %s\n", src);
-#   endif
-    return -1;
-}
-
-
-// ID = 7
-int app_asapi(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
-    
-    /// dt == NULL is the initialization case.
-    /// There may not be an initialization for all command groups.
-    if (dt == NULL) {
-        return 0;
-    }
-    
-    INPUT_SANITIZE();
-    fprintf(stderr, "asapi invoked %s\n", src);
     return -1;
 }
 

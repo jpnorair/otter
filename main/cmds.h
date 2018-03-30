@@ -55,6 +55,11 @@ int cmd_raw(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax
 int cmd_set(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax);
 
 
+// External command call to HBuilder
+int cmdext_hbuilder(void* hb_handle, void* cmd_handle, dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax)
+
+
+
 
 // HBCC is a client-side generator of sequential ASAPI Calls into simple, 
 // atomic API messages
@@ -68,33 +73,6 @@ int cmd_hbcc(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstma
 // ID = 0
 int app_null(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax);
 
-
-// ID = 1
-int app_file(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax);
-
-
-// ID = 2
-int app_sensor(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax);
-
-
-// ID = 3
-int app_sec(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax);
-
-
-// ID = 4
-int app_log(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax);
-
-
-// ID = 5
-int app_dforth(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax);
-
-
-// ID = 6
-int app_confit(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax);
-
-
-// ID = 7
-int app_asapi(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax);
 
 
 

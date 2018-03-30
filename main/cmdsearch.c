@@ -15,7 +15,7 @@
   */
 
 // cmdtab library header
-#include <cmdtab/cmdtab.h>
+#include <cmdtab.h>
 
 // Local Headers
 #include "cmds.h"
@@ -44,9 +44,6 @@ typedef struct {
 
 static const cmd_t otter_commands[] = {
     { "bye",        &cmd_quit  },
-   /* { "file",       &app_file }, */
-   /* { "hbcc",       &cmd_hbcc }, */
-    { "log",        &app_log },
     { "null",       &app_null },
     { "quit",       &cmd_quit },
     { "raw",        &cmd_raw },
@@ -56,12 +53,23 @@ static const cmd_t otter_commands[] = {
     { "whoami",     &cmd_whoami },
 };
 
-
 ///@todo Make this thread safe by adding a mutex here.
 ///      It's not technically required yet becaus only one thread in otter uses
 ///      cmdsearch, but we should put it in soon, just in case.
 static cmdtab_t cmdtab_default;
 static cmdtab_t* otter_cmdtab;
+
+#if OTTER_FEATURE(HBUILDER)
+static void* hbuilder_handle;
+#endif
+
+typedef enum {
+    EXTCMD_null     = 0,
+#   if OTTER_FEATURE(HBUILDER)
+    EXTCMD_hbuilder,
+#   endif
+    EXTCMD_MAX
+} otter_extcmd_t;
 
 
 
@@ -91,7 +99,9 @@ int cmd_init(cmdtab_t* init_table) {
     
 #   endif
     
-    /// Any future command lists can be added below
+    /// Any future command lists can be added below.
+    
+    ///@todo a path-based command finder should go here.
     
     
     return 0;
@@ -99,6 +109,33 @@ int cmd_init(cmdtab_t* init_table) {
 
 
 
+int cmd_run(cmdtab_item_t* cmd, dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
+    int output;
+
+    if (cmd == NULL) {
+        return -1;
+    }
+    
+    // handling of different command types
+    switch ((otter_extcmd_t)cmd->extcmd) {
+        case EXTCMD_null:
+            output = ((cmdaction_t)cmd->action)(dt, dst, inbytes, src, dstmax);
+            break;
+            
+#       if OTTER_FEATURE(HBUILDER)
+        case EXTCMD_hbuilder:
+            output = cmdext_hbuilder(hbuilder_handle, (void*)cmd->action, dt, dst, inbytes, src, dstmax);
+            break;
+#       endif
+
+        default:
+            ///@todo a path-based command executor should go here.
+            output = -2;
+            break;
+    }
+
+    return output;
+}
 
 
 
@@ -130,6 +167,8 @@ const cmdtab_item_t* cmd_search(char *cmdname) {
 const cmdtab_item_t* cmd_subsearch(char *namepart) {
     return cmdtab_subsearch(otter_cmdtab, namepart);
 }
+
+
 
 
 
