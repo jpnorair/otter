@@ -17,9 +17,12 @@
 #ifndef cmdsearch_h
 #define cmdsearch_h
 
+// Local Dependencies
 #include "cmds.h"
 #include "dterm.h"
 
+// External Dependencies
+#include <cmdtab.h>
 
 
 int cmd_init(cmdtab_t* init_table);

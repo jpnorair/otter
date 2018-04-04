@@ -20,7 +20,7 @@
 // HBuilder provides a library of DASH7/OpenTag communication API functions 
 // that are easy to use.
 #if OTTER_FEATURE(HBUILDER)
-#   include <hbuilder/hbuilder.h>
+#   include <hbuilder.h>
 #endif
 
 
@@ -322,7 +322,7 @@ void fmt_fprintalp(mpipe_printer_t puts_fn, cJSON* msgcall, uint8_t* src, size_t
         /// Punt non supported ALPs to HBUILDER, if HBUILDER is enabled.
 #       if OTTER_FEATURE(HBUILDER)
         else if (id != 0) {
-            hb_alp_formatter(puts_fn, id, cmd, payload, length);
+            hbuilder_fmtalp(puts_fn, id, cmd, payload, length);
         }
 #       endif
         

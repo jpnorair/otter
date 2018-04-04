@@ -25,9 +25,10 @@ OBJEXT      := o
 
 CFLAGS_DEBUG:= -std=gnu99 -O -g -Wall -pthread
 CFLAGS      := -std=gnu99 -O3 -pthread
-INC         := -I. -I./$(PKGDIR)/libotfs
+INC         := -I. -I./$(PKGDIR)/libotfs -I./$(PKGDIR)/hbuilder -I./$(PKGDIR)/cmdtab -I./$(PKGDIR)/bintex
 INCDEP      := -I.
-LIB         := -lotfs -lhbuilder -lbintex -L./$(PKGDIR)/libotfs -L./$(PKGDIR)/hbuilder -L./$(PKGDIR)/bintex
+LIB         := -lotfs -lhbuilder -lcmdtab -lbintex -L./$(PKGDIR)/libotfs -L./$(PKGDIR)/hbuilder -L./$(PKGDIR)/cmdtab -L./$(PKGDIR)/bintex
+OTTER_PKG   := $(PKGDIR)
 OTTER_DEF   := $(DEFAULT_DEF) $(EXT_DEF)
 OTTER_INC   := $(INC) $(EXT_INC)
 OTTER_LIB   := $(LIB) $(EXT_LIBFLAGS)
@@ -36,6 +37,7 @@ OTTER_LIB   := $(LIB) $(EXT_LIBFLAGS)
 #MODULES     := $(SUBMODULES) $(LIBMODULES)
 
 # Export the following variables to the shell: will affect submodules
+export OTTER_PKG
 export OTTER_DEF
 export OTTER_INC
 export OTTER_LIB
@@ -49,9 +51,10 @@ remake: cleaner all
 
 install: 
 	@mkdir -p $(SYSDIR)/bin
-	@mkdir -p $(PKGDIR)
-	@cp $(TARGETDIR)/$(TARGET) $(PKGDIR)/bin/
+	@mkdir -p $(PKGDIR)/$(TARGET).$(VERSION)
+	@cp $(TARGETDIR)/$(TARGET) $(PKGDIR)/$(TARGET).$(VERSION)
 	@rm -f $(SYSDIR)/bin/$(TARGET)
+	@cp $(TARGETDIR)/$(TARGET) $(SYSDIR)/bin
 # TODO	@ln -s hbuilder.$(VERSION) ./$(PKGDIR)/otter/bin/$(TARGET)
 
 directories:
@@ -73,11 +76,11 @@ $(TARGET): $(SUBMODULES) $(LIBMODULES)
 
 $(TARGET).debug: $(SUBMODULES) $(LIBMODULES)
 	$(eval OBJECTS := $(shell find $(BUILDDIR) -type f -name "*.$(OBJEXT)"))
-	$(CC) $(CFLAGS_DEBUG) $(OTTER_DEF) -D__DEBUG__ -o $(TARGETDIR)/$(TARGET) $(OBJECTS) $(OTTER_LIB)
+	$(CC) $(CFLAGS_DEBUG) $(OTTER_DEF) -D__DEBUG__ -o $(TARGETDIR)/$(TARGET).debug $(OBJECTS) $(OTTER_LIB)
 
 #Library dependencies (not in otter sources)
 $(LIBMODULES): %: 
-	cd ./../$@ && $(MAKE) all && $(MAKE) install
+	cd ./../$@ && $(MAKE) lib && $(MAKE) install
 
 #otter submodules
 $(SUBMODULES): %: $(LIBMODULES) directories

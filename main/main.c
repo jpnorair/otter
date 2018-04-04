@@ -53,7 +53,7 @@
 #include "cJSON.h"
 
 //Package libraries
-#include <cmdtab/cmdtab.h>
+#include <cmdtab.h>
 
 // Standard C & POSIX Libraries
 #include <pthread.h>
@@ -462,7 +462,7 @@ int otter_main( const char* ttyfile,
     /// Initialize command search table.  
     ///@todo in the future, let's pull this from an initialization file or
     ///      something dynamic as such.
-    cmdsearch_init(NULL);
+    cmd_init(NULL);
     
     /// Initialize Otter Environment Variables
     ///@todo in the future, let's pull this from an initialization file or

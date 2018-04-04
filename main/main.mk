@@ -1,6 +1,7 @@
 CC=gcc
 
 TARGET      := main
+OTTER_PKG   ?=
 OTTER_DEF   ?= -D__HBUILDER__
 OTTER_INC   ?=
 OTTER_LIB   ?= 
@@ -13,8 +14,8 @@ TARGETDIR   := .
 SRCEXT      := c
 DEPEXT      := d
 OBJEXT      := o
-LIB         := -lhbuilder -lbintex -L./../../hbuilder-lib -L./../../bintex $(OTTER_LIB)
-INC         := -I./../../hbuilder-lib -I./../../bintex -I./../cJSON -I./../argtable -I./../test -I./../../m2def $(OTTER_INC)
+LIB         := -lhbuilder -lcmdtab -lbintex -L./../$(OTTER_PKG)/hbuilder -L./../$(OTTER_PKG)/cmdtab -L./../$(OTTER_PKG)/bintex
+INC         := -I./../argtable -I./../cJSON -I./../test -I./../$(OTTER_PKG)/m2def -I./../$(OTTER_PKG)/hbuilder -I./../$(OTTER_PKG)/cmdtab -I./../$(OTTER_PKG)/bintex
 INCDEP      := $(INC)
 
 SOURCES     := $(shell find . -type f -name "*.$(SRCEXT)")
