@@ -14,8 +14,8 @@ EXT_LIBS ?=
 VERSION     ?= "0.5.0"
 
 DEFAULT_DEF := -D__HBUILDER__
-LIBMODULES  := libotfs bintex hbuilder-lib $(EXT_LIBS)
-SUBMODULES  := argtable cJSON main test
+LIBMODULES  := argtable cJSON cmdtab bintex hbuilder-lib libotfs $(EXT_LIBS)
+SUBMODULES  := main test
 
 BUILDDIR    := build
 
@@ -25,9 +25,9 @@ OBJEXT      := o
 
 CFLAGS_DEBUG:= -std=gnu99 -O -g -Wall -pthread
 CFLAGS      := -std=gnu99 -O3 -pthread
-INC         := -I. -I./$(PKGDIR)/libotfs -I./$(PKGDIR)/hbuilder -I./$(PKGDIR)/cmdtab -I./$(PKGDIR)/bintex
+INC         := -I. -I./$(PKGDIR)/argtable -I./$(PKGDIR)/bintex -I./$(PKGDIR)/cJSON -I./$(PKGDIR)/cmdtab -I./$(PKGDIR)/hbuilder -I./$(PKGDIR)/libotfs -I./$(PKGDIR)/m2def
 INCDEP      := -I.
-LIB         := -lotfs -lhbuilder -lcmdtab -lbintex -L./$(PKGDIR)/libotfs -L./$(PKGDIR)/hbuilder -L./$(PKGDIR)/cmdtab -L./$(PKGDIR)/bintex
+LIB         := -largtable -lbintex -lcJSON -lcmdtab -lhbuilder -lotfs -L./$(PKGDIR)/argtable -L./$(PKGDIR)/bintex -L./$(PKGDIR)/cJSON -L./$(PKGDIR)/cmdtab -L./$(PKGDIR)/hbuilder -L./$(PKGDIR)/libotfs
 OTTER_PKG   := $(PKGDIR)
 OTTER_DEF   := $(DEFAULT_DEF) $(EXT_DEF)
 OTTER_INC   := $(INC) $(EXT_INC)

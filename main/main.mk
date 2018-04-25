@@ -14,8 +14,10 @@ TARGETDIR   := .
 SRCEXT      := c
 DEPEXT      := d
 OBJEXT      := o
-LIB         := -lhbuilder -lcmdtab -lbintex -L./../$(OTTER_PKG)/hbuilder -L./../$(OTTER_PKG)/cmdtab -L./../$(OTTER_PKG)/bintex
-INC         := -I./../argtable -I./../cJSON -I./../test -I./../$(OTTER_PKG)/m2def -I./../$(OTTER_PKG)/hbuilder -I./../$(OTTER_PKG)/cmdtab -I./../$(OTTER_PKG)/bintex
+#LIB         := -lhbuilder -lcmdtab -lbintex -L./../$(OTTER_PKG)/hbuilder -L./../$(OTTER_PKG)/cmdtab -L./../$(OTTER_PKG)/bintex
+LIB			:= $(subst -L./,-L./../,$(OTTER_LIB))
+#INC         := -I./../argtable -I./../cJSON -I./../test -I./../$(OTTER_PKG)/m2def -I./../$(OTTER_PKG)/hbuilder -I./../$(OTTER_PKG)/cmdtab -I./../$(OTTER_PKG)/bintex
+INC			:= $(subst -I./,-I./../,$(OTTER_INC)) -I./../test -I./../cJSON
 INCDEP      := $(INC)
 
 SOURCES     := $(shell find . -type f -name "*.$(SRCEXT)")
