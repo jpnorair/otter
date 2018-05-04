@@ -11,7 +11,7 @@ EXT_DEF     ?=
 EXT_INC     ?= 
 EXT_LIBFLAGS ?= 
 EXT_LIBS ?= 
-VERSION     ?= "0.5.0"
+VERSION     ?= "0.6.0"
 
 DEFAULT_DEF := -D__HBUILDER__
 LIBMODULES  := argtable cJSON cmdtab bintex hbuilder-lib libotfs $(EXT_LIBS)
@@ -72,11 +72,11 @@ cleaner: clean
 #Linker
 $(TARGET): $(SUBMODULES) $(LIBMODULES)
 	$(eval OBJECTS := $(shell find $(BUILDDIR) -type f -name "*.$(OBJEXT)"))
-	$(CC) $(CFLAGS) $(OTTER_DEF) -o $(TARGETDIR)/$(TARGET) $(OBJECTS) $(OTTER_LIB)
+	$(CC) $(CFLAGS) $(OTTER_DEF) $(OTTER_INC) $(OTTER_LIB) -o $(TARGETDIR)/$(TARGET) $(OBJECTS)
 
 $(TARGET).debug: $(SUBMODULES) $(LIBMODULES)
 	$(eval OBJECTS := $(shell find $(BUILDDIR) -type f -name "*.$(OBJEXT)"))
-	$(CC) $(CFLAGS_DEBUG) $(OTTER_DEF) -D__DEBUG__ -o $(TARGETDIR)/$(TARGET).debug $(OBJECTS) $(OTTER_LIB)
+	$(CC) $(CFLAGS_DEBUG) $(OTTER_DEF) -D__DEBUG__ $(OTTER_INC) $(OTTER_LIB) -o $(TARGETDIR)/$(TARGET).debug $(OBJECTS)
 
 #Library dependencies (not in otter sources)
 $(LIBMODULES): %: 
