@@ -26,8 +26,9 @@
 #include <stdio.h>
 #include <ctype.h>
 
-
-
+#if OTTER_FEATURE(HBUILDER)
+#   include <hbuilder.h>
+#endif
 
 
 /// Binary Search Table for Commands
@@ -68,6 +69,7 @@ typedef enum {
 #   if OTTER_FEATURE(HBUILDER)
     EXTCMD_hbuilder,
 #   endif
+    EXTCMD_path,
     EXTCMD_MAX
 } otter_extcmd_t;
 
@@ -78,10 +80,23 @@ int cmd_init(cmdtab_t* init_table) {
     
     otter_cmdtab = (init_table == NULL) ? &cmdtab_default : init_table;
 
-    /// Add Otter commands to the cmdtab.
+    /// cmdtab prioritizes subsequent command adds, so the highest priority
+    /// commands should be added last.
+    
+    /// First, add commands that are available from the command path.
+    ///@todo this is not yet implemented.
+    
+
+    /// Second, if HBuilder is enabled, pass this table into the hbuilder 
+    /// initializer.
+#   if OTTER_FEATURE(HBUILDER)
+        hbuilder_handle = hbuilder_init(otter_cmdtab, (void*)EXTCMD_hbuilder);
+#   endif
+
+    /// Last, Add Otter commands to the cmdtab.
     for (int i=0; i<(sizeof(otter_commands)/sizeof(cmd_t)); i++) {
         int rc;
-        rc = cmdtab_add(otter_cmdtab, otter_commands[i].name, (void*)otter_commands[i].action, NULL);
+        rc = cmdtab_add(otter_cmdtab, otter_commands[i].name, (void*)otter_commands[i].action, (void*)EXTCMD_null);
         
         if (rc != 0) {
             fprintf(stderr, "ERROR: cmdtab_add() from %s line %d returned %d.\n", __FUNCTION__, __LINE__, rc);
@@ -92,17 +107,6 @@ int cmd_init(cmdtab_t* init_table) {
         ///@note This is specific to otter, it's not a requirement of cmdtab
         otter_commands[i].action(NULL, NULL, NULL, NULL, 0);
     }
-    
-
-    /// If HBuilder is enabled, pass this table into the hbuilder initializer
-#   if OTTER_FEATURE(HBUILDER)
-    
-#   endif
-    
-    /// Any future command lists can be added below.
-    
-    ///@todo a path-based command finder should go here.
-    
     
     return 0;
 }
@@ -119,17 +123,22 @@ int cmd_run(cmdtab_item_t* cmd, dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t
     // handling of different command types
     switch ((otter_extcmd_t)cmd->extcmd) {
         case EXTCMD_null:
+            //fprintf(stderr, "EXTCMD_null: inbytes=%d, src=%s\n", *inbytes, (char*)src);
             output = ((cmdaction_t)cmd->action)(dt, dst, inbytes, src, dstmax);
             break;
             
 #       if OTTER_FEATURE(HBUILDER)
         case EXTCMD_hbuilder:
+            //fprintf(stderr, "EXTCMD_hbuilder: inbytes=%d, src=%s\n", *inbytes, (char*)src);
             output = cmdext_hbuilder(hbuilder_handle, (void*)cmd->action, dt, dst, inbytes, src, dstmax);
             break;
 #       endif
 
+        ///@todo not yet implemented
+        case EXTCMD_path:
+
         default:
-            ///@todo a path-based command executor should go here.
+            //fprintf(stderr, "No Command Extension found: inbytes=%d, src=%s\n", *inbytes, (char*)src);
             output = -2;
             break;
     }
