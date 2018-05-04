@@ -129,6 +129,7 @@ int otter_main( const char* ttyfile,
                 int baudrate,
                 int enc_bits, int enc_parity, int enc_stopbits,
                 bool pipe,
+                const char* xpath,
                 cJSON* params
                 ); 
 
@@ -139,6 +140,7 @@ void sub_json_loadargs(cJSON* json,
                        int* baudrate_val, 
                        bool* pipe_val,
                        int* intf_val,
+                       char* xpath,
                        int* enc_bits,
                        int* enc_parity,
                        int* enc_stop,
@@ -209,23 +211,24 @@ INTF_Type sub_intf_cmp(const char* s1) {
 
 int main(int argc, char* argv[]) {
 /// ArgTable params: These define the input argument behavior
-    struct arg_file *ttyfile = arg_file1(NULL,NULL,"<ttyfile>",         "path to tty file (e.g. /dev/tty.usbmodem)");
-    struct arg_int  *brate   = arg_int0(NULL,NULL,"<baudrate>",         "baudrate, default is 115200");
+    struct arg_file *ttyfile = arg_file1(NULL,NULL,"<ttyfile>",         "Path to tty file (e.g. /dev/tty.usbmodem)");
+    struct arg_int  *brate   = arg_int0(NULL,NULL,"<baudrate>",         "Baudrate, default is 115200");
     struct arg_str  *ttyenc  = arg_str0("e", "encoding", "<e.g. 8N1>",  "Manual-entry for TTY encoding (default mpipe:8N1, modbus:8N2)");
-    struct arg_lit  *pipe    = arg_lit0("p","pipe",                     "use pipe I/O instead of terminal console");
-    struct arg_str  *intf    = arg_str0("i", "intf", "<mpipe|modbus>",  "select \"mpipe\" or \"modbus\" interface (default=mpipe)");
+    struct arg_lit  *pipe    = arg_lit0("p","pipe",                     "Use pipe I/O instead of terminal console");
+    struct arg_str  *intf    = arg_str0("i", "intf", "<mpipe|modbus>",  "Select \"mpipe\" or \"modbus\" interface (default=mpipe)");
+    struct arg_file *xpath   = arg_file0("x", "xpath", "<filepath>",     "Path to directory of external data processor programs");
     //struct arg_str  *parsers = arg_str1("p", "parsers", "<msg:parser>", "parser call string with comma-separated msg:parser pairs");
     //struct arg_str  *fparse  = arg_str1("P", "parsefile", "<file>",     "file containing comma-separated msg:parser pairs");
     
     // Generic
     struct arg_file *config  = arg_file0("C", "config", "<file.json>",  "JSON based configuration file.");
-    struct arg_lit  *verbose = arg_lit0("v","verbose",                  "use verbose mode");
+    struct arg_lit  *verbose = arg_lit0("v","verbose",                  "Use verbose mode");
     struct arg_lit  *debug   = arg_lit0("d","debug",                    "Set debug mode on: requires compiling for debug");
-    struct arg_lit  *help    = arg_lit0(NULL,"help",                    "print this help and exit");
-    struct arg_lit  *version = arg_lit0(NULL,"version",                 "print version information and exit");
+    struct arg_lit  *help    = arg_lit0(NULL,"help",                    "Print this help and exit");
+    struct arg_lit  *version = arg_lit0(NULL,"version",                 "Print version information and exit");
     struct arg_end  *end     = arg_end(20);
     
-    void* argtable[] = {ttyfile,brate,pipe,ttyenc,intf,config,verbose,debug,help,version,end};
+    void* argtable[] = {ttyfile,brate,pipe,ttyenc,intf,xpath,config,verbose,debug,help,version,end};
     const char* progname = OTTER_PARAM(NAME);
     int nerrors;
     int exitcode = 0;
@@ -239,6 +242,8 @@ int main(int argc, char* argv[]) {
     int enc_bits        = 8;
     int enc_parity      = (int)'N';
     int enc_stopbits    = (intf_val == INTF_modbus) ? 2 : 1;
+    
+    char xpath_val[256] = { 0 };
     
     cJSON* json = NULL;
     char* buffer = NULL;
@@ -342,6 +347,7 @@ int main(int argc, char* argv[]) {
                                 &baudrate_val, 
                                 &pipe_val, 
                                 &tmp_intf, 
+                                xpath_val,
                                 &enc_bits, 
                                 &enc_parity, 
                                 &enc_stopbits, 
@@ -377,6 +383,9 @@ int main(int argc, char* argv[]) {
     if (intf->count != 0) {
         intf_val = sub_intf_cmp(intf->sval[0]);
     }
+    if (xpath->count != 0) {
+        strncpy(xpath_val, xpath->filename[0], 256);
+    }
     if (verbose->count != 0) {
         verbose_val = true;
     }
@@ -395,6 +404,7 @@ int main(int argc, char* argv[]) {
     exitcode = otter_main(  (const char*)ttyfile_val, 
                             baudrate_val, 
                             enc_bits, enc_parity, enc_stopbits,
+                            (const char*)xpath,
                             pipe_val,
                             json);
     
@@ -421,6 +431,7 @@ int main(int argc, char* argv[]) {
 int otter_main( const char* ttyfile, 
                 int baudrate, 
                 int enc_bits, int enc_parity, int enc_stopbits,
+                const char* xpath,
                 bool pipe, 
                 cJSON* params) {    
     
@@ -462,7 +473,7 @@ int otter_main( const char* ttyfile,
     /// Initialize command search table.  
     ///@todo in the future, let's pull this from an initialization file or
     ///      something dynamic as such.
-    cmd_init(NULL);
+    cmd_init(NULL, xpath);
     
     /// Initialize Otter Environment Variables
     ///@todo in the future, let's pull this from an initialization file or
@@ -673,6 +684,7 @@ void sub_json_loadargs(cJSON* json,
                        int* baudrate_val, 
                        bool* pipe_val,
                        int* intf_val,
+                       char* xpath,
                        int* enc_bits,
                        int* enc_parity,
                        int* enc_stop,
@@ -739,6 +751,8 @@ void sub_json_loadargs(cJSON* json,
     GET_BOOL_ARG(pipe_val, "pipe");
     
     GET_STRINGENUM_ARG(intf_val, sub_intf_cmp, "intf");
+    
+    GET_STRING_ARG(xpath, 256, "tty");
     
     GET_INT_ARG(enc_bits, "tty_bits");
     GET_CHAR_ARG(enc_parity, "tty_parity");

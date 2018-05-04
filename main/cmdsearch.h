@@ -25,7 +25,7 @@
 #include <cmdtab.h>
 
 
-int cmd_init(cmdtab_t* init_table);
+int cmd_init(cmdtab_t* init_table, const char* xpath);
 
 
 int cmd_run(cmdtab_item_t* cmd, dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax);
