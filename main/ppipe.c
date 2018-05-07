@@ -174,6 +174,7 @@ int ppipe_new(const char* prefix, const char* name, const char* fmode) {
     strcat(fifo->fpath, prefix); 
     strcat(fifo->fpath, "/");
     strcat(fifo->fpath, name);
+    //fprintf(stderr, "%s %d: %s\n", __FUNCTION__, __LINE__, fifo->fpath);
     
     /// See if FIFO already exists, in which case just open it.  Else, make it.
     rc = access( fifo->fpath, F_OK );
