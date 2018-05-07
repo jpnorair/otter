@@ -165,6 +165,7 @@ void _output_hexlog(mpipe_printer_t puts_fn, uint8_t* payload, int length) {
 
 void _output_binarylog(mpipe_printer_t puts_fn, uint8_t* payload, int length) {
     uint8_t* msgbreak;
+    int ppipe_rc;
 
     msgbreak = (uint8_t*)_loggermsg_findbreak((char*)payload, (size_t)length);
     
@@ -172,7 +173,8 @@ void _output_binarylog(mpipe_printer_t puts_fn, uint8_t* payload, int length) {
         *msgbreak++ = 0;
         length -= (msgbreak - payload);
         
-        if (ppipelist_putbinary("./pipes/log", (const char*)payload, msgbreak, length) != 0) {
+        ppipe_rc = ppipelist_putbinary("./pipes/log", (const char*)payload, msgbreak, length);
+        if ((ppipe_rc != 0) || cliopt_isverbose()) {
             puts_fn((char*)payload);
             puts_fn("\n");
             fmt_printhex(puts_fn, msgbreak, length, 16);
@@ -182,6 +184,7 @@ void _output_binarylog(mpipe_printer_t puts_fn, uint8_t* payload, int length) {
 
 void _output_textlog(mpipe_printer_t puts_fn, uint8_t* payload, int length) {
     uint8_t* msgbreak;
+    int ppipe_rc;
 
     msgbreak = (uint8_t*)_loggermsg_findbreak((char*)payload, (size_t)length);
     
@@ -189,7 +192,8 @@ void _output_textlog(mpipe_printer_t puts_fn, uint8_t* payload, int length) {
         *msgbreak++ = 0;
         length -= (msgbreak - payload);
         
-        if (ppipelist_puttext("./pipes/log", (const char*)payload, (char*)msgbreak, length) != 0) {
+        ppipe_rc = ppipelist_puttext("./pipes/log", (const char*)payload, (char*)msgbreak, length);
+        if ((ppipe_rc != 0) || cliopt_isverbose()) {
             puts_fn((char*)payload);
             puts_fn("\n");
             puts_fn((char*)msgbreak);
