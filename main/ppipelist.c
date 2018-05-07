@@ -52,9 +52,13 @@ int sub_addpipe(const char* prefix, const char* name, const char* fmode) {
     ppipe_t*        ppipe;
     ppipe_fifo_t*   newfifo;
     
+    //fprintf(stderr, "%s %d : %s%s %s\n", __FUNCTION__, __LINE__, prefix, name, fmode);
+    
     rc = ppipe_new(prefix, name, fmode);
     if (rc == 0) {
         ppipe = ppipe_ref();
+        //fprintf(stderr, "%s %d : %d\n", __FUNCTION__, __LINE__, rc);
+        
         if (ppipe != NULL) {
             newfifo = &ppipe->fifo[ppipe->num-1];
             
@@ -68,81 +72,6 @@ int sub_addpipe(const char* prefix, const char* name, const char* fmode) {
 
 ///@note Bidirectional Pipes are specified in some UNIXes, but in practice they
 ///      do not work.
-#ifdef USE_BIDIRECTIONAL_PIPES
-int ppipelist_new(const char* prefix, const char* name, const char* fmode) {
-    int rc = 0;
-    unsigned int    flags;
-    char*           namebuf;
-    size_t          namelen;
-    
-    /// Produce the extended pipe name
-    /// "x" is a placeholder that gets switched for 'r' and 'w'
-    namelen = strlen(name);
-    namebuf = malloc(namelen + 8);
-    if (namebuf == NULL) {
-        rc = -1;
-        goto ppipelist_new_END;
-    }
-    strcpy(namebuf, name);
-    strcat(namebuf, ".x");
-    namelen += 1;
-    
-    if (strchr(fmode, '+') != NULL){
-        flags = 3;
-    }
-    else {
-        flags   = (strchr(fmode, 'r') != NULL); // read flag
-        flags  |= (strchr(fmode, 'w') != NULL); // write flag
-    }
-    
-    // Read fifo
-    if (flags & 1) {
-        namebuf[namelen] = 'r';
-        rc = sub_addpipe(prefix, namebuf, "r");
-    }
-    if ((rc == 0) && (flags & 2)) {
-        namebuf[namelen] = 'w';
-        sub_addpipe(prefix, namebuf, "w");
-    }
-
-    ppipelist_new_END:
-    free(namebuf);
-    return rc;
-}
-
-
-int ppipelist_search(ppipe_fifo_t** dst, const char* prefix, const char* name, const char* mode) {
-/// Linear search of ppipe array.  This will need to be replaced with an
-/// indexed search at some point.
-    ppipe_t*    base = ppipe_ref();
-    int         ppd;
-    
-    ppd = (int)base->num - 1;
-    
-    while (ppd >= 0) {
-        ppipe_fifo_t* fifo = &base->fifo[ppd];
-        int prefix_size = (int)strlen(prefix);
-    
-        if (strncmp(fifo->fpath, prefix, prefix_size) == 0) {
-            size_t name_size = strlen(name);
-            if (strncmp(&fifo->fpath[prefix_size+1], name, name_size) == 0) {
-                if (fifo->fpath[prefix_size+1+name_size+1] == mode[0]) {
-                    *dst = fifo;
-                    return ppd;
-                }
-            }
-        }
-        ppd--;
-    }
-    
-    *dst = NULL;
-    return ppd;
-}
-
-
-
-///@note The implementation variant below uses unidirectional pipes.
-#else
 int ppipelist_new(const char* prefix, const char* name, const char* fmode) {
     int rc;
     ppipe_t*        ppipe;
@@ -169,12 +98,15 @@ int ppipelist_search(ppipe_fifo_t** dst, const char* prefix, const char* name) {
     int         ppd;
     
     ppd = (int)base->num - 1;
+    //fprintf(stderr, "%s %d : %s/%s %s\n", __FUNCTION__, __LINE__, prefix, name);
     
     while (ppd >= 0) {
         ppipe_fifo_t* fifo = &base->fifo[ppd];
         int prefix_size = (int)strlen(prefix);
     
+        //fprintf(stderr, "%s %d : %s %s (%d)\n", __FUNCTION__, __LINE__, fifo->fpath, prefix, prefix_size);
         if (strncmp(fifo->fpath, prefix, prefix_size) == 0) {
+            //fprintf(stderr, "%s %d : %s %s\n", __FUNCTION__, __LINE__, &fifo->fpath[prefix_size+1], name);
             if (strcmp(&fifo->fpath[prefix_size+1], name) == 0) {
                 *dst = fifo;
                 return ppd;
@@ -187,8 +119,6 @@ int ppipelist_search(ppipe_fifo_t** dst, const char* prefix, const char* name) {
     return ppd;
 }
 
-#endif
-
 
 
 
@@ -196,6 +126,7 @@ int ppipelist_del(const char* prefix, const char* name) {
     ppipe_fifo_t*   delfifo;
     int             ppd;
     
+    //fprintf(stderr, "%s %d : %s/%s %s\n", __FUNCTION__, __LINE__, prefix, name);
     ppd = ppipelist_search(&delfifo, prefix, name);
     
     if (ppd >= 0) {
@@ -217,11 +148,8 @@ int sub_put(const char* prefix, const char* name, uint8_t* hdr, uint8_t* src, si
     ppipe_fifo_t*   fifo;
     int             fd;
     
-#   ifdef USE_BIDIRECTIONAL_PIPES
-    ppipelist_search(&fifo, prefix, name, "w");
-#   else
+    //fprintf(stderr, "%s %d : %zu bytes >> %s/%s \n", __FUNCTION__, __LINE__, size, prefix, name);
     ppipelist_search(&fifo, prefix, name);
-#   endif
 
     if (fifo != NULL) {
         //errno = 0;
@@ -273,11 +201,8 @@ int ppipelist_puthex(const char* prefix, const char* name, char* src, size_t siz
     ppipe_fifo_t*   fifo;
     int             fd;
 
-#   ifdef USE_BIDIRECTIONAL_PIPES
-    ppipelist_search(&fifo, prefix, name, "w");
-#   else
+    //fprintf(stderr, "%s %d : %zu bytes >> %s/%s \n", __FUNCTION__, __LINE__, size, prefix, name);
     ppipelist_search(&fifo, prefix, name);
-#   endif
 
     if (fifo != NULL) {
         //errno = 0;
