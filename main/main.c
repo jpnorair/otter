@@ -243,7 +243,7 @@ int main(int argc, char* argv[]) {
     int enc_parity      = (int)'N';
     int enc_stopbits    = (intf_val == INTF_modbus) ? 2 : 1;
     
-    char xpath_val[256] = { 0 };
+    char xpath_val[256] = "";
     
     cJSON* json = NULL;
     char* buffer = NULL;
@@ -404,8 +404,8 @@ int main(int argc, char* argv[]) {
     exitcode = otter_main(  (const char*)ttyfile_val, 
                             baudrate_val, 
                             enc_bits, enc_parity, enc_stopbits,
-                            (const char*)xpath,
                             pipe_val,
+                            (const char*)xpath_val,
                             json);
     
     ///@todo some optimization could be realized by putting this ahead of the 
@@ -431,8 +431,8 @@ int main(int argc, char* argv[]) {
 int otter_main( const char* ttyfile, 
                 int baudrate, 
                 int enc_bits, int enc_parity, int enc_stopbits,
-                const char* xpath,
                 bool pipe, 
+                const char* xpath,
                 cJSON* params) {    
     
     // MPipe Datastructs
@@ -775,9 +775,9 @@ void ppipelist_populate(cJSON* obj) {
         obj = obj->child;
         while (obj != NULL) { 
             if (cJSON_IsString(obj) != 0) { 
-                //printf("%s, %s, %s\n", prefix, obj->string, obj->valuestring);
+                //fprintf(stderr, "%s, %s, %s\n", prefix, obj->string, obj->valuestring);
                 ppipelist_new(prefix, obj->string, obj->valuestring); 
-                //printf("%d\n", __LINE__);
+                //fprintf(stderr, "%d\n", __LINE__);
             }
             obj = obj->next;
         }
