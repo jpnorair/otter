@@ -1,6 +1,6 @@
 CC=gcc
 
-TARGET      := main
+SUBAPP      := main
 OTTER_PKG   ?=
 OTTER_DEF   ?= -D__HBUILDER__
 OTTER_INC   ?=
@@ -9,8 +9,8 @@ OTTER_LIB   ?=
 #CFLAGS      := -std=gnu99 -O -g -Wall -pthread 
 CFLAGS      := -std=gnu99 -O3 -pthread
 
-BUILDDIR    := ../build/$(TARGET)
-TARGETDIR   := .
+BUILDDIR    := ../build/$(SUBAPP)
+SUBAPPDIR   := .
 SRCEXT      := c
 DEPEXT      := d
 OBJEXT      := o
@@ -24,7 +24,7 @@ SOURCES     := $(shell find . -type f -name "*.$(SRCEXT)")
 OBJECTS     := $(patsubst ./%,$(BUILDDIR)/%,$(SOURCES:.$(SRCEXT)=.$(OBJEXT)))
 
 
-all: resources $(TARGET)
+all: resources $(SUBAPP)
 obj: $(OBJECTS)
 remake: cleaner all
 
@@ -34,7 +34,7 @@ resources: directories
 
 #Make the Directories
 directories:
-	@mkdir -p $(TARGETDIR)
+	@mkdir -p $(SUBAPPDIR)
 	@mkdir -p $(BUILDDIR)
 
 #Clean only Objects
@@ -43,14 +43,14 @@ clean:
 
 #Full Clean, Objects and Binaries
 cleaner: clean
-	@$(RM) -rf $(TARGETDIR)
+	@$(RM) -rf $(SUBAPPDIR)
 
 #Pull in dependency info for *existing* .o files
 -include $(OBJECTS:.$(OBJEXT)=.$(DEPEXT))
 
 #Direct build of the test app with objects
-$(TARGET): $(OBJECTS)
-	$(CC) -o $(TARGETDIR)/$(TARGET) $^ $(LIB)
+$(SUBAPP): $(OBJECTS)
+	$(CC) -o $(SUBAPPDIR)/$(SUBAPP) $^ $(LIB)
 
 #Compile Stages
 $(BUILDDIR)/%.$(OBJEXT): ./%.$(SRCEXT)
