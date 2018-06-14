@@ -3,8 +3,9 @@ CC=gcc
 THISMACHINE := $(shell uname -srm | sed -e 's/ /-/g')
 THISSYSTEM	:= $(shell uname -s)
 
-APP      ?= otter
-APPDIR   ?= bin
+APP         ?= otter
+APPDIR      := bin/$(THISMACHINE)
+BUILDDIR    := build/$(THISMACHINE)
 PKGDIR      ?= ../_hbpkg/$(THISMACHINE)
 SYSDIR      ?= ../_hbsys/$(THISMACHINE)
 EXT_DEF     ?= 
@@ -14,10 +15,8 @@ EXT_LIBS    ?=
 VERSION     ?= 0.6.0
 
 DEFAULT_DEF := -D__HBUILDER__
-LIBMODULES  := argtable cJSON cmdtab bintex hbuilder-lib OTEAX libotfs $(EXT_LIBS)
+LIBMODULES  := argtable cJSON cmdtab bintex hbuilder-lib m2def OTEAX libotfs $(EXT_LIBS)
 SUBMODULES  := main test
-
-BUILDDIR    := build
 
 SRCEXT      := c
 DEPEXT      := d
@@ -32,6 +31,8 @@ OTTER_PKG   := $(PKGDIR)
 OTTER_DEF   := $(DEFAULT_DEF) $(EXT_DEF)
 OTTER_INC   := $(INC) $(EXT_INC)
 OTTER_LIB   := $(LIB) $(EXT_LIBFLAGS)
+OTTER_BLD   := $(BUILDDIR)
+OTTER_APP   := $(APPDIR)
 
 #OBJECTS     := $(shell find $(BUILDDIR) -type f -name "*.$(OBJEXT)")
 #MODULES     := $(SUBMODULES) $(LIBMODULES)
@@ -41,7 +42,8 @@ export OTTER_PKG
 export OTTER_DEF
 export OTTER_INC
 export OTTER_LIB
-
+export OTTER_BLD
+export OTTER_APP
 
 all: directories $(APP)
 debug: directories $(APP).debug
@@ -60,13 +62,15 @@ directories:
 	@mkdir -p $(APPDIR)
 	@mkdir -p $(BUILDDIR)
 
-# Clean only only objects
+# Clean only this machine
 clean:
 	@$(RM) -rf $(BUILDDIR)
+	@$(RM) -rf $(APPDIR)
 
-# Clean objects and binaries
-cleaner: clean
-	@$(RM) -rf $(APPDIR)	
+# Clean all builds
+cleaner: 
+	@$(RM) -rf ./build
+	@$(RM) -rf ./bin
 
 #Linker
 $(APP): $(SUBMODULES) $(LIBMODULES)

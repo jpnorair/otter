@@ -9,7 +9,8 @@ OTTER_LIB   ?=
 #CFLAGS      := -std=gnu99 -O -g -Wall -pthread 
 CFLAGS      := -std=gnu99 -O3 -pthread
 
-BUILDDIR    := ../build/$(SUBAPP)
+BUILDDIR    := ../$(OTTER_BLD)
+
 SUBAPPDIR   := .
 SRCEXT      := c
 DEPEXT      := d

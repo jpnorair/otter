@@ -6,8 +6,8 @@ OTTER_DEF   ?=
 #CFLAGS      := -std=gnu99 -O -g -Wall
 CFLAGS      := -std=gnu99 -O3
 
-BUILDDIR    := ../build/$(SUBAPP)
-SUBAPPDIR   := ./
+BUILDDIR    := ../$(OTTER_BLD)/$(SUBAPP)
+SUBAPPDIR   := ../$(OTTER_APP)
 SRCEXT      := c
 DEPEXT      := d
 OBJEXT      := o
@@ -38,7 +38,7 @@ clean:
 
 #Full Clean, Objects and Binaries
 cleaner: clean
-	@$(RM) -rf $(SUBAPPDIR)
+	@$(RM) -rf $(SUBAPPDIR)/$(SUBAPP)
 
 #Pull in dependency info for *existing* .o files
 -include $(OBJECTS:.$(OBJEXT)=.$(DEPEXT))
