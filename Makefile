@@ -14,6 +14,11 @@ EXT_LIBFLAGS ?=
 EXT_LIBS    ?= 
 VERSION     ?= 0.6.0
 
+# Make sure the LD_LIBRARY_PATH includes the _hbsys directory
+ifneq ($(findstring $(SYSDIR)/lib,$(LD_LIBRARY_PATH)),)
+	error "$(SYSDIR)/lib not in LD_LIBRARY_PATH.  Please update your settings to include this."
+endif
+
 DEFAULT_DEF := -D__HBUILDER__
 LIBMODULES  := argtable cJSON cmdtab bintex hbuilder-lib m2def OTEAX libotfs $(EXT_LIBS)
 SUBMODULES  := main test
@@ -24,9 +29,11 @@ OBJEXT      := o
 
 CFLAGS_DEBUG:= -std=gnu99 -O -g -Wall -pthread
 CFLAGS      := -std=gnu99 -O3 -pthread
-INC         := -I. -I./$(PKGDIR)/argtable -I./$(PKGDIR)/bintex -I./$(PKGDIR)/cJSON -I./$(PKGDIR)/cmdtab -I./$(PKGDIR)/hbuilder -I./$(PKGDIR)/liboteax -I./$(PKGDIR)/libotfs -I./$(PKGDIR)/m2def
+#INC         := -I. -I./$(PKGDIR)/argtable -I./$(PKGDIR)/bintex -I./$(PKGDIR)/cJSON -I./$(PKGDIR)/cmdtab -I./$(PKGDIR)/hbuilder -I./$(PKGDIR)/liboteax -I./$(PKGDIR)/libotfs -I./$(PKGDIR)/m2def
+INC         := -I. -I./$(SYSDIR)/include
 INCDEP      := -I.
-LIB         := -largtable -lbintex -lcJSON -lcmdtab -lhbuilder -loteax -lotfs -L./$(PKGDIR)/argtable -L./$(PKGDIR)/bintex -L./$(PKGDIR)/cJSON -L./$(PKGDIR)/cmdtab -L./$(PKGDIR)/hbuilder -L./$(PKGDIR)/liboteax -L./$(PKGDIR)/libotfs
+#LIB         := -largtable -lbintex -lcJSON -lcmdtab -lhbuilder -loteax -lotfs -L./$(PKGDIR)/argtable -L./$(PKGDIR)/bintex -L./$(PKGDIR)/cJSON -L./$(PKGDIR)/cmdtab -L./$(PKGDIR)/hbuilder -L./$(PKGDIR)/liboteax -L./$(PKGDIR)/libotfs
+LIB         := -largtable -lbintex -lcJSON -lcmdtab -lhbuilder -loteax -lotfs -L./$(SYSDIR)/lib
 OTTER_PKG   := $(PKGDIR)
 OTTER_DEF   := $(DEFAULT_DEF) $(EXT_DEF)
 OTTER_INC   := $(INC) $(EXT_INC)
@@ -45,9 +52,10 @@ export OTTER_LIB
 export OTTER_BLD
 export OTTER_APP
 
+deps: $(LIBMODULES)
 all: directories $(APP)
 debug: directories $(APP).debug
-obj: $(SUBMODULES) $(LIBMODULES) 
+obj: $(SUBMODULES)
 remake: cleaner all
 
 
@@ -57,6 +65,7 @@ install:
 	@cp $(APPDIR)/$(APP) $(PKGDIR)/$(APP).$(VERSION)/
 	@rm -f $(PKGDIR)/$(APP)
 	@ln -s $(APP).$(VERSION) ./$(PKGDIR)/$(APP)
+	cd ../_hbsys && $(MAKE) sys_install INS_MACHINE=$(THISMACHINE) INS_PKGNAME=otter
 
 directories:
 	@mkdir -p $(APPDIR)
@@ -73,20 +82,20 @@ cleaner:
 	@$(RM) -rf ./bin
 
 #Linker
-$(APP): $(SUBMODULES) $(LIBMODULES)
+$(APP): $(SUBMODULES) 
 	$(eval OBJECTS := $(shell find $(BUILDDIR) -type f -name "*.$(OBJEXT)"))
-	$(CC) $(CFLAGS) $(OTTER_DEF) $(OTTER_INC) $(OTTER_LIB) -o $(APPDIR)/$(APP) $(OBJECTS)
+	$(CC) $(CFLAGS) $(OTTER_DEF) $(OTTER_INC) -o $(APPDIR)/$(APP) $(OBJECTS) $(OTTER_LIB)
 
-$(APP).debug: $(SUBMODULES) $(LIBMODULES)
+$(APP).debug: $(SUBMODULES)
 	$(eval OBJECTS := $(shell find $(BUILDDIR) -type f -name "*.$(OBJEXT)"))
-	$(CC) $(CFLAGS_DEBUG) $(OTTER_DEF) -D__DEBUG__ $(OTTER_INC) $(OTTER_LIB) -o $(APPDIR)/$(APP).debug $(OBJECTS)
+	$(CC) $(CFLAGS_DEBUG) $(OTTER_DEF) -D__DEBUG__ $(OTTER_INC) -o $(APPDIR)/$(APP).debug $(OBJECTS) $(OTTER_LIB)
 
 #Library dependencies (not in otter sources)
 $(LIBMODULES): %: 
 	cd ./../$@ && $(MAKE) lib && $(MAKE) install
 
 #otter submodules
-$(SUBMODULES): %: $(LIBMODULES) directories
+$(SUBMODULES): %: directories
 	cd ./$@ && $(MAKE) -f $@.mk obj
 
 #Non-File Targets
