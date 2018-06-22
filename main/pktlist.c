@@ -64,6 +64,7 @@ void sub_writeheader_modbus(pkt_t* newpkt, uint8_t* data, size_t datalen) {
             // 56 bit nonce
             // bytes 3:6 are 32bit epoch
             // bytes 7:9 are sequence number
+            ///@todo validate this encryption model against libsmut -- requires chuser command
             newpkt->buffer[3] = (epoch >> 24) & 0xFF;
             newpkt->buffer[4] = (epoch >> 16) & 0xFF;
             newpkt->buffer[5] = (epoch >> 8) & 0xFF;

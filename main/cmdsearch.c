@@ -34,6 +34,12 @@
 #endif
 
 
+///@todo Commands to add
+/// 1. Change user: chuser      To change between root, admin, guest modes.
+/// 2. Print Commands:          Print a list of available commands.
+/// 3. 
+
+
 /// Binary Search Table for Commands
 
 // sorted list of supported commands
@@ -48,6 +54,8 @@ typedef struct {
 
 static const cmd_t otter_commands[] = {
     { "bye",        &cmd_quit  },
+    { "chuser",     &cmd_chuser },
+    { "cmdlist",    &cmd_cmdlist },
     { "null",       &app_null },
     { "quit",       &cmd_quit },
     { "raw",        &cmd_raw },
@@ -61,7 +69,7 @@ static const cmd_t otter_commands[] = {
 ///      It's not technically required yet becaus only one thread in otter uses
 ///      cmdsearch, but we should put it in soon, just in case.
 static cmdtab_t cmdtab_default;
-static cmdtab_t* otter_cmdtab;
+cmdtab_t* otter_cmdtab;
 
 #if OTTER_FEATURE(HBUILDER)
 static void* hbuilder_handle;

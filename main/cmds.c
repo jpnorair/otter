@@ -67,6 +67,23 @@ uint8_t user_key[16];
 
 
 
+static int hexstr_to_uint8(const char* src) {
+    size_t chars = strlen(src);
+    int bytes;
+    
+    chars  &= ~1;    // round down to nearest even
+    bytes   = chars / 2;
+    
+    while (chars != 0)
+
+    if (c >= '0' && c <= '9') return      c - '0';
+    if (c >= 'A' && c <= 'F') return 10 + c - 'A';
+    if (c >= 'a' && c <= 'f') return 10 + c - 'a';
+    return -1;
+}
+
+
+
 uint8_t* sub_markstring(uint8_t** psrc, int* search_limit, int string_limit) {
     size_t      code_len;
     size_t      code_max;
@@ -144,7 +161,6 @@ uint8_t* goto_eol(uint8_t* src) {
 
 
 int cmd_quit(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
-    
     /// dt == NULL is the initialization case.
     /// There may not be an initialization for all command groups.
     if (dt == NULL) {
@@ -157,6 +173,25 @@ int cmd_quit(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstma
     return 0;
 }
 
+
+int cmd_cmdlist(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
+    int bytes_out;
+    char cmdprint[1024];
+
+    /// dt == NULL is the initialization case.
+    /// There may not be an initialization for all command groups.
+    if (dt == NULL) {
+        return 0;
+    }
+    
+    INPUT_SANITIZE();
+    
+    bytes_out = cmdtab_list(otter_cmdtab, cmdprint, 1024);
+    dterm_puts(dt, "Commands available:\n");
+    dterm_puts(dt, cmdprint);
+    
+    return 0;
+}
 
 
 int cmd_set(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
@@ -205,8 +240,21 @@ int cmd_sethome(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t ds
 
 
 
-
 int cmd_su(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
+/// su takes no arguments, and it wraps cmd_chuser
+    int chuser_inbytes;
+    char* chuser_cmd = "root";
+    
+    if (dt == NULL) {
+        return 0;
+    }
+    INPUT_SANITIZE();
+
+    return cmd_chuser(dt, dst, &chuser_inbytes, chuser_cmd, dstmax);
+}
+
+
+int cmd_chuser(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
 /// src is a string containing the user to switch-to, which may be:
 /// - "guest" or [empty]
 /// - "user" or "admin"
@@ -258,8 +306,6 @@ int cmd_su(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax)
             dterm_puts(dt, "Key [AES128]: ");
             
             // Read in the 16-byte hex key for AES128
-            
-            ///@todo Implement a readline function for dterm
             dterm_scanf(dt, "%32s", aes128_key);
             
             key_ptr = aes128_key;
