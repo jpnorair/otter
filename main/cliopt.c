@@ -28,8 +28,8 @@ cliopt_t* cliopt_init(cliopt_t* new_master) {
     
     ///@note settings for modbus addressing, and perhaps future versions of
     ///      MPipe that have encryption.
-    master->src_addr    = 0;
-    master->dst_addr    = 1;
+    master->src_addr    = 1;
+    master->dst_addr    = 2;
     
     ///@note this is for default guest access
     master->user_id     = 2;
