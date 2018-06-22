@@ -33,7 +33,7 @@ CFLAGS      := -std=gnu99 -O3 -pthread
 INC         := -I. -I./$(SYSDIR)/include
 INCDEP      := -I.
 LIBINC      := -L./$(SYSDIR)/lib
-LIB         := -largtable -lbintex -lcJSON -lcmdtab -lhbuilder -loteax -lotfs
+LIB         := -largtable -lbintex -lcJSON -lcmdtab -lhbuilder -lotfs -loteax -lc
 OTTER_PKG   := $(PKGDIR)
 OTTER_DEF   := $(DEFAULT_DEF) $(EXT_DEF)
 OTTER_INC   := $(INC) $(EXT_INC)
