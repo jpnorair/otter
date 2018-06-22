@@ -6,8 +6,8 @@ THISSYSTEM	:= $(shell uname -s)
 APP         ?= otter
 APPDIR      := bin/$(THISMACHINE)
 BUILDDIR    := build/$(THISMACHINE)
-PKGDIR      ?= ../_hbpkg/$(THISMACHINE)
-SYSDIR      ?= ../_hbsys/$(THISMACHINE)
+PKGDIR      := ../_hbpkg/$(THISMACHINE)
+SYSDIR      := ../_hbsys/$(THISMACHINE)
 EXT_DEF     ?= 
 EXT_INC     ?= 
 EXT_LIBFLAGS ?= 
@@ -20,7 +20,7 @@ ifneq ($(findstring $(SYSDIR)/lib,$(LD_LIBRARY_PATH)),)
 endif
 
 DEFAULT_DEF := -D__HBUILDER__
-LIBMODULES  := argtable cJSON cmdtab bintex hbuilder-lib m2def OTEAX libotfs $(EXT_LIBS)
+LIBMODULES  := argtable cJSON cmdtab bintex m2def libjudy OTEAX hbuilder-lib libotfs $(EXT_LIBS)
 SUBMODULES  := main test
 
 SRCEXT      := c
