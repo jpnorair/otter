@@ -32,11 +32,12 @@ CFLAGS      := -std=gnu99 -O3 -pthread
 #INC         := -I. -I./$(PKGDIR)/argtable -I./$(PKGDIR)/bintex -I./$(PKGDIR)/cJSON -I./$(PKGDIR)/cmdtab -I./$(PKGDIR)/hbuilder -I./$(PKGDIR)/liboteax -I./$(PKGDIR)/libotfs -I./$(PKGDIR)/m2def
 INC         := -I. -I./$(SYSDIR)/include
 INCDEP      := -I.
-#LIB         := -largtable -lbintex -lcJSON -lcmdtab -lhbuilder -loteax -lotfs -L./$(PKGDIR)/argtable -L./$(PKGDIR)/bintex -L./$(PKGDIR)/cJSON -L./$(PKGDIR)/cmdtab -L./$(PKGDIR)/hbuilder -L./$(PKGDIR)/liboteax -L./$(PKGDIR)/libotfs
-LIB         := -L./$(SYSDIR)/lib -largtable -lbintex -lcJSON -lcmdtab -lhbuilder -loteax -lotfs
+LIBINC      := -L./$(SYSDIR)/lib
+LIB         := -largtable -lbintex -lcJSON -lcmdtab -lhbuilder -loteax -lotfs
 OTTER_PKG   := $(PKGDIR)
 OTTER_DEF   := $(DEFAULT_DEF) $(EXT_DEF)
 OTTER_INC   := $(INC) $(EXT_INC)
+OTTER_LIBINC:= $(LIBINC)
 OTTER_LIB   := $(LIB) $(EXT_LIBFLAGS)
 OTTER_BLD   := $(BUILDDIR)
 OTTER_APP   := $(APPDIR)
@@ -47,6 +48,7 @@ OTTER_APP   := $(APPDIR)
 # Export the following variables to the shell: will affect submodules
 export OTTER_PKG
 export OTTER_DEF
+export OTTER_LIBINC
 export OTTER_INC
 export OTTER_LIB
 export OTTER_BLD
@@ -84,11 +86,11 @@ cleaner:
 #Linker
 $(APP): $(SUBMODULES) 
 	$(eval OBJECTS := $(shell find $(BUILDDIR) -type f -name "*.$(OBJEXT)"))
-	$(CC) $(CFLAGS) $(OTTER_DEF) $(OTTER_INC) -o $(APPDIR)/$(APP) $(OBJECTS) $(OTTER_LIB)
+	$(CC) $(CFLAGS) $(OTTER_DEF) $(OTTER_INC) $(OTTER_LIBINC) -o $(APPDIR)/$(APP) $(OBJECTS) $(OTTER_LIB)
 
 $(APP).debug: $(SUBMODULES)
 	$(eval OBJECTS := $(shell find $(BUILDDIR) -type f -name "*.$(OBJEXT)"))
-	$(CC) $(CFLAGS_DEBUG) $(OTTER_DEF) -D__DEBUG__ $(OTTER_INC) -o $(APPDIR)/$(APP).debug $(OBJECTS) $(OTTER_LIB)
+	$(CC) $(CFLAGS_DEBUG) $(OTTER_DEF) -D__DEBUG__ $(OTTER_INC) $(OTTER_LIBINC) -o $(APPDIR)/$(APP).debug $(OBJECTS) $(OTTER_LIB)
 
 #Library dependencies (not in otter sources)
 $(LIBMODULES): %: 

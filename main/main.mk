@@ -15,7 +15,8 @@ SUBAPPDIR   := .
 SRCEXT      := c
 DEPEXT      := d
 OBJEXT      := o
-LIB			:= $(subst -L./,-L./../,$(OTTER_LIB))
+LIB         := $(OTTER_LIB)
+LIBINC      := $(subst -L./,-L./../,$(OTTER_LIBINC))
 INC			:= $(subst -I./,-I./../,$(OTTER_INC)) -I./../test
 INCDEP      := $(INC)
 
@@ -49,7 +50,7 @@ cleaner: clean
 
 #Direct build of the test app with objects
 $(SUBAPP): $(OBJECTS)
-	$(CC) -o $(SUBAPPDIR)/$(SUBAPP) $^ $(LIB)
+	$(CC) $(INC) $(LIBINC) -o $(SUBAPPDIR)/$(SUBAPP) $^ $(LIB)
 
 #Compile Stages
 $(BUILDDIR)/%.$(OBJEXT): ./%.$(SRCEXT)
