@@ -62,6 +62,7 @@ static const cmd_t otter_commands[] = {
     { "set",        &cmd_set },
     { "sethome",    &cmd_sethome },
     { "su",         &cmd_su },
+    { "useradd",    &cmd_useradd },
     { "whoami",     &cmd_whoami },
 };
 

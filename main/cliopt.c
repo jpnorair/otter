@@ -31,9 +31,6 @@ cliopt_t* cliopt_init(cliopt_t* new_master) {
     master->src_addr    = 1;
     master->dst_addr    = 2;
     
-    ///@note this is for default guest access
-    master->user_id     = 2;
-    
     return master;
 }
 
@@ -51,13 +48,6 @@ FORMAT_Type cliopt_getformat(void) {
 
 INTF_Type cliopt_getintf(void) {
     return master->intf;
-}
-
-int cliopt_getuser(void) {
-    return master->user_id;
-}
-void cliopt_setuser(int user_id) {
-    master->user_id = user_id;
 }
 
 int cliopt_getdstaddr(void) {

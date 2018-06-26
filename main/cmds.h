@@ -46,8 +46,14 @@ int cmd_cmdlist(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t ds
 // To be deprecated and linked to cmd_set
 int cmd_sethome(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax);
 
+/// User commands
+/// chuser  : Change user.              chuser guest|user|root [address]
+/// su      : Alias for "chuser root 0" su
+/// useradd : Adds a new user.          useradd user|root address key
+/// whoami  : Displays username         whoami
+int cmd_chuser(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax);
 int cmd_su(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax);
-
+int cmd_useradd(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax);
 int cmd_whoami(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax);
 
 // Raw Protocol Entry: 

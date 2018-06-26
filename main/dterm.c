@@ -15,11 +15,13 @@
   */
 
 // Application Headers
+#include "cliopt.h"
 #include "cmds.h"
 #include "cmdhistory.h"
 #include "cmdsearch.h"
 #include "dterm.h"
 #include "test.h"
+#include "user.h"
 
 // Local Libraries/Headers
 #include <bintex.h>
@@ -41,12 +43,14 @@
 
 
 // Dterm variables
-const char prompt_guest[]   = PROMPT_GUEST;
-const char prompt_user[]    = PROMPT_USER;
-const char prompt_root[]    = PROMPT_ROOT;
-const char* prompt_str;
-
-
+static const char prompt_guest[]    = PROMPT_GUEST;
+static const char prompt_user[]     = PROMPT_USER;
+static const char prompt_root[]     = PROMPT_ROOT;
+static const char* prompt_str[]     = {
+    prompt_root,
+    prompt_user,
+    prompt_guest
+};
 
 
 
@@ -185,9 +189,6 @@ void* dterm_piper(void* args) {
     
     // Initial state = off
     dt->state = prompt_off;
-    
-    // Initial prompt = Guest
-    prompt_str = prompt_guest;
     
     /// Get each line from the pipe.
     while (1) {
@@ -332,9 +333,6 @@ void* dterm_prompter(void* args) {
     // Initial state = off
     dt->state = prompt_off;
     
-    // Initial prompt = Guest
-    prompt_str = prompt_guest;
-    
     /// Get each keystroke.
     /// A keystoke is reported either as a single character or as three.
     /// triple-char keystrokes are for special keys like arrows and control
@@ -447,7 +445,7 @@ void* dterm_prompter(void* args) {
                                         dt->state = prompt_off;
                                     }
                                     else {
-                                        dterm_puts(dt, (char*)prompt_str);
+                                        dterm_puts(dt, (char*)prompt_str[user_typeval_get()]);
                                         dt->state = prompt_on;
                                     }
                                     break;
@@ -514,7 +512,7 @@ void* dterm_prompter(void* args) {
                                     cmdptr = cmd_subsearch((char*)cmdname);
                                     if ((cmdptr != NULL) && (dt->linebuf[cmdlen] == 0)) {
                                         dterm_remln(dt);
-                                        dterm_puts(dt, (char*)prompt_str);
+                                        dterm_puts(dt, (char*)prompt_str[user_typeval_get()]);
                                         dterm_putsc(dt, (char*)cmdptr->name);
                                         dterm_puts(dt, (char*)cmdptr->name);
                                     }
@@ -528,7 +526,7 @@ void* dterm_prompter(void* args) {
                 case ct_histnext:   cmdstr = ch_next(ch);
                                     if (ch->count && cmdstr) {
                                         dterm_remln(dt);
-                                        dterm_puts(dt, (char*)prompt_str);
+                                        dterm_puts(dt, (char*)prompt_str[user_typeval_get()]);
                                         dterm_putsc(dt, cmdstr);
                                         dterm_puts(dt, cmdstr);
                                     }
@@ -539,7 +537,7 @@ void* dterm_prompter(void* args) {
                 case ct_histprev:   cmdstr = ch_prev(ch);
                                     if (ch->count && cmdstr) {
                                         dterm_remln(dt);
-                                        dterm_puts(dt, (char*)prompt_str);
+                                        dterm_puts(dt, (char*)prompt_str[user_typeval_get()]);
                                         dterm_putsc(dt, cmdstr);
                                         dterm_puts(dt, cmdstr);
                                     }

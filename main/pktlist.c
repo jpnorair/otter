@@ -8,6 +8,7 @@
 
 #include "pktlist.h"
 #include "cliopt.h"
+#include "user.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -41,7 +42,6 @@ void sub_writeheader_null(pkt_t* newpkt, uint8_t* data, size_t datalen) {
 
 void sub_writeheader_modbus(pkt_t* newpkt, uint8_t* data, size_t datalen) {
 /// Adds 1, 3, or 10 bytes to packet depending on conditions
-    int user_id;
     int hdr_size;
     
     /// Basic Modbus just puts the destination address.
@@ -53,12 +53,11 @@ void sub_writeheader_modbus(pkt_t* newpkt, uint8_t* data, size_t datalen) {
     /// We know it's enhanced modbus if first byte is 0xC0/D0, which is the ALP
     /// Specifier as well as an illegal Function ID in regular modbus.
     if ((data[0] == 0xC0) || (data[0] == 0xD0)) {
-        user_id             = cliopt_getuser();
-        newpkt->buffer[1]   = 68 + (user_id & 3);
+        newpkt->buffer[1]   = 68 + user_typeval_get();
         newpkt->buffer[2]   = cliopt_getsrcaddr() & 0xFF;
         hdr_size            = 3;
     
-        if (user_id < 2) {   
+        if (user_typeval_get() < USER_guest) {   
             uint32_t epoch = (uint32_t)time(NULL);
             
             // 56 bit nonce

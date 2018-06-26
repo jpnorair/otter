@@ -33,7 +33,17 @@
 #   define OTTER_FEATURE_MODBUS     DISABLED
 #endif
 #ifndef OTTER_FEATURE_HBUILDER
-#   define OTTER_FEATURE_HBUILDER  defined(__HBUILDER__)
+#   ifdef __HBUILDER__
+#   define OTTER_FEATURE_HBUILDER   ENABLED
+#   else
+#   define OTTER_FEATURE_HBUILDER   DISABLED
+#   endif
+#endif
+#ifndef OTTER_FEATURE_SECURITY
+#   define OTTER_FEATURE_SECURITY   (DISABLED || OTTER_FEATURE_HBUILDER)
+#endif
+#ifndef OTTER_FEATURE_OTFS
+#   define OTTER_FEATURE_OTFS       DISABLED
 #endif
 
 /// Parameter configurations

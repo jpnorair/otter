@@ -15,19 +15,30 @@
   */
 
 // Local Headers
+#include "cliopt.h"
 #include "cmds.h"
 #include "dterm.h"
+#include "otter_cfg.h"
 #include "test.h"
-#include "cliopt.h"
+#include "user.h"
 
-// Local Headers/Libraries
+
+// HB Headers/Libraries
 #include <bintex.h>
+#include <cmdtab.h>
 
 // Standard C & POSIX Libraries
+#include <stdint.h>
 #include <signal.h>
 #include <stdio.h>
 #include <string.h>
 #include <ctype.h>
+
+// Security Feature enables cryptography to be used on packets.
+// - The authentication element from libotfs is used for key management
+#if OTTER_FEATURE(SECURITY)
+#   include <otfs.h>
+#endif
 
 // HBuilder is part of Haystack HDO and it is not open source as of 08.2017.
 // HBuilder provides a library of DASH7/OpenTag communication API functions 
@@ -37,22 +48,11 @@
 #endif
 
 
+
 /// Variables used across shell commands
 
-///@todo put these into some form of data structure, potentially the "cli" 
-///      datastructure.
-const char user_str_guest[]     = "guest";
-const char user_str_admin[]     = "admin";
-const char user_str_root[]      = "root";
-const char user_prompt_guest[]  = "~";
-const char user_prompt_admin[]  = "$";
-const char user_prompt_root[]   = "#";
 
-const char *user_str            = user_str_guest;
-const char *user_str_lookup[3]  = { user_str_root, user_str_admin, user_str_guest };
 
-const char *user_prompt         = user_prompt_guest;
-const char *user_prompt_lookup[3] = { user_prompt_root, user_prompt_admin, user_prompt_guest };
 
 #define HOME_PATH_MAX           1024
 char home_path[HOME_PATH_MAX]   = "~/";
@@ -61,25 +61,47 @@ int home_path_len               = 2;
 
 /// This key is hardcoded for AES128
 ///@todo have a way to make this dynamic based on cli parameters, or mode params
-uint8_t user_key[16];
+static uint8_t user_key[16];
 
 
 
 
 
-static int hexstr_to_uint8(const char* src) {
-    size_t chars = strlen(src);
+static int hexstr_to_uint8(uint8_t* dst, const char* src) {
+    size_t chars;
     int bytes;
     
-    chars  &= ~1;    // round down to nearest even
-    bytes   = chars / 2;
+    chars   = strlen(src);
+    chars >>= 1;    // round down to nearest even
+    bytes   = (int)chars;
     
-    while (chars != 0)
+    while (chars != 0) {
+        char c;
+        uint8_t a, b;
+        chars--;
+        
+        c = *src++;
+        if      (c >= '0' && c <= '9')  a = c - '0';
+        else if (c >= 'A' && c <= 'F')  a = 10 + c - 'A';
+        else if (c >= 'a' && c <= 'f')  a = 10 + c - 'a';
+        else    a = 0;
+        
+        c = *src++;
+        if      (c >= '0' && c <= '9')  b = c - '0';
+        else if (c >= 'A' && c <= 'F')  b = 10 + c - 'A';
+        else if (c >= 'a' && c <= 'f')  b = 10 + c - 'a';
+        else    b = 0;
+        
+        *dst++ = (a << 4) + b;
+    }
+    
+    return bytes;
+}
 
-    if (c >= '0' && c <= '9') return      c - '0';
-    if (c >= 'A' && c <= 'F') return 10 + c - 'A';
-    if (c >= 'a' && c <= 'f') return 10 + c - 'a';
-    return -1;
+
+static int base64_to_uint8(uint8_t* dst, const char* src) {
+///@todo build this function on a rainy day -- probably reference a BASE64 lib.
+    return 0;
 }
 
 
@@ -160,6 +182,10 @@ uint8_t* goto_eol(uint8_t* src) {
 
 
 
+/** Basic Commands
+  * ------------------------------------------------------------------------
+  */
+
 int cmd_quit(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
     /// dt == NULL is the initialization case.
     /// There may not be an initialization for all command groups.
@@ -174,6 +200,7 @@ int cmd_quit(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstma
 }
 
 
+extern cmdtab_t* otter_cmdtab;
 int cmd_cmdlist(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
     int bytes_out;
     char cmdprint[1024];
@@ -193,6 +220,15 @@ int cmd_cmdlist(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t ds
     return 0;
 }
 
+
+
+
+
+
+
+/** Environment Commands
+  * ------------------------------------------------------------------------
+  */
 
 int cmd_set(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
 ///@todo This will do setting of Otter Env Variables.
@@ -240,30 +276,41 @@ int cmd_sethome(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t ds
 
 
 
-int cmd_su(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
-/// su takes no arguments, and it wraps cmd_chuser
-    int chuser_inbytes;
-    char* chuser_cmd = "root";
-    
+
+
+
+
+/** User & Addressing Commands
+  * ------------------------------------------------------------------------
+  */
+
+int cmd_chuser(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
+/// src is a string containing:
+/// - "guest" which is a single argument
+/// - "user [address]"
+/// - "admin [address" (alias for for "user")
+/// - "root [address]"
+/// 
+/// * If address is not specified, the local address (0) is assumed.
+/// * Address must be a value in BINTEX representing an integer.
+/// * user/address combination must be added via useradd
+///
+#if (OTTER_FEATURE(SECURITY) != ENABLED)
+    /// dt == NULL is the initialization case, but it is unused here.
     if (dt == NULL) {
         return 0;
     }
     INPUT_SANITIZE();
+    dterm_puts(dt, "--> This build of "OTTER_PARAM_NAME" does not support security or users.\n");
+    return 0;
 
-    return cmd_chuser(dt, dst, &chuser_inbytes, chuser_cmd, dstmax);
-}
-
-
-int cmd_chuser(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
-/// src is a string containing the user to switch-to, which may be:
-/// - "guest" or [empty]
-/// - "user" or "admin"
-/// - "root"
-    int test_id     = -1;
+#else 
+    int test_id;
     int bytes_out   = 0;
+    uint8_t* cursor;
     
     /// dt == NULL is the initialization case.
-    /// There may not be an initialization for all command groups.
+    /// 
     if (dt == NULL) {
         return 0;
     }
@@ -273,111 +320,127 @@ int cmd_chuser(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dst
     // The user search implementation is not optimized for speed, it just uses 
     // strcmp and strlen
     if (*inbytes == 0) {
-        test_id = 2;
+        test_id = (int)USER_guest;
+        goto cmd_chuser_END;
     }
-    else if (strcmp("guest", (const char*)src) == 0) {
-        test_id = 2;
+    
+    /// go past the first parameter.  
+    /// - src will point to the front.
+    /// - cursor will point to the parameter after the first one.
+    cursor = sub_markstring(&src, inbytes, *inbytes);
+    
+    /// Check if parameter is a know usertype
+    if (strcmp("guest", (const char*)src) == 0) {
+        test_id = (int)USER_guest;
     }
     else if (strcmp("admin", (const char*)src) == 0) {
-        test_id = 1;
+        test_id = (int)USER_user;
     }
     else if (strcmp("user", (const char*)src) == 0) {
-        test_id = 1;
+        test_id = (int)USER_user;
     }
     else if (strcmp("root", (const char*)src) == 0) {
-        test_id = 0;
+        test_id = (int)USER_root;
     }
-    
-    /// If user parameter was entered incorrectly, so print error and bail
-    if ((test_id == -1) || (test_id > 2)) {
-        dterm_puts(dt, (char*)src);
-        dterm_puts(dt, " is not a recognized user.\nTry: guest, admin, root\n");
-    }
-    
     else {
-        /// If user parameter was entered as Admin/User or Root it requires entry
-        /// of a hex AES128 key for that user.  It will be authenticated on the 
-        /// target, as well, via the M2DEF Auth protocol. 
-        if (test_id < 2) {
-            int     i;
-            char    aes128_key[40];
-            char*   key_ptr;
-            
-            dterm_puts(dt, "Key [AES128]: ");
-            
-            // Read in the 16-byte hex key for AES128
-            dterm_scanf(dt, "%32s", aes128_key);
-            
-            key_ptr = aes128_key;
-            for (i=0; i<16; i++) {
-                user_key[i] = 0;
-            
-                if (*key_ptr != 0) {
-                    user_key[i] = (*key_ptr++);
-                    
-                    key_ptr++;
-                }
-            }
-            
-            /*
-            while ((keychars = read(dt->fd_in, &char_in, 1)) > 0) {
-                int hexval = -1;
-                    
-                if (char_in == '\n') {
-                    int i           = (hex_chars + 1) >> 1;
-                    aes128_key[i] <<= 4;
-                    break;
-                }
-                else if ((char_in >= '0') && (char_in <= '9')) {
-                    hexval = ((int)char_in - '0');
-                }
-                else if ((char_in <= 'a') && (char_in <= 'f')) {
-                    hexval = ((int)char_in - 'a' + 10);
-                }
-                else if ((char_in <= 'A') && (char_in <= 'F')) {
-                    hexval = ((int)char_in - 'a' + 10);
-                }
-                    
-                if (hexval >= 0) {
-                    int i;
-                    dterm_putc(dt, char_in);
-                        
-                    i               = hex_chars >> 1;
-                    aes128_key[i] <<= 4;
-                    aes128_key[i]  |= hexval;
-                        
-                    if (++hex_chars == 32) {
-                        break;
-                    }
-                }
-            }
-            dterm_putc(dt, '\n');
-            */
-            
-            /// Load aes128 key into actual user_key buffer.
-            ///@todo store this in CLI object
-            memcpy((uint8_t*)user_key, aes128_key, 16);
-            
-            ///@todo build the protocol command for authenticating the user.
-            bytes_out = 0;
+        test_id = -1;
+    }
+    
+    /// If user parameter was entered incorrectly, so print error and bail.
+    /// If user parameter was entered as Admin/User or Root, then we need  
+    /// to look for additional parameters.
+    if ((test_id == -1) || (test_id > (int)USER_guest)) {
+        dterm_puts(dt, (char*)src);
+        dterm_puts(dt, " is not a recognized user type.\nTry: guest, admin, root\n");
+        goto cmd_chuser_END;
+    }
+    
+    /// root or admin user type.
+    /// - no additional parameters means to use local keys (-l)
+    /// - flag parameter can be -l or -d: local or database user search
+    /// - -l flag parameter is followed by AES key in bintex
+    /// - -d flag parameter is followed by ID number in bintex
+    if (test_id < (int)USER_guest) {
+        char    mode;
+        
+        // get & test the flag parameter
+        src = cursor;
+        if (*src == '-') {
+            src++;
+            mode = (char)*src;
+            src++;
+            *inbytes -= 2;
+        }
+        else {
+            mode = 'l';
         }
         
-        
-        /// Save User Parameters.
-        /// Note that these might not properly authenticate with the target, in
-        /// which case an Auth Response from the target should cause the user to 
-        /// be dropped back into guest on failure.
-        //user_id     = test_id;
-        cliopt_setuser(test_id);
-        
-        user_str    = user_str_lookup[test_id];
-        user_prompt = user_prompt_lookup[test_id];
+        // for l, look for a key parameter in BINTEX and pass it to user module
+        // for d, look for ID parameter in BINTEX and pass it to user db module
+        if ((mode != 'l') && (mode != 'd')) {
+            dterm_puts(dt, "--> Option not supported.  Use -l or -d.\n");
+        }
+        else {
+            cursor = sub_markstring(&src, inbytes, *inbytes);
+            if (mode == 'l') {
+                size_t  key_size;
+                uint8_t aes128_key[16];
+                key_size = bintex_ss((unsigned char*)cursor, aes128_key, 16);
+                if (key_size != 16) {
+                    dterm_puts(dt, "--> Key is not a recognized size: should be 128 bits.\n");
+                }
+                else if (0 != user_localkey_new((USER_Type)test_id, aes128_key) {
+                    dterm_puts(dt, "--> Key cannot be added to this user.\n");
+                }
+            }
+            else {
+                size_t  id_size;
+                uint8_t id64[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
+                id_size = bintex_ss((unsigned char*)cursor, id64, 8);
+                if (0 != user_dbkey_set((USER_Type)test_id, id64)) {
+                    dterm_puts(dt, "--> This user identity is not valid.\n");
+                }
+            }
+        }
     }
+
+    cmd_chuser_END:
 
     /// User or Root attempted accesses will require a transmission of an
     /// authentication command over the M2DEF protocol, via MPipe.  Attempted
     /// Guest access will not do authentication.
     return 0;
+#endif
+}
+
+
+
+int cmd_su(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
+/// su takes no arguments, and it wraps cmd_chuser
+    int chuser_inbytes;
+    char* chuser_cmd = "root -l 0";
+    
+    if (dt == NULL) {
+        return 0;
+    }
+    INPUT_SANITIZE();
+
+    return cmd_chuser(dt, dst, &chuser_inbytes, (uint8_t*)chuser_cmd, dstmax);
+}
+
+
+
+int cmd_useradd(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
+/// su takes no arguments, and it wraps cmd_chuser
+    int chuser_inbytes;
+    char* chuser_cmd = "root";
+    
+    if (dt == NULL) {
+        return 0;
+    }
+    INPUT_SANITIZE();
+
+    return cmd_chuser(dt, dst, &chuser_inbytes, (uint8_t*)chuser_cmd, dstmax);
 }
 
 
@@ -385,7 +448,9 @@ int cmd_chuser(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dst
 int cmd_whoami(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
 /// whoami command does not send any data to the target, it just checks to see
 /// who is the active CLI user, and if it has been authenticated successfully.
-
+    char output[64];
+    
+    
     /// dt == NULL is the initialization case.
     /// There may not be an initialization for all command groups.
     if (dt == NULL) {
@@ -396,14 +461,16 @@ int cmd_whoami(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dst
     
     if (*inbytes != 0) {
         dterm_puts(dt, "Usage: whoami [no parameters]\n");
-        dterm_puts(dt, "Indicates the current user, and if it has been authenticated on the target.\n");
+        dterm_puts(dt, "Indicates the current user and address\n");
     }
     else {
-        dterm_puts(dt, (char*)user_str);
+        sprintf(output, "%s %llu\n", user_typestring_get(), user_idval_get());
+    
+        dterm_puts(dt, output);
         
         /// @todo indicate if authentication response has been successfully
         ///       received from the target.
-        if (cliopt_getuser() < 2) {
+        if (user_typeval_get() < USER_guest) {
             dterm_puts(dt, " [no auth available yet]");
         }
         
@@ -414,6 +481,14 @@ int cmd_whoami(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dst
 }
 
 
+
+
+
+
+
+/** Protocol I/O Commands
+  * ------------------------------------------------------------------------
+  */
 
 ///@todo make separate commands for file & string based input
 // Raw Protocol Entry: This is implemented fully and it takes a Bintex
@@ -583,10 +658,6 @@ int cmd_hbcc(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstma
 #   endif
 }
 */
-
-
-
-
 
 
 
