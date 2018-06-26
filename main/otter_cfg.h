@@ -42,8 +42,8 @@
 #ifndef OTTER_FEATURE_SECURITY
 #   define OTTER_FEATURE_SECURITY   (DISABLED || OTTER_FEATURE_HBUILDER)
 #endif
-#ifndef OTTER_FEATURE_OTFS
-#   define OTTER_FEATURE_OTFS       DISABLED
+#ifndef OTTER_FEATURE_OTDB
+#   define OTTER_FEATURE_OTDB       DISABLED
 #endif
 
 /// Parameter configurations
