@@ -58,6 +58,7 @@ deps: $(LIBMODULES)
 all: directories $(APP)
 debug: directories $(APP).debug
 obj: $(SUBMODULES)
+pkg: deps all install
 remake: cleaner all
 
 

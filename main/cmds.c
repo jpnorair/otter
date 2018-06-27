@@ -19,7 +19,7 @@
 #include "cmds.h"
 #include "dterm.h"
 #include "otter_cfg.h"
-#include "test.h"
+//#include "test.h"
 #include "user.h"
 
 
@@ -34,11 +34,6 @@
 #include <string.h>
 #include <ctype.h>
 
-// Security Feature enables cryptography to be used on packets.
-// - The authentication element from libotfs is used for key management
-#if OTTER_FEATURE(SECURITY)
-#   include <otfs.h>
-#endif
 
 // HBuilder is part of Haystack HDO and it is not open source as of 08.2017.
 // HBuilder provides a library of DASH7/OpenTag communication API functions 
@@ -208,6 +203,7 @@ int cmd_cmdlist(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t ds
     /// dt == NULL is the initialization case.
     /// There may not be an initialization for all command groups.
     if (dt == NULL) {
+        fprintf(stderr, "cmd_cmdlist() initialized\n");
         return 0;
     }
     
@@ -306,7 +302,6 @@ int cmd_chuser(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dst
 
 #else 
     int test_id;
-    int bytes_out   = 0;
     uint8_t* cursor;
     
     /// dt == NULL is the initialization case.
@@ -355,6 +350,7 @@ int cmd_chuser(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dst
         goto cmd_chuser_END;
     }
     
+    ///@todo this section needs attention to fault tolerance.  Needs to be able to handle incorrect inputs and early termination.
     /// root or admin user type.
     /// - no additional parameters means to use local keys (-l)
     /// - flag parameter can be -l or -d: local or database user search
@@ -381,27 +377,36 @@ int cmd_chuser(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dst
             dterm_puts(dt, "--> Option not supported.  Use -l or -d.\n");
         }
         else {
-            cursor = sub_markstring(&src, inbytes, *inbytes);
             if (mode == 'l') {
                 size_t  key_size;
                 uint8_t aes128_key[16];
-                key_size = bintex_ss((unsigned char*)cursor, aes128_key, 16);
+                key_size = bintex_ss((unsigned char*)src, aes128_key, 16);
+
                 if (key_size != 16) {
                     dterm_puts(dt, "--> Key is not a recognized size: should be 128 bits.\n");
                 }
-                else if (0 != user_localkey_new((USER_Type)test_id, aes128_key) {
+                else if (0 != user_set_local((USER_Type)test_id, 0, aes128_key)) {
                     dterm_puts(dt, "--> Key cannot be added to this user.\n");
                 }
             }
             else {
+#               if OTTER_FEATURE(OTDB)
                 size_t  id_size;
-                uint8_t id64[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
-                id_size = bintex_ss((unsigned char*)cursor, id64, 8);
-                if (0 != user_dbkey_set((USER_Type)test_id, id64)) {
-                    dterm_puts(dt, "--> This user identity is not valid.\n");
+                uint64_t id64 = 0;
+                id_size = bintex_ss((unsigned char*)src, (uint8_t*)&id64, 8);
+                if (0 != user_set_db((USER_Type)test_id, id64)) {
+                    dterm_puts(dt, "--> User ID not found.\n");
                 }
+#               else
+                dterm_puts(dt, "--> This build of otter does not support external DB user lookup.\n");
+#               endif
             }
         }
+    }
+    
+    /// guest usertype
+    else {
+        user_set_local(USER_guest, 0, NULL);
     }
 
     cmd_chuser_END:
@@ -418,7 +423,7 @@ int cmd_chuser(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dst
 int cmd_su(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
 /// su takes no arguments, and it wraps cmd_chuser
     int chuser_inbytes;
-    char* chuser_cmd = "root -l 0";
+    char* chuser_cmd = "root";
     
     if (dt == NULL) {
         return 0;
@@ -464,7 +469,7 @@ int cmd_whoami(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dst
         dterm_puts(dt, "Indicates the current user and address\n");
     }
     else {
-        sprintf(output, "%s %llu\n", user_typestring_get(), user_idval_get());
+        sprintf(output, "%s %016llX", user_typestring_get(), user_idval_get());
     
         dterm_puts(dt, output);
         

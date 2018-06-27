@@ -46,6 +46,7 @@
 #include "cmdsearch.h"
 #include "cmdhistory.h"
 #include "cliopt.h"
+#include "user.h"
 #include "debug.h"
 
 // Local Libraries
@@ -469,17 +470,19 @@ int otter_main( const char* ttyfile,
     /// - TODO "msgpipe": (same as msg call, but call is open at startup and piped-to)
     //mpipe_args.msgcall = cJSON_GetObjectItem(params, "msgcall");
     
-
+    /// Initialize Otter Environment Variables.
+    /// This must be the first module to be initialized.
+    ///@todo in the future, let's pull this from an initialization file or
+    ///      something dynamic as such.
+    
+    /// Initialize the user manager.
+    /// This must be done prior to command module init
+    user_init();
+    
     /// Initialize command search table.  
     ///@todo in the future, let's pull this from an initialization file or
     ///      something dynamic as such.
     cmd_init(NULL, xpath);
-    
-    /// Initialize Otter Environment Variables
-    ///@todo in the future, let's pull this from an initialization file or
-    ///      something dynamic as such.
-    
-    
     
     /// Initialize packet lists for transmitted packets and received packets
     pktlist_init(&mpipe_rlist);
@@ -655,6 +658,7 @@ int otter_main( const char* ttyfile,
     mpipe_freelists(&mpipe_rlist, &mpipe_tlist);
     DEBUG_PRINTF("Freeing PPipe lists\n");
     ppipelist_deinit();
+    user_deinit();
     
     // cli.exitcode is set to 0, unless sigint is raised.
     DEBUG_PRINTF("Exiting cleanly and flushing output buffers\n");

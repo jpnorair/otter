@@ -18,7 +18,7 @@
 #include "cliopt.h"
 #include "otter_cfg.h"
 
-
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -103,17 +103,36 @@ USER_Type user_typeval_get(void) {
 }
 
 
-int user_localkey_new(USER_Type usertype, KEY_Type keytype, uint8_t* keyval) {
+uint64_t user_idval_get(void) {
+    return current_user.id;
+}
+
+
+int user_set_local(USER_Type usertype, KEY_Type keytype, uint8_t* keyval) {
 #if (OTTER_FEATURE(SECURITY))
-    unsigned int key_index = (unsigned int)usertype;
-    return sec_update_key(key_index, (void*)keyval);
+    unsigned int key_index;
+    int rc;
+    
+    // Set to local ID, and with requested user type
+    current_user.id         = 0;
+    current_user.usertype   = usertype;
+    
+    // Use pre-existing key if keyval is null
+    if (keyval != NULL) {
+        rc = sec_update_key((unsigned int)usertype, (void*)keyval);
+    }
+    else {
+        rc = 0;
+    }
+    
+    return rc;
 
 #endif
     return -1;
 }
 
 
-int user_dbkey_new(USER_Type usertype, uint64_t uid) {
+int user_set_db(USER_Type usertype, uint64_t uid) {
 #if (OTTER_FEATURE(SECURITY) && OTTER_FEATURE(OTDB))
 
 #else

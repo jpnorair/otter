@@ -17,6 +17,7 @@
 #ifndef user_h
 #define user_h
 
+#include <stdio.h>
 #include <stdint.h>
 
 #include "otter_cfg.h"
@@ -74,6 +75,15 @@ USER_Type user_typeval_get(void);
 
 
 
+/** @brief Get the ID Value corresponding to the active user
+  * @retval USER_Type       64 bit UID.  0 is local user.
+  *
+  * Used by commands that need the user ID value
+  */ 
+uint64_t user_idval_get(void);
+
+
+
 /** @brief Supply a new key for a local user
   * @param usertype     (USER_Type) Type value of local user for whom to supply new key
   * @param keytype      (KEY_Type) Type of key.  Always AES128, presently.
@@ -82,7 +92,7 @@ USER_Type user_typeval_get(void);
   *
   * Used by commands that set user keys
   */ 
-int user_localkey_new(USER_Type usertype, KEY_Type keytype, uint8_t* keyval);
+int user_set_local(USER_Type usertype, KEY_Type keytype, uint8_t* keyval);
 
 
 
@@ -95,7 +105,7 @@ int user_localkey_new(USER_Type usertype, KEY_Type keytype, uint8_t* keyval);
   * that utilize an external key database.  The typical external DB used for 
   * this purpose is OTDB.
   */ 
-int user_dbkey_new(USER_Type usertype, uint64_t uid);
+int user_set_db(USER_Type usertype, uint64_t uid);
 
 
 

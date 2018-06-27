@@ -53,11 +53,17 @@ void sub_writeheader_modbus(pkt_t* newpkt, uint8_t* data, size_t datalen) {
     /// We know it's enhanced modbus if first byte is 0xC0/D0, which is the ALP
     /// Specifier as well as an illegal Function ID in regular modbus.
     if ((data[0] == 0xC0) || (data[0] == 0xD0)) {
-        newpkt->buffer[1]   = 68 + user_typeval_get();
+        unsigned int cmdvariant;
+        switch (user_typeval_get()) {
+            case USER_root: cmdvariant = 0; break;
+            case USER_user: cmdvariant = 1; break;
+            default:        cmdvariant = 2; break;
+        }
+        newpkt->buffer[1]   = 68 + cmdvariant;
         newpkt->buffer[2]   = cliopt_getsrcaddr() & 0xFF;
         hdr_size            = 3;
     
-        if (user_typeval_get() < USER_guest) {   
+        if (cmdvariant < 2) {   
             uint32_t epoch = (uint32_t)time(NULL);
             
             // 56 bit nonce
@@ -68,6 +74,8 @@ void sub_writeheader_modbus(pkt_t* newpkt, uint8_t* data, size_t datalen) {
             newpkt->buffer[4] = (epoch >> 16) & 0xFF;
             newpkt->buffer[5] = (epoch >> 8) & 0xFF;
             newpkt->buffer[6] = (epoch >> 0) & 0xFF;
+            
+            
             newpkt->buffer[7] = (newpkt->sequence >> 16) & 0xFF;
             newpkt->buffer[8] = (newpkt->sequence >> 8) & 0xFF;
             newpkt->buffer[9] = (newpkt->sequence >> 0) & 0xFF;

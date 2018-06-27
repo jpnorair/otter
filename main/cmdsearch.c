@@ -48,14 +48,14 @@
 ///      initialization file and plug-in libraries stored with the app.
 ///
 typedef struct {
-    const char      name[8]; 
+    const char      name[12]; 
     cmdaction_t     action; 
 } cmd_t;
 
 static const cmd_t otter_commands[] = {
     { "bye",        &cmd_quit  },
     { "chuser",     &cmd_chuser },
-    { "cmdlist",    &cmd_cmdlist },
+    { "cmdls",      &cmd_cmdlist },
     { "null",       &app_null },
     { "quit",       &cmd_quit },
     { "raw",        &cmd_raw },
@@ -133,6 +133,7 @@ int cmd_init(cmdtab_t* init_table, const char* xpath) {
     /// Last, Add Otter commands to the cmdtab.
     for (int i=0; i<(sizeof(otter_commands)/sizeof(cmd_t)); i++) {
         int rc;
+
         rc = cmdtab_add(otter_cmdtab, otter_commands[i].name, (void*)otter_commands[i].action, (void*)EXTCMD_null);
         if (rc != 0) {
             fprintf(stderr, "ERROR: cmdtab_add() from %s line %d returned %d.\n", __FUNCTION__, __LINE__, rc);
