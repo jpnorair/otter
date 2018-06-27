@@ -31,10 +31,6 @@
 
 
 
-
-
-
-
 typedef struct {
     USER_Type   usertype;
     uint64_t    id;
@@ -71,13 +67,15 @@ static user_t   current_user;
 
 
 
-void user_init(void) {
+int user_init(void) {
     current_user.usertype   = USER_guest;
     current_user.id         = 0;
     
 #   if OTTER_FEATURE(SECURITY)
     sec_init();
 #   endif
+
+    return 0;
 }
 
 void user_deinit(void) {
@@ -105,10 +103,10 @@ USER_Type user_typeval_get(void) {
 }
 
 
-int user_localkey_new(USER_Type usertype, uint8_t* aes128_key) {
+int user_localkey_new(USER_Type usertype, KEY_Type keytype, uint8_t* keyval) {
 #if (OTTER_FEATURE(SECURITY))
     unsigned int key_index = (unsigned int)usertype;
-    return sec_update_key(key_index, (void*)aes128_key);
+    return sec_update_key(key_index, (void*)keyval);
 
 #endif
     return -1;
@@ -172,7 +170,8 @@ int user_encrypt(USER_Type usertype, uint64_t uid, uint8_t* front, size_t payloa
         return 0;
     }
     if (key_index < (unsigned int)USER_guest) {
-        return sec_encrypt(front, front+7, payload_len, key_index);
+        int rc = sec_encrypt(front, front+7, payload_len, key_index);
+        return (rc != 0) ? rc : (int)payload_len + 7 + 4;
     }
 
 #elif (OTTER_FEATURE(SECURITY) && OTTER_FEATURE(OTDB))
