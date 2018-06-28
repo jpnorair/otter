@@ -20,7 +20,7 @@ ifneq ($(findstring $(SYSDIR)/lib,$(LD_LIBRARY_PATH)),)
 endif
 
 DEFAULT_DEF := -D__HBUILDER__
-LIBMODULES  := argtable cJSON cmdtab bintex m2def libjudy OTEAX hbuilder-lib libotfs $(EXT_LIBS)
+LIBMODULES  := argtable cJSON cmdtab bintex m2def libjudy OTEAX libotfs hbuilder-lib $(EXT_LIBS)
 SUBMODULES  := main test
 
 SRCEXT      := c

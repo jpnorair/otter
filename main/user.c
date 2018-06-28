@@ -213,21 +213,21 @@ int user_decrypt(USER_Type usertype, uint64_t uid, uint8_t* front, size_t* frame
     key_index = (unsigned int)usertype;
     
     if (key_index <= (unsigned int)USER_guest) {
-        bytes_added = 3;
-        frame_len  -= 3;
+        bytes_added = 3;    // 24 bit header
+        frame_len  -= 3;    // 24 bit header
         
         if (key_index < (unsigned int)USER_guest) {
             if (0 != sec_decrypt(front, front+7, *frame_len-7-4, key_index)) {
-                bytes_added = -1;
+                bytes_added = -1;       // error
             }
             else {
-                bytes_added += 4;
-                *frame_len  -= 8;
+                bytes_added += 4;       // nonce (4)
+                *frame_len  -= (4 + 4); // nonce (4) and MAC tag (4)
             }
         }
     }
     else {
-        bytes_added = -1;
+        bytes_added = -1;   // error
     }
     
     return bytes_added;

@@ -111,7 +111,7 @@ void* modbus_reader(void* args) {
     // If returns an error, exit
     pollcode = poll(fds, 1, -1);
     if (pollcode <= 0) {
-        errcode = 4;
+        errcode = 5;
         goto modbus_reader_ERR;
     }
     
@@ -133,12 +133,12 @@ void* modbus_reader(void* args) {
         
         if (pollcode == 0) {
             // delay limit detected: frame is over
-            //errcode = 3;
+            //errcode = 4;
             break;
         }
         else if (pollcode < 0) {
             // some type of error, exit
-            errcode = 3;
+            errcode = 4;
             goto modbus_reader_ERR;
         }
     }
@@ -156,8 +156,11 @@ void* modbus_reader(void* args) {
 
     /// Copy the packet to the rlist and signal mpipe_parser()
     pthread_mutex_lock(rlist_mutex);
-    pktlist_add(rlist, false, rbuf, (size_t)frame_length);
+    frame_length = pktlist_add(rlist, false, rbuf, (size_t)frame_length);
     pthread_mutex_unlock(rlist_mutex);
+    if (frame_bytes <= 0) {
+        errcode = 3;
+    }
     
     /// Error Handler: wait a few milliseconds, then handle the error.
     /// @todo supply estimated bytes remaining into mpipe_flush()
@@ -172,10 +175,13 @@ void* modbus_reader(void* args) {
         case 2: TTY_RX_PRINTF("Modbus Packet Payload Length (%d bytes) is out of bounds.\n", frame_length);
                 goto modbus_reader_START;
                 
-        case 3: TTY_RX_PRINTF("Modbus Packet RX timed-out\n");
+        case 3: TTY_RX_PRINTF("Modbus Packet frame has invalid data (bad crypto or CRC).\n");
                 goto modbus_reader_START;
                 
-        case 4: fprintf(stderr, "Connection dropped, quitting now\n");
+        case 4: TTY_RX_PRINTF("Modbus Packet RX timed-out\n");
+                goto modbus_reader_START;
+                
+        case 5: fprintf(stderr, "Connection dropped, quitting now\n");
                 break;
                 
        default: fprintf(stderr, "Unknown error, quitting now\n");
@@ -369,11 +375,9 @@ void* modbus_parser(void* args) {
             }
             
             /// CRC is good, so send packet to Modbus processor.
-            /// CRC bytes (2) are stripped
-            
             ///@todo validate resp_proc for master.  Currently crashes, presumably on 
             ///      filesystem lookup stage.
-            proc_result = smut_resp_proc(putsbuf, rlist->cursor->buffer, &output_bytes, rlist->cursor->size-2);
+            proc_result = smut_resp_proc(putsbuf, rlist->cursor->buffer, &output_bytes, rlist->cursor->size);
             if (proc_result == 0) {
                 if (output_bytes != 0) {
                     fmt_fprintalp(_PUTS, msgcall, (uint8_t*)putsbuf, output_bytes);
@@ -383,7 +387,7 @@ void* modbus_parser(void* args) {
                 }
             }
             else {
-                fmt_printhex(_PUTS, rlist->cursor->buffer, rlist->cursor->size-2, 16);
+                fmt_printhex(_PUTS, rlist->cursor->buffer, rlist->cursor->size, 16);
             }
 
 
