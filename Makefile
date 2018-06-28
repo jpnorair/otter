@@ -19,6 +19,12 @@ ifneq ($(findstring $(SYSDIR)/lib,$(LD_LIBRARY_PATH)),)
 	error "$(SYSDIR)/lib not in LD_LIBRARY_PATH.  Please update your settings to include this."
 endif
 
+ifeq ($(THISSYSTEM),Linux)
+LIBBSD := -lbsd
+else
+LIBBSD :=
+endif
+
 DEFAULT_DEF := -D__HBUILDER__
 LIBMODULES  := argtable cJSON cmdtab bintex m2def libjudy OTEAX hbuilder-lib libotfs $(EXT_LIBS)
 SUBMODULES  := main test
@@ -33,7 +39,8 @@ CFLAGS      := -std=gnu99 -O3 -pthread
 INC         := -I. -I./$(SYSDIR)/include
 INCDEP      := -I.
 LIBINC      := -L./$(SYSDIR)/lib
-LIB         := -largtable -lbintex -lcJSON -lcmdtab -lhbuilder -lotfs -loteax -ljudy -lm -lc
+LIB         := -largtable -lbintex -lcJSON -lcmdtab -lhbuilder -lotfs -loteax -ljudy -lm -lc ${LIBBSD}
+
 OTTER_PKG   := $(PKGDIR)
 OTTER_DEF   := $(DEFAULT_DEF) $(EXT_DEF)
 OTTER_INC   := $(INC) $(EXT_INC)
