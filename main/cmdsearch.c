@@ -105,8 +105,15 @@ int cmd_init(cmdtab_t* init_table, const char* xpath) {
         
         if (xpath_len > 0) { 
             ///@todo make this find call work properly on mac and linux.
+#           if defined(__APPLE__) || defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__)
             snprintf(buffer, 256, "find %s -perm +111 -type f", xpath);
             stream = popen(buffer, "r");
+#           elif defined(__linux__)
+            snprintf(buffer, 256, "find %s -perm /u=x,g=x,o=x -type f", xpath);
+            stream = popen(buffer, "r");
+#           else
+            stream = NULL;
+#           endif
             
             if (stream != NULL) {
                 do {

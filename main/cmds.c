@@ -203,7 +203,6 @@ int cmd_cmdlist(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t ds
     /// dt == NULL is the initialization case.
     /// There may not be an initialization for all command groups.
     if (dt == NULL) {
-        fprintf(stderr, "cmd_cmdlist() initialized\n");
         return 0;
     }
     
@@ -469,8 +468,13 @@ int cmd_whoami(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dst
         dterm_puts(dt, "Indicates the current user and address\n");
     }
     else {
-        sprintf(output, "%s %016llX", user_typestring_get(), user_idval_get());
-    
+        if (user_idval_get() == 0) {
+            sprintf(output, "%s@local", user_typestring_get());
+        }
+        else {
+            sprintf(output, "%s@%016llX", user_typestring_get(), user_idval_get());
+        }
+        
         dterm_puts(dt, output);
         
         /// @todo indicate if authentication response has been successfully
