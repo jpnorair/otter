@@ -316,7 +316,7 @@ int sec_update_key(unsigned int key_index, void* keydata) {
 
 /// EAX cryptography is symmetric, so decrypt and encrypt are almost identical.
 
-int sub_do_crypto(void* nonce, void* data, size_t datalen, unsigned int key_index,
+static int sub_do_crypto(void* nonce, void* data, size_t datalen, unsigned int key_index,
                         int (*EAXdrv_fn)(io_t*, unsigned long, eax_ctx*) ) {
     int retval;
     
