@@ -158,7 +158,7 @@ void* modbus_reader(void* args) {
     pthread_mutex_lock(rlist_mutex);
     frame_length = pktlist_add(rlist, false, rbuf, (size_t)frame_length);
     pthread_mutex_unlock(rlist_mutex);
-    if (frame_bytes <= 0) {
+    if (frame_length <= 0) {
         errcode = 3;
     }
     
@@ -377,7 +377,7 @@ void* modbus_parser(void* args) {
             /// CRC is good, so send packet to Modbus processor.
             ///@todo validate resp_proc for master.  Currently crashes, presumably on 
             ///      filesystem lookup stage.
-            proc_result = smut_resp_proc(putsbuf, rlist->cursor->buffer, &output_bytes, rlist->cursor->size);
+            proc_result = smut_resp_proc(putsbuf, rlist->cursor->buffer, &output_bytes, rlist->cursor->size, true);
             if (proc_result == 0) {
                 if (output_bytes != 0) {
                     fmt_fprintalp(_PUTS, msgcall, (uint8_t*)putsbuf, output_bytes);

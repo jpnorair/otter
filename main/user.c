@@ -19,8 +19,16 @@
 #include "otter_cfg.h"
 
 #include <stdint.h>
+
 #include <stdlib.h>
+#ifdef __linux__
+#   include <bsd/stdlib.h>
+#endif
+
+
 #include <string.h>
+
+
 
 #if OTTER_FEATURE(SECURITY)
 #   include <oteax.h>
