@@ -53,11 +53,11 @@ static user_t   current_user;
 
     void sec_init(void);
     void sec_deinit(void);
-    void sec_putnonce(void* dst, unsigned int total_size);
+    void sec_putnonce(uint8_t* dst, unsigned int total_size);
     uint32_t sec_getnonce(void);
-    int sec_update_key(USER_Type usertype, void* keydata);
-    int sec_encrypt(void* nonce, void* data, size_t datalen, unsigned int key_index);
-    int sec_decrypt(void* nonce, void* data, size_t datalen, unsigned int key_index);
+    int sec_update_key(USER_Type usertype, uint8_t* keydata);
+    int sec_encrypt(uint8_t* nonce, uint8_t* data, size_t datalen, unsigned int key_index);
+    int sec_decrypt(uint8_t* nonce, uint8_t* data, size_t datalen, unsigned int key_index);
     
 #endif
 
@@ -119,7 +119,7 @@ int user_set_local(USER_Type usertype, KEY_Type keytype, uint8_t* keyval) {
     
     // Use pre-existing key if keyval is null
     if (keyval != NULL) {
-        rc = sec_update_key((unsigned int)usertype, (void*)keyval);
+        rc = sec_update_key((unsigned int)usertype, (uint8_t*)keyval);
     }
     else {
         rc = 0;
@@ -267,7 +267,7 @@ void sec_deinit(void) {
 }
 
 
-void sec_putnonce(void* dst, unsigned int total_size) {
+void sec_putnonce(uint8_t* dst, unsigned int total_size) {
 /// Nonce is 4 bytes.
 /// - If total_size < 4, only the LSBs of the nonce are written.  Not recommended.
 /// - If total_size == 4, the whole nonce is written.
@@ -276,12 +276,11 @@ void sec_putnonce(void* dst, unsigned int total_size) {
     int         pad_bytes;
     int         write_bytes;
     uint32_t    output_nonce;
-    uint8_t*    dst_u8 = (uint8_t*)dst;
     
     write_bytes = 4;
     pad_bytes   = total_size - 4;
     if (pad_bytes > 0) {
-        dst_u8 += pad_bytes;
+        dst += pad_bytes;
     }
     else {
         write_bytes += pad_bytes;
@@ -293,7 +292,7 @@ void sec_putnonce(void* dst, unsigned int total_size) {
     /// conveyed congruently.
     output_nonce = dlls_nonce++;
     
-    memcpy(dst_u8, &output_nonce, write_bytes);
+    memcpy(dst, &output_nonce, write_bytes);
 }
 
 
@@ -304,7 +303,7 @@ uint32_t sec_getnonce(void) {
 }
 
 
-int sec_update_key(unsigned int key_index, void* keydata) {
+int sec_update_key(unsigned int key_index, uint8_t* keydata) {
     if (key_index < OTTER_NUM_KEYS) {
         eax_init_and_key((io_t*)keydata, &dlls_ctx[key_index].ctx);
         return 0;
@@ -316,7 +315,7 @@ int sec_update_key(unsigned int key_index, void* keydata) {
 
 /// EAX cryptography is symmetric, so decrypt and encrypt are almost identical.
 
-int sub_do_crypto(void* nonce, void* data, size_t datalen, unsigned int key_index,
+static int sub_do_crypto(uint8_t* nonce, uint8_t* data, size_t datalen, unsigned int key_index,
                         int (*EAXdrv_fn)(io_t*, unsigned long, eax_ctx*) ) {
     int retval;
     
@@ -333,10 +332,10 @@ int sub_do_crypto(void* nonce, void* data, size_t datalen, unsigned int key_inde
     return retval;
 }
 
-int sec_encrypt(void* nonce, void* data, size_t datalen, unsigned int key_index) {
+int sec_encrypt(uint8_t* nonce, uint8_t* data, size_t datalen, unsigned int key_index) {
     return sub_do_crypto(nonce, data, datalen, key_index, &eax_encrypt);
 }
-int sec_decrypt(void* nonce, void* data, size_t datalen, unsigned int key_index) {
+int sec_decrypt(uint8_t* nonce, uint8_t* data, size_t datalen, unsigned int key_index) {
     return sub_do_crypto(nonce, data, datalen, key_index, &eax_decrypt);
 }
 

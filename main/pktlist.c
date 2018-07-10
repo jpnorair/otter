@@ -124,8 +124,15 @@ void sub_writeframe_modbus(pkt_t* newpkt, uint8_t* data, size_t datalen) {
         }
         newpkt->buffer[1]   = 68 + cmdvariant;
         newpkt->buffer[2]   = cliopt_getsrcaddr() & 0xFF;
+        
+        fprintf(stderr, "--> user_id        = %llu\n", user_idval_get());
+        fprintf(stderr, "--> input data len = %zu\n", datalen);
+        fprintf(stderr, "--> buffer         = %016llX\n", (uint64_t)&newpkt->buffer[0]);
+        
         hdr_size            = user_preencrypt(usertype, user_idval_get(), &newpkt->buffer[0], &newpkt->buffer[0]);
         
+        fprintf(stderr, "--> hdr_size = %d\n", hdr_size);
+
         memcpy(&newpkt->buffer[hdr_size], data, datalen);
         hdr_size = user_encrypt(usertype, user_idval_get(), &newpkt->buffer[hdr_size], datalen);
     }

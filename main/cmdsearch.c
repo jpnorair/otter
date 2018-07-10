@@ -35,9 +35,9 @@
 
 
 ///@todo Commands to add
-/// 1. Change user: chuser      To change between root, admin, guest modes.
-/// 2. Print Commands:          Print a list of available commands.
-/// 3. 
+/// 1. Change addresses
+/// 2. Have chuser command work on addresses (non-local), and change addresses as needed.
+/// 3. ...
 
 
 /// Binary Search Table for Commands
