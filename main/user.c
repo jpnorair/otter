@@ -194,11 +194,11 @@ int user_encrypt(USER_Type usertype, uint64_t uid, uint8_t* front, size_t payloa
     
     key_index = (unsigned int)usertype;
     if (key_index == (unsigned int)USER_guest) {
-        return 0;
+        return 3;
     }
     if (key_index < (unsigned int)USER_guest) {
         int rc = sec_encrypt(front, front+7, payload_len, key_index);
-        return (rc != 0) ? rc : (int)payload_len + 7 + 4;
+        return (rc != 0) ? rc : 7 + 4;
     }
 
 #elif (OTTER_FEATURE(SECURITY) && OTTER_FEATURE(OTDB))
@@ -324,27 +324,21 @@ int sec_update_key(unsigned int key_index, uint8_t* keydata) {
 /// EAX cryptography is symmetric, so decrypt and encrypt are almost identical.
 
 static int sub_do_crypto(uint8_t* nonce, uint8_t* data, size_t datalen, unsigned int key_index,
-                        int (*EAXdrv_fn)(io_t*, unsigned long, eax_ctx*) ) {
-    int retval;
-    
+                        int (*EAXdrv_fn)(const void*, void*, unsigned long, eax_ctx*) ) {
+
     /// Error if key index is not available
     if (key_index >= OTTER_NUM_KEYS) {
         return -1;
     }
     
-    retval = eax_init_message((const io_t*)nonce, (eax_ctx*)&dlls_ctx[key_index].ctx);
-    if (retval == 0) {
-        retval = EAXdrv_fn((io_t*)data, (unsigned long)datalen, (eax_ctx*)&dlls_ctx[key_index].ctx);
-    }
-
-    return retval;
+    return EAXdrv_fn(nonce, data, datalen, (eax_ctx*)&dlls_ctx[key_index].ctx);
 }
 
 int sec_encrypt(uint8_t* nonce, uint8_t* data, size_t datalen, unsigned int key_index) {
-    return sub_do_crypto(nonce, data, datalen, key_index, &eax_encrypt);
+    return sub_do_crypto(nonce, data, datalen, key_index, &eax_encrypt_message);
 }
 int sec_decrypt(uint8_t* nonce, uint8_t* data, size_t datalen, unsigned int key_index) {
-    return sub_do_crypto(nonce, data, datalen, key_index, &eax_decrypt);
+    return sub_do_crypto(nonce, data, datalen, key_index, &eax_decrypt_message);
 }
 
 #endif

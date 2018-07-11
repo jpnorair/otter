@@ -103,10 +103,12 @@ void sub_readframe_modbus(pkt_t* newpkt, uint8_t* data, size_t datalen) {
 void sub_writeframe_modbus(pkt_t* newpkt, uint8_t* data, size_t datalen) {
 /// Adds 1, 3, or 11 bytes to payload depending on conditions
     int hdr_size;
+    int pad_size;
     
     /// Basic Modbus just puts the destination address.
     newpkt->buffer[0]   = cliopt_getdstaddr() & 0xFF;
     hdr_size            = 1;
+    pad_size            = 0;
     
     /// Enhanced Modbus uses commands 68, 69, 70.
     /// MPipe/ALP encapsulation uses these commands.
@@ -124,24 +126,50 @@ void sub_writeframe_modbus(pkt_t* newpkt, uint8_t* data, size_t datalen) {
         }
         newpkt->buffer[1]   = 68 + cmdvariant;
         newpkt->buffer[2]   = cliopt_getsrcaddr() & 0xFF;
-        
-        fprintf(stderr, "--> user_id        = %llu\n", user_idval_get());
-        fprintf(stderr, "--> input data len = %zu\n", datalen);
-        fprintf(stderr, "--> buffer         = %016llX\n", (uint64_t)&newpkt->buffer[0]);
-        
         hdr_size            = user_preencrypt(usertype, user_idval_get(), &newpkt->buffer[0], &newpkt->buffer[0]);
-        
-        fprintf(stderr, "--> hdr_size = %d\n", hdr_size);
-
         memcpy(&newpkt->buffer[hdr_size], data, datalen);
-        hdr_size = user_encrypt(usertype, user_idval_get(), &newpkt->buffer[hdr_size], datalen);
+        
+        // Perform encryption
+        if (cmdvariant < 2) {
+            // Encryption I/O debugging
+//            for (int i=0; i<(hdr_size+datalen); i++) {
+//                fprintf(stderr, "%02X ", newpkt->buffer[i]);
+//            }
+//            fprintf(stderr, "\n");
+        
+            // Apply zero padding for alignment requirements
+            fprintf(stderr, "datalen = %zu\n", datalen);
+#           if (OTTER_PARAM_ENCALIGN != 1)
+            while (datalen & (OTTER_PARAM_ENCALIGN-1)) {
+                data[datalen] = 0;
+                datalen++;
+                pad_size++;
+            }
+#           endif
+            fprintf(stderr, "datalen = %zu\n", datalen);
+            
+            hdr_size = user_encrypt(usertype, user_idval_get(), &newpkt->buffer[0], datalen);
+            if (hdr_size < 0) {
+                goto sub_writeframe_modbus_ERR;
+            }
+
+            // Encryption I/O debugging
+            for (int i=0; i<(hdr_size+datalen); i++) {
+                fprintf(stderr, "%02X ", newpkt->buffer[i]);
+            }
+            fprintf(stderr, "\n");
+        }
     }
     else {
         memcpy(&newpkt->buffer[hdr_size], data, datalen);
     }
     
     // need to add frame length to size value
-    newpkt->size += hdr_size;
+    newpkt->size = newpkt->size + hdr_size + pad_size;
+    return;
+    
+    sub_writeframe_modbus_ERR:
+    newpkt->size = 0;
 }
 
 
@@ -248,7 +276,7 @@ int pktlist_add(pktlist_t* plist, bool write_header, uint8_t* data, size_t size)
     // Also allocate the buffer of the new packet
     // The starting size is the payload size, and put_frame() will modify it.
     newpkt->size    = size;
-    newpkt->buffer  = malloc(size + max_overhead);
+    newpkt->buffer  = malloc(size + max_overhead + OTTER_PARAM_ENCALIGN-1);
     if (newpkt->buffer == NULL) {
         free(newpkt);
         return -3;

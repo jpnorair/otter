@@ -64,6 +64,9 @@
 #ifndef OTTER_PARAM_MBTIMEOUT
 #   define OTTER_PARAM_MBTIMEOUT    20
 #endif
+#ifndef OTTER_PARAM_ENCALIGN
+#   define OTTER_PARAM_ENCALIGN     1
+#endif
 
 
 /// Automatic Checks
@@ -73,6 +76,10 @@
 
 #if (OTTER_FEATURE_MPIPE != ENABLED)
 #   warning "MPipe interface not enabled.  Functionality is not guaranteed."
+#endif
+
+#if !((OTTER_PARAM_ENCALIGN == 1) || (OTTER_PARAM_ENCALIGN == 2) || (OTTER_PARAM_ENCALIGN == 4))
+#   error "OTTER_PARAM_ENCALIGN must be 1, 2, or 4.  Default=1"
 #endif
 
 #endif
