@@ -363,9 +363,11 @@ void* modbus_parser(void* args) {
             }
             else {
                 char crc_symbol = (rlist->cursor->crcqual == 0) ? 'v' : 'x';
-                sprintf(putsbuf, "[%c][%03d] ", crc_symbol, rlist->cursor->sequence);
+                sprintf(putsbuf, "[%c][%03d]\n", crc_symbol, rlist->cursor->sequence);
             }
             _PUTS(putsbuf);
+            
+            fmt_printhex(_PUTS, &rlist->cursor->buffer[0], rlist->cursor->size, 16);
             
             /// If CRC is bad, dump hex of buffer-size and discard packet now.
             if (rlist->cursor->crcqual != 0) {
