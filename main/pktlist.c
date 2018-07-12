@@ -64,10 +64,10 @@ void sub_readframe_modbus(pkt_t* newpkt, uint8_t* data, size_t datalen) {
         src_addr            = (uint64_t)data[2];
         
         // Encryption I/O debugging
-        for (int i=0; i<datalen; i++) {
-            fprintf(stderr, "%02X ", data[i]);
-        }
-        fprintf(stderr, "\n");
+//        for (int i=0; i<datalen; i++) {
+//            fprintf(stderr, "%02X ", data[i]);
+//        }
+//        fprintf(stderr, "\n");
         
         // For 68/69 packets, there's an encrypted subframe.
         // frame_size will become the size of the decrypted data, at returned offset
@@ -75,10 +75,10 @@ void sub_readframe_modbus(pkt_t* newpkt, uint8_t* data, size_t datalen) {
         mbcmd  -= 68;
         offset  = user_decrypt((USER_Type)mbcmd, src_addr, data, &frame_size);
         
-        for (int i=0; i<datalen; i++) {
-            fprintf(stderr, "%02X ", data[i]);
-        }
-        fprintf(stderr, "\n");
+//        for (int i=0; i<datalen; i++) {
+//            fprintf(stderr, "%02X ", data[i]);
+//        }
+//        fprintf(stderr, "\n");
         
         if (offset < 0) {
             newpkt->crcqual = -1;
@@ -87,10 +87,10 @@ void sub_readframe_modbus(pkt_t* newpkt, uint8_t* data, size_t datalen) {
         }
         
         // Encryption I/O debugging
-        for (int i=0; i<datalen; i++) {
-            fprintf(stderr, "%02X ", data[i]);
-        }
-        fprintf(stderr, "\n");
+//        for (int i=0; i<datalen; i++) {
+//            fprintf(stderr, "%02X ", data[i]);
+//        }
+//        fprintf(stderr, "\n");
         
         // Realign headers
         hdr24[0]    = data[0];
@@ -103,10 +103,10 @@ void sub_readframe_modbus(pkt_t* newpkt, uint8_t* data, size_t datalen) {
         data[2]     = hdr24[2];
         
         // Encryption I/O debugging
-        for (int i=0; i<datalen; i++) {
-            fprintf(stderr, "%02X ", newpkt->buffer[i]);
-        }
-        fprintf(stderr, "\n");
+//        for (int i=0; i<datalen; i++) {
+//            fprintf(stderr, "%02X ", newpkt->buffer[i]);
+//        }
+//        fprintf(stderr, "\n");
     }
     else {
         datalen -= 2;

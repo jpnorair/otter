@@ -218,22 +218,21 @@ int user_decrypt(USER_Type usertype, uint64_t uid, uint8_t* front, size_t* frame
     if (frame_len == NULL)  return -4;
     if (*frame_len < 11)    return -4;
     
-    fprintf(stderr, "framelen = %zu\n", *frame_len);
+    //fprintf(stderr, "framelen = %zu\n", *frame_len);
     
     key_index = (unsigned int)usertype;
     
-    fprintf(stderr, "keyindex = %d\n", key_index);
+    //fprintf(stderr, "keyindex = %d\n", key_index);
     
     if (key_index <= (unsigned int)USER_guest) {
         bytes_added = 3;    // 24 bit header
         *frame_len -= 3;    // 24 bit header
         
         if (key_index < (unsigned int)USER_guest) {
-            fprintf(stderr, "sec_decrypt(%016llX, %016llX, %zu, %u)\n", (uint64_t)front, (uint64_t)(front+7), *frame_len-(4+4), key_index);
+            //fprintf(stderr, "sec_decrypt(%016llX, %016llX, %zu, %u)\n", (uint64_t)front, (uint64_t)(front+7), *frame_len-(4+4), key_index);
             if (0 != sec_decrypt(front, front+7, *frame_len-(4+4), key_index)) {
                 bytes_added = -1;       // error
-                fprintf(stderr, "sec_decrypt() error\n");
-                
+                //fprintf(stderr, "sec_decrypt() error\n");
             }
             else {
                 bytes_added += 4;       // nonce (4)

@@ -344,6 +344,9 @@ void* modbus_parser(void* args) {
         else {
             uint16_t    output_bytes;
             int         proc_result;
+            int         msgtype;
+            uint8_t*    msg;
+            uint16_t    msgbytes;
             bool        clear_rpkt      = true;
             bool        rpkt_is_resp;
 
@@ -367,8 +370,6 @@ void* modbus_parser(void* args) {
             }
             _PUTS(putsbuf);
             
-            fmt_printhex(_PUTS, &rlist->cursor->buffer[0], rlist->cursor->size, 16);
-            
             /// If CRC is bad, dump hex of buffer-size and discard packet now.
             if (rlist->cursor->crcqual != 0) {
                 fmt_printhex(_PUTS, &rlist->cursor->buffer[0], rlist->cursor->size, 16);
@@ -380,15 +381,29 @@ void* modbus_parser(void* args) {
             ///@todo validate resp_proc for master.  Currently crashes, presumably on 
             ///      filesystem lookup stage.
             proc_result = smut_resp_proc(putsbuf, rlist->cursor->buffer, &output_bytes, rlist->cursor->size, true);
-            if (proc_result == 0) {
-                if (output_bytes != 0) {
-                    fmt_fprintalp(_PUTS, msgcall, (uint8_t*)putsbuf, output_bytes);
+            msg         = rlist->cursor->buffer;
+            msgbytes    = rlist->cursor->size;
+            msgtype     = smut_extract_payload((void**)&msg, (void*)msg, &msgbytes, msgbytes, true);
+            
+            if ((proc_result == 0) && (msgtype >= 0)) {
+                // ALP message
+                if (msgtype == 0) {
+                    fmt_fprintalp(_PUTS, msgcall, msg, msgbytes);
+                    if (output_bytes != 0) {
+                        //fprintf(stderr, "fmt_fprintalp(..., ..., %016llX, %d)\n", (uint64_t)putsbuf, output_bytes);
+                        fmt_fprintalp(_PUTS, msgcall, (uint8_t*)putsbuf, output_bytes);
+                    }
                 }
+                // Raw Message
                 else {
+                    sprintf(putsbuf, "Raw Modbus Message received\n");
                     _PUTS(putsbuf);
+                    fmt_printhex(_PUTS, msg, msgbytes, 16);
                 }
             }
             else {
+                sprintf(putsbuf, "Unidentified Message received\n");
+                _PUTS(putsbuf);
                 fmt_printhex(_PUTS, rlist->cursor->buffer, rlist->cursor->size, 16);
             }
 

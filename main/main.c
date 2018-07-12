@@ -398,6 +398,10 @@ int main(int argc, char* argv[]) {
         cliopts.debug_on    = true;
         cliopts.verbose_on  = true;
     }
+    else {
+        cliopts.debug_on    = false;
+        cliopts.verbose_on  = verbose_val;
+    }
     cliopt_init(&cliopts);
     
     /// All configuration is done.
