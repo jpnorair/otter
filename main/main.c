@@ -236,7 +236,7 @@ int main(int argc, char* argv[]) {
     
     char ttyfile_val[256];
     int  baudrate_val   = OTTER_PARAM_DEFBAUDRATE;
-    bool verbose_val    = true;
+    bool verbose_val    = false;
     bool pipe_val       = false;
     
     INTF_Type intf_val  = OTTER_FEATURE(MPIPE) ? INTF_mpipe : INTF_modbus;
