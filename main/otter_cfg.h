@@ -53,10 +53,13 @@
 #   define OTTER_PARAM_NAME         "otter"
 #endif
 #ifndef OTTER_PARAM_VERSION 
-#   define OTTER_PARAM_VERSION      "0.2.0"
+#   define OTTER_PARAM_VERSION      "0.3.0"
 #endif
 #ifndef OTTER_PARAM_DATE
 #   define OTTER_PARAM_DATE         __DATE__
+#endif
+#ifndef OTTER_PARAM_BYLINE
+#   define OTTER_PARAM_BYLINE       "Haystack Technologies, Inc."
 #endif
 #ifndef OTTER_PARAM_DEFBAUDRATE
 #   define OTTER_PARAM_DEFBAUDRATE  115200
