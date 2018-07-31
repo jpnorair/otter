@@ -213,7 +213,9 @@ void* dterm_piper(void* args) {
         if (cmdptr == NULL) {
             ///@todo build a nicer way to show where the error is,
             ///      possibly by using pi or ci (sign reversing)
-            dterm_puts(dt, "--> command not found\n");
+            if (linelen > 0) {
+                dterm_puts(dt, "--> command not found\n");
+            }
             linelen = 0;
         }
         else {
@@ -460,8 +462,8 @@ void* dterm_prompter(void* args) {
                 // 4. Reset prompt, change to OFF State, unlock mutex on dterm
                 case ct_enter:      //dterm_put(dt, (char[]){ASCII_NEWLN}, 2);
                                     dterm_putc(dt, '\n');
-
-                                    if (*(dt->linebuf) && !ch_contains(ch, dt->linebuf)) {
+                                    
+                                    if (!ch_contains(ch, dt->linebuf)) {
                                         ch_add(ch, dt->linebuf);
                                     }
                                     
@@ -470,7 +472,9 @@ void* dterm_prompter(void* args) {
                                     if (cmdptr == NULL) {
                                         ///@todo build a nicer way to show where the error is,
                                         ///      possibly by using pi or ci (sign reversing)
-                                        dterm_puts(dt, "--> command not found\n");
+                                        if (cmdlen > 0) {
+                                            dterm_puts(dt, "--> command not found\n");
+                                        }
                                     }
                                     else {
                                         int outbytes;
