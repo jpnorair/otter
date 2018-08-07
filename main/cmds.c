@@ -575,6 +575,7 @@ int cmdext_hbuilder(void* hb_handle, void* cmd_handle, dterm_t* dt, uint8_t* dst
         }
     }
     else if ((rc > 0) && cliopt_isverbose()) {
+        //fprintf(stdout, "--> HBuilder returned %d: packetizing %zu bytes\n", rc, bytesout);
         fprintf(stdout, "--> HBuilder packetizing %zu bytes\n", bytesout);
     }
 
