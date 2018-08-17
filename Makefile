@@ -109,5 +109,5 @@ $(SUBMODULES): %: directories
 	cd ./$@ && $(MAKE) -f $@.mk obj
 
 #Non-File Targets
-.PHONY: all remake clean cleaner
+.PHONY: all pkg remake clean cleaner
 
