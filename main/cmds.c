@@ -565,6 +565,8 @@ int cmdext_hbuilder(void* hb_handle, void* cmd_handle, dterm_t* dt, uint8_t* dst
     
     INPUT_SANITIZE_FLAG_EOS(is_eos);
     
+    //fprintf(stderr, "hbuilder invoked: %.*s\n", *inbytes, (char*)src);
+    
 #   if OTTER_FEATURE(HBUILDER)
     rc = hbuilder_runcmd(hb_handle, cmd_handle, dst, &bytesout, dstmax, src, inbytes);
     
