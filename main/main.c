@@ -761,7 +761,7 @@ void sub_json_loadargs(cJSON* json,
     
     GET_STRINGENUM_ARG(intf_val, sub_intf_cmp, "intf");
     
-    GET_STRING_ARG(xpath, 256, "tty");
+    GET_STRING_ARG(xpath, 256, "xpath");
     
     GET_INT_ARG(enc_bits, "tty_bits");
     GET_CHAR_ARG(enc_parity, "tty_parity");
