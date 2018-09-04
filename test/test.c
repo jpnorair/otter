@@ -29,4 +29,5 @@ void test_dumpbytes(const uint8_t* data, size_t datalen, const char* label) {
         }
     }
     fprintf(stderr, "\n\n");
+    fflush(stderr);
 }
