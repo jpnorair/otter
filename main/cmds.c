@@ -563,6 +563,13 @@ int cmdext_hbuilder(void* hb_handle, void* cmd_handle, dterm_t* dt, uint8_t* dst
     size_t bytesout = 0;
     int rc;
     
+//    if (dt == NULL) {
+//#       if defined(__HBUILDER__)
+//        hbcc_init();
+//#       endif
+//        return 0;
+//    }
+    
     INPUT_SANITIZE_FLAG_EOS(is_eos);
     
     //fprintf(stderr, "hbuilder invoked: %.*s\n", *inbytes, (char*)src);

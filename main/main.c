@@ -664,6 +664,7 @@ int otter_main( const char* ttyfile,
     DEBUG_PRINTF("Freeing PPipe lists\n");
     ppipelist_deinit();
     user_deinit();
+    cmd_free(NULL);
     
     // cli.exitcode is set to 0, unless sigint is raised.
     DEBUG_PRINTF("Exiting cleanly and flushing output buffers\n");

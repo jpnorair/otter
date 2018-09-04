@@ -156,6 +156,25 @@ int cmd_init(cmdtab_t* init_table, const char* xpath) {
 }
 
 
+int cmd_free(cmdtab_t* init_table) {
+    
+    init_table = (init_table == NULL) ? otter_cmdtab : init_table;
+    
+    /// First, free commands on xpath (should require nothing)
+    
+    /// Second, free hbuilder
+#   if OTTER_FEATURE(HBUILDER)
+        hbuilder_free(hbuilder_handle);
+#   endif
+    
+    /// Last, free cmdtab
+    cmdtab_free(init_table);
+    
+    return 0;
+}
+
+
+
 
 int cmd_run(const cmdtab_item_t* cmd, dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
     int output;
