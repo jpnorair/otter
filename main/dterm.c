@@ -272,17 +272,17 @@ void* dterm_piper(void* args) {
             // If bytesout == 0, there is no error, but also nothing
             // to send to MPipe.
             else if (bytesout > 0) {
-                int list_size;
-                
-                // Test only
-                //test_dumpbytes(protocol_buf, bytesout, "TX Packet Add");
-                // Test only
-                
-                pthread_mutex_lock(tlist_mutex);
-                list_size = pktlist_add(tlist, true, protocol_buf, bytesout);
-                pthread_mutex_unlock(tlist_mutex);
-                if (list_size > 0) {
-                    pthread_cond_signal(tlist_cond);
+                if (cliopt_isdummy()) {
+                    test_dumpbytes(protocol_buf, bytesout, "TX Packet Add");
+                }
+                else {
+                    int list_size;
+                    pthread_mutex_lock(tlist_mutex);
+                    list_size = pktlist_add(tlist, true, protocol_buf, bytesout);
+                    pthread_mutex_unlock(tlist_mutex);
+                    if (list_size > 0) {
+                        pthread_cond_signal(tlist_cond);
+                    }
                 }
             }
         }
@@ -522,13 +522,18 @@ void* dterm_prompter(void* args) {
                                         // If rawbytes == 0, there is no error, but also nothing
                                         // to send to MPipe.
                                         else if (outbytes > 0) {
-                                            int list_size;
-                                            //fprintf(stderr, "packet added to tlist, size = %d bytes\n", outbytes);
-                                            pthread_mutex_lock(tlist_mutex);
-                                            list_size = pktlist_add(tlist, true, protocol_buf, outbytes);
-                                            pthread_mutex_unlock(tlist_mutex);
-                                            if (list_size > 0) {
-                                                pthread_cond_signal(tlist_cond);
+                                            if (cliopt_isdummy()) {
+                                                test_dumpbytes(protocol_buf, outbytes, "TX Packet Add");
+                                            }
+                                            else {
+                                                int list_size;
+                                                //fprintf(stderr, "packet added to tlist, size = %d bytes\n", outbytes);
+                                                pthread_mutex_lock(tlist_mutex);
+                                                list_size = pktlist_add(tlist, true, protocol_buf, outbytes);
+                                                pthread_mutex_unlock(tlist_mutex);
+                                                if (list_size > 0) {
+                                                    pthread_cond_signal(tlist_cond);
+                                                }
                                             }
                                         }
                                     }
