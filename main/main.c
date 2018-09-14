@@ -130,6 +130,7 @@ int otter_main( const char* ttyfile,
                 int baudrate,
                 int enc_bits, int enc_parity, int enc_stopbits,
                 bool pipe,
+                const char* otdb,
                 const char* xpath,
                 cJSON* params
                 ); 
@@ -139,12 +140,13 @@ INTF_Type sub_intf_cmp(const char* s1);
 void sub_json_loadargs(cJSON* json, 
                        char* ttyfile, 
                        int* baudrate_val, 
-                       bool* pipe_val,
-                       int* intf_val,
-                       char* xpath,
                        int* enc_bits,
                        int* enc_parity,
                        int* enc_stop,
+                       int* intf_val,
+                       bool* pipe_val,
+                       char* otdb_val,
+                       char* xpath,
                        bool* verbose_val );
 
 void ppipelist_populate(cJSON* obj);
@@ -212,48 +214,57 @@ INTF_Type sub_intf_cmp(const char* s1) {
 
 int main(int argc, char* argv[]) {
 /// ArgTable params: These define the input argument behavior
+#   define FILL_STRINGARG(ARGITEM, VAR)   do { \
+        size_t str_sz = strlen(ARGITEM->filename[0]) + 1;   \
+        if (VAR != NULL) free(VAR);                         \
+        VAR = malloc(str_sz);                               \
+        if (VAR == NULL) goto main_FINISH;                  \
+        memcpy(VAR, ARGITEM->filename[0], str_sz);          \
+    } while(0);
+
     struct arg_file *ttyfile = arg_file1(NULL,NULL,"<ttyfile>",         "Path to tty file (e.g. /dev/tty.usbmodem)");
     struct arg_int  *brate   = arg_int0(NULL,NULL,"<baudrate>",         "Baudrate, default is 115200");
-    struct arg_str  *ttyenc  = arg_str0("e", "encoding", "<e.g. 8N1>",  "Manual-entry for TTY encoding (default mpipe:8N1, modbus:8N2)");
+    struct arg_str  *ttyenc  = arg_str0("e", "encoding", "ttyenc",      "Manual-entry for TTY encoding (default mpipe:8N1, modbus:8N2)");
+    struct arg_str  *intf    = arg_str0("i", "intf", "mpipe|modbus",    "Select \"mpipe\" or \"modbus\" interface (default=mpipe)");
     struct arg_lit  *pipe    = arg_lit0("p","pipe",                     "Use pipe I/O instead of terminal console");
-    struct arg_str  *intf    = arg_str0("i", "intf", "<mpipe|modbus>",  "Select \"mpipe\" or \"modbus\" interface (default=mpipe)");
-    struct arg_file *xpath   = arg_file0("x", "xpath", "<filepath>",     "Path to directory of external data processor programs");
+    struct arg_file *otdb    = arg_file0("D","otdb","socket",           "Socket path/address to otdb server");
+    struct arg_file *xpath   = arg_file0("x", "xpath", "path",          "Path to directory of external data processor programs");
     //struct arg_str  *parsers = arg_str1("p", "parsers", "<msg:parser>", "parser call string with comma-separated msg:parser pairs");
     //struct arg_str  *fparse  = arg_str1("P", "parsefile", "<file>",     "file containing comma-separated msg:parser pairs");
-    
     // Generic
-    struct arg_file *config  = arg_file0("C", "config", "<file.json>",  "JSON based configuration file.");
+    struct arg_file *config  = arg_file0("c", "config", "<file.json>",  "JSON based configuration file.");
     struct arg_lit  *verbose = arg_lit0("v","verbose",                  "Use verbose mode");
     struct arg_lit  *debug   = arg_lit0("d","debug",                    "Set debug mode on: requires compiling for debug");
     struct arg_lit  *help    = arg_lit0(NULL,"help",                    "Print this help and exit");
     struct arg_lit  *version = arg_lit0(NULL,"version",                 "Print version information and exit");
     struct arg_end  *end     = arg_end(20);
     
-    void* argtable[] = {ttyfile,brate,pipe,ttyenc,intf,xpath,config,verbose,debug,help,version,end};
+    void* argtable[] = {ttyfile,brate,ttyenc,intf,pipe,otdb,xpath,config,verbose,debug,help,version,end};
     const char* progname = OTTER_PARAM(NAME);
     int nerrors;
-    int exitcode = 0;
+    bool bailout        = true;
+    int exitcode        = 0;
     
-    char ttyfile_val[256];
+    char* ttyfile_val   = NULL;
+    char* otdb_val      = NULL;
+    char* xpath_val     = NULL;
+    cJSON* json         = NULL;
+    char* buffer        = NULL;
+    
     int  baudrate_val   = OTTER_PARAM_DEFBAUDRATE;
-    bool verbose_val    = false;
-    bool pipe_val       = false;
-    
     INTF_Type intf_val  = OTTER_FEATURE(MPIPE) ? INTF_mpipe : INTF_modbus;
     int enc_bits        = 8;
     int enc_parity      = (int)'N';
     int enc_stopbits    = (intf_val == INTF_modbus) ? 2 : 1;
     
-    char xpath_val[256] = "";
-    
-    cJSON* json = NULL;
-    char* buffer = NULL;
+    bool pipe_val       = false;
+    bool verbose_val    = false;
 
     if (arg_nullcheck(argtable) != 0) {
         /// NULL entries were detected, some allocations must have failed 
         fprintf(stderr, "%s: insufficient memory\n", progname);
         exitcode=1;
-        goto main_EXIT;
+        goto main_FINISH;
     }
 
     /* Parse the command line as defined by argtable[] */
@@ -267,7 +278,7 @@ int main(int argc, char* argv[]) {
         arg_print_glossary(stdout, argtable, "  %-25s %s\n");
         
         exitcode = 0;
-        goto main_EXIT;
+        goto main_FINISH;
     }
 
     /// special case: '--version' takes precedence error reporting 
@@ -277,7 +288,7 @@ int main(int argc, char* argv[]) {
         printf("Based on otter by JP Norair (indigresso.com)\n");
         
         exitcode = 0;
-        goto main_EXIT;
+        goto main_FINISH;
     }
 
     /// If the parser returned any errors then display them and exit
@@ -287,7 +298,7 @@ int main(int argc, char* argv[]) {
         printf("Try '%s --help' for more information.\n", progname);
         
         exitcode = 1;
-        goto main_EXIT;
+        goto main_FINISH;
     }
 
     /// special case: with no command line options induces brief help 
@@ -295,7 +306,7 @@ int main(int argc, char* argv[]) {
         printf("Try '%s --help' for more information.\n",progname);
         
         exitcode = 0;
-        goto main_EXIT;
+        goto main_FINISH;
     }
 
     /// Do some final checking of input values
@@ -312,7 +323,7 @@ int main(int argc, char* argv[]) {
         fp = fopen(config->filename[0], "r");
         if (fp == NULL) {
             exitcode = (int)'f';
-            goto main_EXIT;
+            goto main_FINISH;
         }
 
         fseek(fp, 0L, SEEK_END);
@@ -322,7 +333,7 @@ int main(int argc, char* argv[]) {
         buffer = calloc(1, lSize+1);
         if (buffer == NULL) {
             exitcode = (int)'m';
-            goto main_EXIT;
+            goto main_FINISH;
         }
 
         if(fread(buffer, lSize, 1, fp) == 1) {
@@ -333,26 +344,27 @@ int main(int argc, char* argv[]) {
             fclose(fp);
             fprintf(stderr, "read to %s fails\n", config->filename[0]);
             exitcode = (int)'r';
-            goto main_EXIT;
+            goto main_FINISH;
         }
 
         /// At this point the file is closed and the json is parsed into the
         /// "json" variable.  
         if (json == NULL) {
             fprintf(stderr, "JSON parsing failed.  Exiting.\n");
-            goto main_EXIT;
+            goto main_FINISH;
         }
         
         {   int tmp_intf;
             sub_json_loadargs(  json, 
                                 ttyfile_val, 
                                 &baudrate_val, 
-                                &pipe_val, 
-                                &tmp_intf, 
-                                xpath_val,
                                 &enc_bits, 
                                 &enc_parity, 
                                 &enc_stopbits, 
+                                &tmp_intf,
+                                &pipe_val, 
+                                otdb_val,
+                                xpath_val,
                                 &verbose_val
                             );
             intf_val = tmp_intf;
@@ -366,10 +378,10 @@ int main(int argc, char* argv[]) {
     if (ttyfile->count == 0) {
         printf("Input error: no tty provided\n");
         printf("Try '%s --help' for more information.\n", progname);
-        goto main_EXIT;
+        goto main_FINISH;
     }
-    strncpy(ttyfile_val, ttyfile->filename[0], 256);
-    
+    FILL_STRINGARG(ttyfile, ttyfile_val);
+
     if (brate->count != 0) {
         baudrate_val = brate->ival[0];
     }
@@ -385,8 +397,11 @@ int main(int argc, char* argv[]) {
     if (intf->count != 0) {
         intf_val = sub_intf_cmp(intf->sval[0]);
     }
+    if (otdb->count != 0) {
+        FILL_STRINGARG(otdb, otdb_val);
+    }
     if (xpath->count != 0) {
-        strncpy(xpath_val, xpath->filename[0], 256);
+        FILL_STRINGARG(xpath, xpath_val);
     }
     if (verbose->count != 0) {
         verbose_val = true;
@@ -407,24 +422,35 @@ int main(int argc, char* argv[]) {
     
     /// All configuration is done.
     /// Send all configuration data to program main function.
-    exitcode = otter_main(  (const char*)ttyfile_val, 
-                            baudrate_val, 
-                            enc_bits, enc_parity, enc_stopbits,
-                            pipe_val,
-                            (const char*)xpath_val,
-                            json);
+    bailout = false;
     
-    ///@todo some optimization could be realized by putting this ahead of the 
-    ///      call to otter_main, although the JSON part must be kept and freed
-    ///      only after main runs.
-    main_EXIT:
-    if (json != NULL) {
-        cJSON_Delete(json);
+    main_FINISH:
+    arg_freetable(argtable, sizeof(argtable)/sizeof(argtable[0]));
+    
+    if (bailout == false) {
+        exitcode = otter_main(  (const char*)ttyfile_val, 
+                                baudrate_val, 
+                                enc_bits, enc_parity, enc_stopbits,
+                                pipe_val,
+                                (const char*)otdb_val,
+                                (const char*)xpath_val,
+                                json    );
+    }
+    if (ttyfile_val != NULL) {
+        free(ttyfile_val);
+    }
+    if (xpath_val != NULL) {
+        free(xpath_val);
+    }
+    if (otdb_val != NULL) {
+        free(otdb_val);
     }
     if (buffer != NULL) {
         free(buffer);
     }
-    arg_freetable(argtable, sizeof(argtable)/sizeof(argtable[0]));
+    if (json != NULL) {
+        cJSON_Delete(json);
+    }
 
     return exitcode;
 }
@@ -438,6 +464,7 @@ int otter_main( const char* ttyfile,
                 int baudrate, 
                 int enc_bits, int enc_parity, int enc_stopbits,
                 bool pipe, 
+                const char* otdb,
                 const char* xpath,
                 cJSON* params) {    
     
@@ -578,6 +605,12 @@ int otter_main( const char* ttyfile,
         goto otter_main_TERM2;
     }
 
+    ///@todo open the socket to otdb, if required and if otdb is available
+#   if OTTER_FEATURE(HBUILDER)
+    if (otdb != NULL) {
+    
+    }
+#   endif
     
     /// Initialize the signal handlers for this process.
     /// These are activated by Ctl+C (SIGINT) and Ctl+\ (SIGQUIT) as is
@@ -597,7 +630,6 @@ int otter_main( const char* ttyfile,
     if (mpipe_fd != 0) {
         if (OTTER_FEATURE(MODBUS) && (cliopt_getintf() == INTF_modbus)) {
             DEBUG_PRINTF("Opening Modbus Interface\n");
-            
             pthread_create(&thr_mpreader, NULL, &modbus_reader, (void*)&mpipe_args);
             pthread_create(&thr_mpwriter, NULL, &modbus_writer, (void*)&mpipe_args);
             pthread_create(&thr_mpparser, NULL, &modbus_parser, (void*)&mpipe_args);
@@ -696,15 +728,17 @@ int otter_main( const char* ttyfile,
 
 
 
+
 void sub_json_loadargs(cJSON* json, 
                        char* ttyfile, 
                        int* baudrate_val, 
-                       bool* pipe_val,
-                       int* intf_val,
-                       char* xpath,
                        int* enc_bits,
                        int* enc_parity,
                        int* enc_stop,
+                       int* intf_val,
+                       bool* pipe_val,
+                       char* otdb,
+                       char* xpath,
                        bool* verbose_val ) {
 
 #   define GET_STRINGENUM_ARG(DST, FUNC, NAME) do { \
@@ -716,11 +750,13 @@ void sub_json_loadargs(cJSON* json,
         }   \
     } while(0)
                        
-#   define GET_STRING_ARG(DST, LIMIT, NAME) do { \
+#   define GET_STRING_ARG(DST, NAME) do { \
         arg = cJSON_GetObjectItem(json, NAME);  \
         if (arg != NULL) {  \
             if (cJSON_IsString(arg) != 0) {    \
-                strncpy(DST, arg->valuestring, LIMIT);   \
+                size_t sz = strlen(arg->valuestring)+1; \
+                DST = malloc(sz);   \
+                if (DST != NULL) memcpy(DST, arg->valuestring, sz); \
             }   \
         }   \
     } while(0)
@@ -761,23 +797,20 @@ void sub_json_loadargs(cJSON* json,
     }
     
     /// 2. Systematically get all of the individual arguments
-    GET_STRING_ARG(ttyfile, 256, "tty");
-
+    GET_STRING_ARG(ttyfile, "tty");
     GET_INT_ARG(baudrate_val, "baudrate");
-
-    GET_BOOL_ARG(pipe_val, "pipe");
-    
-    GET_STRINGENUM_ARG(intf_val, sub_intf_cmp, "intf");
-    
-    GET_STRING_ARG(xpath, 256, "tty");
-    
     GET_INT_ARG(enc_bits, "tty_bits");
     GET_CHAR_ARG(enc_parity, "tty_parity");
     GET_INT_ARG(enc_stop, "tty_stopbits");
+    GET_STRINGENUM_ARG(intf_val, sub_intf_cmp, "intf");
+    
+    GET_STRING_ARG(otdb, "otdb");
+    GET_STRING_ARG(xpath, "xpath");
+    
+    GET_BOOL_ARG(pipe_val, "pipe");
 
     GET_BOOL_ARG(verbose_val, "verbose");
 }
-
 
 
 
