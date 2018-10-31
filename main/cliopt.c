@@ -25,6 +25,7 @@ cliopt_t* cliopt_init(cliopt_t* new_master) {
     
     //master->verbose_on  = false;
     //master->debug_on    = false;
+    master->dummy_tty   = false;
     
     ///@note settings for modbus addressing, and perhaps future versions of
     ///      MPipe that have encryption.
@@ -41,6 +42,23 @@ bool cliopt_isverbose(void) {
 bool cliopt_isdebug(void) {
     return master->debug_on;
 }
+
+bool cliopt_isdummy(void) {
+    return master->dummy_tty;
+}
+
+void cliopt_setverbose(bool val) {
+    master->verbose_on = val;
+}
+
+void cliopt_setdebug(bool val) {
+    master->debug_on = val;
+}
+
+void cliopt_setdummy(bool val) {
+    master->dummy_tty = val;
+}
+
 
 FORMAT_Type cliopt_getformat(void) {
     return master->format;

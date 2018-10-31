@@ -53,6 +53,13 @@ int mpipe_open( mpipe_ctl_t* mpctl,
     struct termios tio;
     int c_par, i_par;
     
+    // See if the file is the "dummy" file, which is used to test IO without a 
+    // real tty file
+    if (strncmp(dev, "dummy", sizeof("dummy")) == 0) {
+        cliopt_setdummy(true);
+        return 0;
+    }
+    
     // See if the dev file input is resembling a serial line filename
     // This routine could be made more thorough
     if (strncmp(dev, "/dev/", 5) < 0) {
