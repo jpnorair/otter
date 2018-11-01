@@ -102,7 +102,8 @@ $(APP).debug: $(SUBMODULES)
 
 #Library dependencies (not in otter sources)
 $(LIBMODULES): %: 
-	cd ./../$@ && $(MAKE) lib && $(MAKE) install
+#	cd ./../$@ && $(MAKE) lib && $(MAKE) install
+	cd ./../$@ && $(MAKE) pkg
 
 #otter submodules
 $(SUBMODULES): %: directories
