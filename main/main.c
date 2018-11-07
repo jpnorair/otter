@@ -136,6 +136,7 @@ int otter_main( const char* ttyfile,
                 ); 
 
 INTF_Type sub_intf_cmp(const char* s1);
+FORMAT_Type sub_fmt_cmp(const char* s1);
 
 void sub_json_loadargs(cJSON* json, 
                        char* ttyfile, 
@@ -144,6 +145,7 @@ void sub_json_loadargs(cJSON* json,
                        int* enc_parity,
                        int* enc_stop,
                        int* intf_val,
+                       int* fmt_val,
                        bool* pipe_val,
                        char* otdb_val,
                        char* xpath,
@@ -207,6 +209,28 @@ INTF_Type sub_intf_cmp(const char* s1) {
     return selected_intf;
 }
 
+FORMAT_Type sub_fmt_cmp(const char* s1) {
+    FORMAT_Type selected_fmt;
+    
+    if (strcmp(s1, "default") == 0) {
+        selected_fmt = FORMAT_Default;
+    }
+    else if (strcmp(s1, "json") == 0) {
+        selected_fmt = FORMAT_Json;
+    }
+    else if (strcmp(s1, "bintex") == 0) {
+        selected_fmt = FORMAT_Bintex;
+    }
+    else if (strcmp(s1, "hex") == 0) {
+        selected_fmt = FORMAT_Hex;
+    }
+    else {
+        selected_fmt = FORMAT_Default;
+    }
+    
+    return selected_fmt;
+}
+
 
 
 
@@ -226,6 +250,7 @@ int main(int argc, char* argv[]) {
     struct arg_int  *brate   = arg_int0(NULL,NULL,"<baudrate>",         "Baudrate, default is 115200");
     struct arg_str  *ttyenc  = arg_str0("e", "encoding", "ttyenc",      "Manual-entry for TTY encoding (default mpipe:8N1, modbus:8N2)");
     struct arg_str  *intf    = arg_str0("i", "intf", "mpipe|modbus",    "Select \"mpipe\" or \"modbus\" interface (default=mpipe)");
+    struct arg_str  *fmt     = arg_str0("f", "fmt", "see opts",         "\"default\", \"json\", \"bintex\", \"hex\"");
     struct arg_lit  *pipe    = arg_lit0("p","pipe",                     "Use pipe I/O instead of terminal console");
     struct arg_file *otdb    = arg_file0("D","otdb","socket",           "Socket path/address to otdb server");
     struct arg_file *xpath   = arg_file0("x", "xpath", "path",          "Path to directory of external data processor programs");
@@ -239,7 +264,7 @@ int main(int argc, char* argv[]) {
     struct arg_lit  *version = arg_lit0(NULL,"version",                 "Print version information and exit");
     struct arg_end  *end     = arg_end(20);
     
-    void* argtable[] = {ttyfile,brate,ttyenc,intf,pipe,otdb,xpath,config,verbose,debug,help,version,end};
+    void* argtable[] = { ttyfile, brate, ttyenc, intf, fmt, pipe, otdb, xpath, config, verbose, debug, help, version, end };
     const char* progname = OTTER_PARAM(NAME);
     int nerrors;
     bool bailout        = true;
@@ -253,6 +278,7 @@ int main(int argc, char* argv[]) {
     
     int  baudrate_val   = OTTER_PARAM_DEFBAUDRATE;
     INTF_Type intf_val  = OTTER_FEATURE(MPIPE) ? INTF_mpipe : INTF_modbus;
+    FORMAT_Type fmt_val = FORMAT_Default;
     int enc_bits        = 8;
     int enc_parity      = (int)'N';
     int enc_stopbits    = (intf_val == INTF_modbus) ? 2 : 1;
@@ -354,7 +380,9 @@ int main(int argc, char* argv[]) {
             goto main_FINISH;
         }
         
-        {   int tmp_intf;
+        {   int tmp_intf = (int)intf_val;
+            int tmp_fmt  = (int)fmt_val;
+            
             sub_json_loadargs(  json, 
                                 ttyfile_val, 
                                 &baudrate_val, 
@@ -362,12 +390,15 @@ int main(int argc, char* argv[]) {
                                 &enc_parity, 
                                 &enc_stopbits, 
                                 &tmp_intf,
+                                &tmp_fmt,
                                 &pipe_val, 
                                 otdb_val,
                                 xpath_val,
                                 &verbose_val
                             );
+            
             intf_val = tmp_intf;
+            fmt_val  = tmp_fmt;
         }
     }
     
@@ -397,6 +428,9 @@ int main(int argc, char* argv[]) {
     if (intf->count != 0) {
         intf_val = sub_intf_cmp(intf->sval[0]);
     }
+    if (fmt->count != 0) {
+        fmt_val = sub_fmt_cmp(fmt->sval[0]);
+    }
     if (otdb->count != 0) {
         FILL_STRINGARG(otdb, otdb_val);
     }
@@ -408,8 +442,8 @@ int main(int argc, char* argv[]) {
     }
     
     /// Client Options.  These are read-only from internal modules
-    cliopts.format      = FORMAT_Dynamic;
     cliopts.intf        = intf_val;
+    cliopts.format      = fmt_val;
     if (debug->count != 0) {
         cliopts.debug_on    = true;
         cliopts.verbose_on  = true;
@@ -736,6 +770,7 @@ void sub_json_loadargs(cJSON* json,
                        int* enc_parity,
                        int* enc_stop,
                        int* intf_val,
+                       int* fmt_val,
                        bool* pipe_val,
                        char* otdb,
                        char* xpath,
@@ -803,6 +838,7 @@ void sub_json_loadargs(cJSON* json,
     GET_CHAR_ARG(enc_parity, "tty_parity");
     GET_INT_ARG(enc_stop, "tty_stopbits");
     GET_STRINGENUM_ARG(intf_val, sub_intf_cmp, "intf");
+    GET_STRINGENUM_ARG(fmt_val, sub_fmt_cmp, "fmt");
     
     GET_STRING_ARG(otdb, "otdb");
     GET_STRING_ARG(xpath, "xpath");

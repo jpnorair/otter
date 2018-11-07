@@ -416,12 +416,27 @@ void* mpipe_parser(void* args) {
                             fmt_crc(rlist->cursor->crcqual),
                             fmt_hexdump_header(rlist->cursor->buffer)
                         );
+                _PUTS(putsbuf);
             }
             else {
-                char crc_symbol = (rlist->cursor->crcqual == 0) ? 'v' : 'x';
-                sprintf(putsbuf, "[%c][%03d] ", crc_symbol, rlist->cursor->sequence);
+                switch (cliopt_getformat()) {
+                    case FORMAT_Hex: {
+                        putsbuf[0] = '0';
+                        putsbuf[1] = '0' + (rlist->cursor->crcqual != 0);
+                        putsbuf[2] = 0;
+                        ///@todo put this to the buffer without flushing it
+                    } break;
+                        
+                    case FORMAT_Json: ///@todo
+                    case FORMAT_Bintex: ///@todo
+                    default: {
+                        char crc_symbol = (rlist->cursor->crcqual == 0) ? 'v' : 'x';
+                        sprintf(putsbuf, "[%c][%03d] ", crc_symbol, rlist->cursor->sequence);
+                        _PUTS(putsbuf);
+                    } break;
+                }
             }
-            _PUTS(putsbuf);
+            
             
             /// If CRC is bad, dump hex of buffer-size and discard the 
             /// packet now.
@@ -463,6 +478,7 @@ void* mpipe_parser(void* args) {
 
             // Send an error if payload bytes is too big
             if (payload_bytes > rlist->cursor->size) {
+                ///@todo handle format variations
                 sprintf(putsbuf, "... Reported Payload Length (%zu) is larger than buffer (%zu).\n" \
                                  "... Possible transmission error.\n",
                                 payload_bytes, rlist->cursor->size
@@ -470,7 +486,7 @@ void* mpipe_parser(void* args) {
                 _PUTS(putsbuf);
             }
             
-            ///@todo implement m2def library
+            ///@note: ALP handlers should deal internally with format variations
             else if (rpkt_is_valid)  {
                 //m2def_sprintf(putsbuf, &rlist->cursor->buffer[6], 2048, "");
                 //_PUTS(putsbuf)
@@ -478,6 +494,7 @@ void* mpipe_parser(void* args) {
             }
             
             /// Dump hex if not using ALP
+            ///@todo handle format variations
             else {
                 fmt_printhex(_PUTS, payload_front, payload_bytes, 16);
             }

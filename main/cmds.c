@@ -578,14 +578,23 @@ int cmdext_hbuilder(void* hb_handle, void* cmd_handle, dterm_t* dt, uint8_t* dst
     rc = hbuilder_runcmd(hb_handle, cmd_handle, dst, &bytesout, dstmax, src, inbytes);
     
     if (rc < 0) {
-        dterm_printf(dt, "HBuilder Command Error (code %d)\n", rc);
-        if (rc == -2) {
-            dterm_printf(dt, "--> Input Error on character %zu\n", bytesout);
+        if (cliopt_getformat() == FORMAT_Default) {
+            dterm_printf(dt, "HBuilder Command Error (code %d)\n", rc);
+            if (rc == -2) {
+                dterm_printf(dt, "--> Input Error on character %zu\n", bytesout);
+            }
+        }
+        else if (cliopt_getformat() == FORMAT_Json) {
+            dterm_printf(dt, "{\"cmd\":\"%s\", \"err\":%i}", "hb", rc);
         }
     }
     else if ((rc > 0) && cliopt_isverbose()) {
-        //fprintf(stdout, "--> HBuilder returned %d: packetizing %zu bytes\n", rc, bytesout);
-        fprintf(stdout, "--> HBuilder packetizing %zu bytes\n", bytesout);
+        if (cliopt_getformat() == FORMAT_Default) {
+            fprintf(stdout, "--> HBuilder packetizing %zu bytes\n", bytesout);
+        }
+        else if (cliopt_getformat() == FORMAT_Json) {
+            dterm_printf(dt, "{\"cmd\":\"%s\", \"msg\":\"HBuilder packetizing %zu bytes\"}", "hb", bytesout);
+        }
     }
 
 #   else

@@ -97,12 +97,12 @@ int pipe_gethex(struct pollfd *pubfd, uint8_t* dst, size_t max) {
 
 void fmt_printhex(mpipe_printer_t puts_fn, uint8_t* src, size_t src_bytes, size_t cols) {
     const char convert[] = "0123456789ABCDEF";
-    size_t i;
+    int i;
     
-    if (cols < 1)
-        cols = 1;
+    //if (cols < 1)
+    //    cols = 1;
     
-    i = cols;
+    i = (int)cols;
     
     while (src_bytes-- != 0) {
         char hexstr[4] = {0, 0, 0, 0};
@@ -115,7 +115,7 @@ void fmt_printhex(mpipe_printer_t puts_fn, uint8_t* src, size_t src_bytes, size_
         i--;
         
         if ((i == 0) || (src_bytes == 0)) {
-            i = cols;
+            i = (int)cols;
             puts_fn("\n");
         }
         
@@ -326,7 +326,7 @@ void fmt_fprintalp(mpipe_printer_t puts_fn, cJSON* msgcall, uint8_t* src, size_t
         /// Punt non supported ALPs to HBUILDER, if HBUILDER is enabled.
 #       if OTTER_FEATURE(HBUILDER)
         else if (id != 0) {
-            hbuilder_fmtalp(puts_fn, id, cmd, payload, length);
+            hbuilder_fmtalp(puts_fn, (HBFMT_Type)cliopt_getformat(), id, cmd, payload, length);
         }
 #       endif
         

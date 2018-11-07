@@ -28,11 +28,10 @@ typedef enum {
 } INTF_Type;
 
 typedef enum {
-    FORMAT_Dynamic  = 0,
-    FORMAT_Bintex   = 1,
-    FORMAT_Hex8     = 2,
-    FORMAT_Hex16    = 3,
-    FORMAT_Hex32    = 4
+    FORMAT_Default  = 0,
+    FORMAT_Json     = 1,
+    FORMAT_Bintex   = 2,
+    FORMAT_Hex      = 3
 } FORMAT_Type;
 
 
