@@ -70,7 +70,7 @@ void* modbus_reader(void* args) {
 /// Thread that:
 /// <LI> Listens to modbus TTY via read(). </LI>
 /// <LI> Assembles the packet from TTY data. </LI>
-/// <LI> Adds packet into mpipe.rlist, sends cond-sig to mpipe_parser. </LI>
+/// <LI> Adds packet into mpipe.rlist, sends cond-sig to modbus_parser. </LI>
 
     struct pollfd fds[1];
     int pollcode;
@@ -154,7 +154,7 @@ void* modbus_reader(void* args) {
         goto modbus_reader_ERR;
     }
 
-    /// Copy the packet to the rlist and signal mpipe_parser()
+    /// Copy the packet to the rlist and signal modbus_parser()
     pthread_mutex_lock(rlist_mutex);
     frame_length = pktlist_add(rlist, false, rbuf, (size_t)frame_length);
     pthread_mutex_unlock(rlist_mutex);
@@ -163,7 +163,7 @@ void* modbus_reader(void* args) {
     }
     
     /// Error Handler: wait a few milliseconds, then handle the error.
-    /// @todo supply estimated bytes remaining into mpipe_flush()
+    /// @todo supply estimated bytes remaining into modbus_flush()
     modbus_reader_ERR:
     switch (errcode) {
         case 0: TTY_RX_PRINTF("Packet Received Successfully (%d bytes).\n", frame_length);
@@ -278,12 +278,12 @@ void* modbus_writer(void* args) {
 
 
 void* modbus_parser(void* args) {
-///@todo wait for mpipe_writer() to complete before killing any tlist data.  
+///@todo wait for modbus_writer() to complete before killing any tlist data.
 ///      A mutex could work here.
 ///@todo amputate tlist if it gets too big
 
 /// Thread that:
-/// <LI> Waits for cond-sig from mpipe_reader() when new packet(s) exist. </LI>
+/// <LI> Waits for cond-sig from modbus_reader() when new packet(s) exist. </LI>
 /// <LI> Makes sure the packet is valid. </LI>
 /// <LI> If the packet is encrypted, decrypt it. </LI>
 /// <LI> If the packet is raw, print it out using Hex formatting. </LI>
@@ -329,7 +329,7 @@ void* modbus_parser(void* args) {
         // - rlist->cursor points to the working packet
         pkt_condition = pktlist_getnew(rlist);
         if (pkt_condition < 0) {
-            goto mpipe_parser_END;
+            goto modbus_parser_END;
         }
         // =================================================================
             
@@ -355,18 +355,32 @@ void* modbus_parser(void* args) {
             /// need to be intelligently managed.
             rpkt_is_resp = true;
             
-            /// If Verbose, Print received header in real language
-            /// If not Verbose, just print the encoded packet status
-            if (cliopt_isverbose()) { 
-                sprintf(putsbuf, "\nRX'ed %zu bytes at %s, %s CRC\n",
-                            rlist->cursor->size,
-                            fmt_time(&rlist->cursor->tstamp),
-                            fmt_crc(rlist->cursor->crcqual)
+            // If Verbose, Print received header in real language
+            // If not Verbose, just print the encoded packet status
+            if (cliopt_isverbose()) {
+                sprintf(putsbuf, "\nRX'ed %zu bytes at %s, %s CRC: %s\n",
+                        rlist->cursor->size,
+                        fmt_time(&rlist->cursor->tstamp),
+                        fmt_crc(rlist->cursor->crcqual),
+                        fmt_hexdump_header(rlist->cursor->buffer)
                         );
             }
             else {
-                char crc_symbol = (rlist->cursor->crcqual == 0) ? 'v' : 'x';
-                sprintf(putsbuf, "[%c][%03d]\n", crc_symbol, rlist->cursor->sequence);
+                switch (cliopt_getformat()) {
+                    case FORMAT_Hex: {
+                        putsbuf[0] = '0';
+                        putsbuf[1] = '0' + (rlist->cursor->crcqual != 0);
+                        putsbuf[2] = 0;
+                    } break;
+                        
+                    case FORMAT_Json: ///@todo
+                    case FORMAT_Bintex: ///@todo
+                    default: {
+                        char crc_symbol = (rlist->cursor->crcqual == 0) ? 'v' : 'x';
+                        sprintf(putsbuf, "[%c][%03d] ", crc_symbol, rlist->cursor->sequence);
+                        
+                    } break;
+                }
             }
             _PUTS(putsbuf);
             
@@ -374,7 +388,7 @@ void* modbus_parser(void* args) {
             if (rlist->cursor->crcqual != 0) {
                 fmt_printhex(_PUTS, &rlist->cursor->buffer[0], rlist->cursor->size, 16);
                 pktlist_del(rlist, rlist->cursor);
-                goto mpipe_parser_END;
+                goto modbus_parser_END;
             }
             
             /// CRC is good, so send packet to Modbus processor.
@@ -422,7 +436,7 @@ void* modbus_parser(void* args) {
             //}
         }
         
-        mpipe_parser_END:
+        modbus_parser_END:
         pthread_mutex_unlock(tlist_mutex); 
         pthread_mutex_unlock(rlist_mutex);
         pthread_mutex_unlock(dtwrite_mutex); 
@@ -434,7 +448,7 @@ void* modbus_parser(void* args) {
     
     /// This code should never occur, given the while(1) loop.
     /// If it does (possibly a stack fuck-up), we print this "chaotic error."
-    fprintf(stderr, "\n--> Chaotic error: mpipe_parser() thread broke loop.\n");
+    fprintf(stderr, "\n--> Chaotic error: modbus_parser() thread broke loop.\n");
     raise(SIGINT);
     return NULL;
 }
