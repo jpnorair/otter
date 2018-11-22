@@ -24,6 +24,28 @@
 #   define DISABLED 0
 #endif
 
+
+/// Color codes for terminal output coloring
+#define _E_NRM  "\033[0m"
+#define _E_BLK  "\033[30;40m"
+#define _E_RED  "\033[31;40m"
+#define _E_GRN  "\033[32;40m"
+#define _E_YEL  "\033[33;40m"
+#define _E_BLU  "\033[34;40m"
+#define _E_MAG  "\033[35;40m"
+#define _E_CYN  "\033[36;40m"
+#define _E_WHT  "\033[37;40m"
+
+#define _E_BBLK "\033[1;30;40m"
+#define _E_BRED "\033[1;31;40m"
+#define _E_BGRN "\033[1;32;40m"
+#define _E_BYEL "\033[1;33;40m"
+#define _E_BBLU "\033[1;34;40m"
+#define _E_BMAG "\033[1;35;40m"
+#define _E_BCYN "\033[1;36;40m"
+#define _E_BWHT "\033[1;37;40m"
+
+
 /// Default feature configurations
 #define OTTER_FEATURE(VAL)          OTTER_FEATURE_##VAL
 #ifndef OTTER_FEATURE_MPIPE

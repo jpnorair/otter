@@ -19,8 +19,10 @@
 #include "debug.h"
 #include "mpipe.h"
 #include "ppipelist.h"
+#include "otter_cfg.h"
 
 // Local Libraries/Includes
+#include <cJSON.h>
 #include <bintex.h>
 #include "m2def.h"
 
@@ -410,13 +412,12 @@ void* mpipe_parser(void* args) {
             // If Verbose, Print received header in real language
             // If not Verbose, just print the encoded packet status
             if (cliopt_isverbose()) {
-                sprintf(putsbuf, "\nRX'ed %zu bytes at %s, %s CRC: %s\n",
+                sprintf(putsbuf, "\n" _E_BBLK "RX'ed %zu bytes at %s, %s CRC: %s" _E_NRM "\n",
                             rlist->cursor->size,
                             fmt_time(&rlist->cursor->tstamp),
                             fmt_crc(rlist->cursor->crcqual),
                             fmt_hexdump_header(rlist->cursor->buffer)
                         );
-                _PUTS(putsbuf);
             }
             else {
                 switch (cliopt_getformat()) {
@@ -426,17 +427,18 @@ void* mpipe_parser(void* args) {
                         putsbuf[2] = 0;
                         ///@todo put this to the buffer without flushing it
                     } break;
-                        
                     case FORMAT_Json: ///@todo
                     case FORMAT_Bintex: ///@todo
                     default: {
-                        char crc_symbol = (rlist->cursor->crcqual == 0) ? 'v' : 'x';
-                        sprintf(putsbuf, "[%c][%03d] ", crc_symbol, rlist->cursor->sequence);
-                        _PUTS(putsbuf);
+                        const char* valid_sym = _E_GRN"v";
+                        const char* error_sym = _E_RED"x"; 
+                        const char* crc_sym   = (rlist->cursor->crcqual == 0) ? valid_sym : error_sym;
+                        sprintf(putsbuf, _E_WHT "[" "%s" _E_WHT "][%03d] " _E_NRM, 
+                                crc_sym, rlist->cursor->sequence);
                     } break;
                 }
             }
-            
+            _PUTS(putsbuf);
             
             /// If CRC is bad, dump hex of buffer-size and discard the 
             /// packet now.

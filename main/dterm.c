@@ -24,6 +24,7 @@
 #include "user.h"
 
 // Local Libraries/Headers
+#include <cmdtab.h>
 #include <bintex.h>
 #include "m2def.h"
 
