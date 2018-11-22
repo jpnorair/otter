@@ -14,32 +14,48 @@
   *
   */
   
+  
+  ///@ todo replace this with GNU History
+  
 // Local Headers
 #include "cmdhistory.h"
 
 // Standard C Libraries
 #include <string.h>
-
+#include <stdlib.h>
 
 
 
 
 
 void ch_free(cmdhist* ch) {
-    // Right now, ch is static memory
+    if (ch != NULL) {
+        if (ch->history != NULL) {
+            free(ch->history);
+        }
+        ch->size = 0;
+        ch->count = 0;
+    }
 }
 
 
 
 
 cmdhist* ch_init(cmdhist *ch) {
-	ch->putcur      = ch->history;
-	ch->getstart    = ch->history;
-    ch->getend      = ch->history;
-    ch->count       = 0;
-    memset(ch->putcur, 0, CMD_HISTSIZE);
+    ///@todo make the size more dynamic than present
+    ch->size        = CMD_HISTSIZE;
     
-    return ch;
+    ch->history = malloc(ch->size);
+    if (ch->history != NULL) {
+	    ch->putcur      = ch->history;
+	    ch->getstart    = ch->history;
+        ch->getend      = ch->history;
+        ch->count       = 0;
+        memset(ch->putcur, 0, ch->size);
+        return ch;
+    }
+
+    return NULL;
 }
 
 
@@ -54,13 +70,13 @@ int ch_contains(cmdhist *ch, char *cmdstr) {
 	do {
         // if different - advance to the next cmd
 		if (*cur != *cscur) {
-			while (*cur != 0 && i++ < CMD_HISTSIZE) cur = ch_inc(ch, cur);
-            while (*cur == 0 && i++ < CMD_HISTSIZE) cur = ch_inc(ch, cur);            
+			while (*cur != 0 && i++ < ch->size) cur = ch_inc(ch, cur);
+            while (*cur == 0 && i++ < ch->size) cur = ch_inc(ch, cur);            
             cscur = cmdstr - 1;
 		}
         
         cur = ch_inc(ch, cur);
-	} while (*++cscur != 0 && ++i < CMD_HISTSIZE);
+	} while (*++cscur != 0 && ++i < ch->size);
 	
 	return *cscur == 0 && (*cur == 0 || cur == ch->getstart);
 }
@@ -85,35 +101,72 @@ void ch_add(cmdhist *ch, char *cmdstr) {
 
 void ch_remove(cmdhist *ch, char *cmdptr) {
     // no need to update getstart/getend cause its called from ch_add
-    ch->count--;
-	char *oldptr = cmdptr;
+    char* oldptr = cmdptr;
 
 	do {
 		*cmdptr = 0;
         cmdptr  = ch_inc(ch, cmdptr);
     } while ((cmdptr != oldptr) && (*cmdptr != 0));
+    
+    ch->count--;
 }
 
 
-
-char *ch_next(cmdhist *ch) {
+/*
+char* ch_next(cmdhist *ch) {
     if (ch->count == 0)
-        return 0;
+        return NULL;
     
-    char *next = 0;
+    char *prev = NULL;
     char *cur = ch->getend;
     
-    // shift to next command
+    // shift to prev command
     while ((cur = ch_inc(ch, cur)) != ch->getstart && (*cur == 0));
-    next = cur;
+    prev = cur;
     while ((cur = ch_inc(ch, cur)) != ch->getstart && (*cur != 0));
     
     // align cursors
-    ch->getstart = next;
+    ch->getstart = prev;
     ch->getend = cur;
     
-	return next;
+	return prev;
 }
+*/
+
+char* ch_next(cmdhist *ch) {
+    char* prev;
+    char* cursor;
+
+    if (ch->count == 0)
+        return NULL;
+    
+    prev = ch->getstart;
+    
+    // ch->getend moves to the first 0 behind ch->getstart
+    cursor = ch->getstart;
+    while (*cursor != 0) {
+        cursor = ch_dec(ch, cursor);
+        if (cursor == ch->getstart) {
+            break;
+        }
+    }
+    ch->getend = cursor;
+    
+    // ch->getstart moves to the position ahead of the first 0 behind getend.
+    while (*cursor == 0) {
+        cursor = ch_dec(ch, cursor);
+    }
+    if (cursor != ch->getstart) {
+        while (*cursor != 0) {
+            cursor = ch_dec(ch, cursor);
+        }
+        cursor = ch_inc(ch, cursor);
+        ch->getstart = cursor;
+    }
+
+    return prev;
+}
+
 
 
 char *ch_prev(cmdhist *ch) {
@@ -122,7 +175,7 @@ char *ch_prev(cmdhist *ch) {
     if (ch->count == 0)
         return 0;
 
-    // shift to prev command
+    // shift to next command
     while ((ch->getstart = ch_dec(ch, ch->getstart)) != ch->getend && (*ch->getstart == 0));
     cur = ch->getstart;
     while ((ch->getstart = ch_dec(ch, ch->getstart)) != ch->getend && (*ch->getstart != 0));
@@ -136,11 +189,23 @@ char *ch_prev(cmdhist *ch) {
 }
 
 
-char *ch_inc(cmdhist *ch, char *cmdcur) {    
-	return ++cmdcur == ch->history + CMD_HISTSIZE ? ch->history : cmdcur;
+char* ch_inc(cmdhist* ch, char* cmdcur) {
+    cmdcur++;
+    if (cmdcur >= (ch->history + ch->size)) {
+        cmdcur = ch->history;
+    }
+    return cmdcur;
+    
+	//return ++cmdcur == (ch->history + ch->size) ? ch->history : cmdcur;
 }
 
 
 char *ch_dec(cmdhist *ch, char *cmdcur) {
-	return cmdcur == (ch->history) ? ch->history+CMD_HISTSIZE-1 : (cmdcur - 1);
+    cmdcur--;
+    if (cmdcur < ch->history) {
+        cmdcur = ch->history+ch->size-1;
+    }
+    return cmdcur;
+
+	//return cmdcur == (ch->history) ? ch->history+ch->size-1 : (cmdcur - 1);
 }

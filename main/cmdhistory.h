@@ -19,9 +19,12 @@
 
 #define CMD_HISTSIZE 1024
 
+#include <stdio.h>
+
 // command history sate
 typedef struct {
-    char history[CMD_HISTSIZE];
+    size_t size;
+    char* history;
     char *putcur;
     char *getstart;
     char *getend;
