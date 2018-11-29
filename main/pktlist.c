@@ -6,6 +6,7 @@
 //  Copyright © 2017 JP Norair (Indigresso). All rights reserved.
 //
 
+#include "devtable.h"
 #include "pktlist.h"
 #include "cliopt.h"
 #include "user.h"
@@ -13,6 +14,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+
 
 #include "crc_calc_block.h"
 

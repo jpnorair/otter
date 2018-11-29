@@ -89,12 +89,17 @@
 #ifndef OTTER_PARAM_MBTIMEOUT
 #   define OTTER_PARAM_MBTIMEOUT    20
 #endif
+#ifndef OTTER_PARAM_DEFMBSLAVE
+#   define OTTER_PARAM_DEFMBSLAVE   2
+#endif
 #ifndef OTTER_PARAM_ENCALIGN
 #   define OTTER_PARAM_ENCALIGN     1
 #endif
+#ifndef OTTER_DEVTAB_CHUNK
+#   define OTTER_DEVTAB_CHUNK       4
+#endif
 
-
-/// Automatic Checks
+/// Automatic Checkss
 #if ((OTTER_FEATURE_MPIPE != ENABLED) && (OTTER_FEATURE_MODBUS != ENABLED))
 #   error "No TTY interface enabled.  MPipe (default) and Modbus both disabled"
 #endif

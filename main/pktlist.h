@@ -9,19 +9,22 @@
 #ifndef pktlist_h
 #define pktlist_h
 
+#include "devtable.h"
+
 #include <stdio.h>
 #include <stdint.h>
 #include <stdbool.h>
 #include <time.h>
 
 typedef struct pkt {
-    uint8_t*    buffer;
-    size_t      size;
-    int         crcqual;
-    int         sequence;
-    time_t      tstamp;
-    struct pkt  *prev;
-    struct pkt  *next;
+    devtab_node_t   devnode;
+    uint8_t*        buffer;
+    size_t          size;
+    int             crcqual;
+    int             sequence;
+    time_t          tstamp;
+    struct pkt      *prev;
+    struct pkt      *next;
 } pkt_t;
 
 

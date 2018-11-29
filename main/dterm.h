@@ -24,6 +24,8 @@
 #include "cmdhistory.h"
 #include "mpipe.h"
 
+#include <cmdtab.h>
+
 // Standard C & POSIX Libraries
 #include <pthread.h>
 #include <stdbool.h>
@@ -97,7 +99,8 @@ typedef struct {
 typedef struct {
     dterm_t*            dt;
     cmdhist*            ch;
-    
+    cmdtab_t*           cmdtab;
+    void*               devtab_handle;
     pktlist_t*          tlist;
     
     pthread_mutex_t*    dtwrite_mutex;
@@ -107,7 +110,7 @@ typedef struct {
     pthread_cond_t*     kill_cond;
 } dterm_arg_t;
 
-
+#define dterm_handle_t dterm_arg_t
 
 
 

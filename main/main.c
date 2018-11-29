@@ -38,6 +38,7 @@
 #include "otter_cfg.h"
 
 // Application Headers
+#include "devtable.h"
 #include "dterm.h"
 #include "mpipe.h"
 #include "modbus.h"
@@ -130,7 +131,7 @@ int otter_main( const char* ttyfile,
                 int baudrate,
                 int enc_bits, int enc_parity, int enc_stopbits,
                 bool pipe,
-                const char* otdb,
+                bool multi,
                 const char* xpath,
                 cJSON* params
                 ); 
@@ -147,7 +148,7 @@ void sub_json_loadargs(cJSON* json,
                        int* intf_val,
                        int* fmt_val,
                        bool* pipe_val,
-                       char* otdb_val,
+                       bool* multi_val,
                        char* xpath,
                        bool* verbose_val );
 
@@ -246,32 +247,31 @@ int main(int argc, char* argv[]) {
         memcpy(VAR, ARGITEM->filename[0], str_sz);          \
     } while(0);
 
-    struct arg_file *ttyfile = arg_file1(NULL,NULL,"<ttyfile>",         "Path to tty file (e.g. /dev/tty.usbmodem)");
-    struct arg_int  *brate   = arg_int0(NULL,NULL,"<baudrate>",         "Baudrate, default is 115200");
+    struct arg_file *ttyfile = arg_file1(NULL,NULL,"ttyfile",           "Path to tty file (e.g. /dev/tty.usbmodem)");
+    struct arg_int  *brate   = arg_int0(NULL,NULL,"baudrate",           "Baudrate, default is 115200");
     struct arg_str  *ttyenc  = arg_str0("e", "encoding", "ttyenc",      "Manual-entry for TTY encoding (default mpipe:8N1, modbus:8N2)");
     struct arg_str  *intf    = arg_str0("i", "intf", "mpipe|modbus",    "Select \"mpipe\" or \"modbus\" interface (default=mpipe)");
-    struct arg_str  *fmt     = arg_str0("f", "fmt", "see opts",         "\"default\", \"json\", \"bintex\", \"hex\"");
+    struct arg_str  *fmt     = arg_str0("f", "fmt", "format",           "\"default\", \"json\", \"bintex\", \"hex\"");
     struct arg_lit  *pipe    = arg_lit0("p","pipe",                     "Use pipe I/O instead of terminal console");
-    struct arg_file *otdb    = arg_file0("D","otdb","socket",           "Socket path/address to otdb server");
+    struct arg_lit  *multi   = arg_lit0("m","multi",                    "Support multiple target addressing");
     struct arg_file *xpath   = arg_file0("x", "xpath", "path",          "Path to directory of external data processor programs");
     //struct arg_str  *parsers = arg_str1("p", "parsers", "<msg:parser>", "parser call string with comma-separated msg:parser pairs");
     //struct arg_str  *fparse  = arg_str1("P", "parsefile", "<file>",     "file containing comma-separated msg:parser pairs");
     // Generic
-    struct arg_file *config  = arg_file0("c", "config", "<file.json>",  "JSON based configuration file.");
+    struct arg_file *config  = arg_file0("c","config","file.json",      "JSON based configuration file.");
     struct arg_lit  *verbose = arg_lit0("v","verbose",                  "Use verbose mode");
     struct arg_lit  *debug   = arg_lit0("d","debug",                    "Set debug mode on: requires compiling for debug");
     struct arg_lit  *help    = arg_lit0(NULL,"help",                    "Print this help and exit");
     struct arg_lit  *version = arg_lit0(NULL,"version",                 "Print version information and exit");
     struct arg_end  *end     = arg_end(20);
     
-    void* argtable[] = { ttyfile, brate, ttyenc, intf, fmt, pipe, otdb, xpath, config, verbose, debug, help, version, end };
+    void* argtable[] = { ttyfile, brate, ttyenc, intf, fmt, pipe, multi, xpath, config, verbose, debug, help, version, end };
     const char* progname = OTTER_PARAM(NAME);
     int nerrors;
     bool bailout        = true;
     int exitcode        = 0;
     
     char* ttyfile_val   = NULL;
-    char* otdb_val      = NULL;
     char* xpath_val     = NULL;
     cJSON* json         = NULL;
     char* buffer        = NULL;
@@ -283,6 +283,7 @@ int main(int argc, char* argv[]) {
     int enc_parity      = (int)'N';
     int enc_stopbits    = (intf_val == INTF_modbus) ? 2 : 1;
     
+    bool multi_val      = false;
     bool pipe_val       = false;
     bool verbose_val    = false;
 
@@ -392,7 +393,7 @@ int main(int argc, char* argv[]) {
                                 &tmp_intf,
                                 &tmp_fmt,
                                 &pipe_val, 
-                                otdb_val,
+                                &multi_val,
                                 xpath_val,
                                 &verbose_val
                             );
@@ -431,8 +432,8 @@ int main(int argc, char* argv[]) {
     if (fmt->count != 0) {
         fmt_val = sub_fmt_cmp(fmt->sval[0]);
     }
-    if (otdb->count != 0) {
-        FILL_STRINGARG(otdb, otdb_val);
+    if (multi->count != 0) {
+        multi_val = true;
     }
     if (xpath->count != 0) {
         FILL_STRINGARG(xpath, xpath_val);
@@ -466,7 +467,7 @@ int main(int argc, char* argv[]) {
                                 baudrate_val, 
                                 enc_bits, enc_parity, enc_stopbits,
                                 pipe_val,
-                                (const char*)otdb_val,
+                                multi_val,
                                 (const char*)xpath_val,
                                 json    );
     }
@@ -475,9 +476,6 @@ int main(int argc, char* argv[]) {
     }
     if (xpath_val != NULL) {
         free(xpath_val);
-    }
-    if (otdb_val != NULL) {
-        free(otdb_val);
     }
     if (buffer != NULL) {
         free(buffer);
@@ -498,7 +496,7 @@ int otter_main( const char* ttyfile,
                 int baudrate, 
                 int enc_bits, int enc_parity, int enc_stopbits,
                 bool pipe, 
-                const char* otdb,
+                bool multi,
                 const char* xpath,
                 cJSON* params) {    
     
@@ -541,6 +539,18 @@ int otter_main( const char* ttyfile,
     /// This must be the first module to be initialized.
     ///@todo in the future, let's pull this from an initialization file or
     ///      something dynamic as such.
+    
+    /// Device Table initialization.  Only used if multi-device support is
+    /// enabled.
+    if (multi) {
+        if (devtab_init(&dterm_args.devtab_handle) != 0) {
+            ///@todo print an error
+            goto otter_main_TERM0;
+        }
+    }
+    else {
+        dterm_args.devtab_handle = NULL;
+    }
     
     /// Initialize the user manager.
     /// This must be done prior to command module init
@@ -639,12 +649,6 @@ int otter_main( const char* ttyfile,
         goto otter_main_TERM2;
     }
 
-    ///@todo open the socket to otdb, if required and if otdb is available
-#   if OTTER_FEATURE(HBUILDER)
-    if (otdb != NULL) {
-    
-    }
-#   endif
     
     /// Initialize the signal handlers for this process.
     /// These are activated by Ctl+C (SIGINT) and Ctl+\ (SIGQUIT) as is
@@ -736,9 +740,11 @@ int otter_main( const char* ttyfile,
     mpipe_freelists(&mpipe_rlist, &mpipe_tlist);
     DEBUG_PRINTF("Freeing PPipe lists\n");
     ppipelist_deinit();
-    user_deinit();
     cmd_free(NULL);
+    user_deinit();
+    devtab_free(dterm_args.devtab_handle);
     
+    otter_main_TERM0:
     // cli.exitcode is set to 0, unless sigint is raised.
     DEBUG_PRINTF("Exiting cleanly and flushing output buffers\n");
     fflush(stdout);
@@ -772,7 +778,7 @@ void sub_json_loadargs(cJSON* json,
                        int* intf_val,
                        int* fmt_val,
                        bool* pipe_val,
-                       char* otdb,
+                       bool* multi_val,
                        char* xpath,
                        bool* verbose_val ) {
 
@@ -840,7 +846,7 @@ void sub_json_loadargs(cJSON* json,
     GET_STRINGENUM_ARG(intf_val, sub_intf_cmp, "intf");
     GET_STRINGENUM_ARG(fmt_val, sub_fmt_cmp, "fmt");
     
-    GET_STRING_ARG(otdb, "otdb");
+    GET_BOOL_ARG(multi_val, "multi");
     GET_STRING_ARG(xpath, "xpath");
     
     GET_BOOL_ARG(pipe_val, "pipe");

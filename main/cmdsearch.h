@@ -25,6 +25,17 @@
 #include <cmdtab.h>
 
 
+typedef enum {
+    ENVDICT_raw = 0,
+    ENVDICT_string,
+    ENVDICT_int,
+    ENVDICT_float,
+    ENVDICT_double,
+    ENVDICT_MAX
+} envdict_type_enum;
+
+
+
 int cmd_init(cmdtab_t* init_table, const char* xpath);
 
 int cmd_free(cmdtab_t* init_table);
