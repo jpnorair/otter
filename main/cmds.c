@@ -181,10 +181,10 @@ uint8_t* goto_eol(uint8_t* src) {
   * ------------------------------------------------------------------------
   */
 
-int cmd_quit(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
+int cmd_quit(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
     /// dt == NULL is the initialization case.
     /// There may not be an initialization for all command groups.
-    if (dt == NULL) {
+    if (dth == NULL) {
         return 0;
     }
     
@@ -196,21 +196,21 @@ int cmd_quit(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstma
 
 
 extern cmdtab_t* otter_cmdtab;
-int cmd_cmdlist(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
+int cmd_cmdlist(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
     int bytes_out;
     char cmdprint[1024];
 
     /// dt == NULL is the initialization case.
     /// There may not be an initialization for all command groups.
-    if (dt == NULL) {
+    if (dth == NULL) {
         return 0;
     }
     
     INPUT_SANITIZE();
     
     bytes_out = cmdtab_list(otter_cmdtab, cmdprint, 1024);
-    dterm_puts(dt, "Commands available:\n");
-    dterm_puts(dt, cmdprint);
+    dterm_puts(dth->dt, "Commands available:\n");
+    dterm_puts(dth->dt, cmdprint);
     
     return 0;
 }
@@ -225,12 +225,12 @@ int cmd_cmdlist(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t ds
   * ------------------------------------------------------------------------
   */
 
-int cmd_set(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
+int cmd_set(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
 ///@todo This will do setting of Otter Env Variables.
     
     /// dt == NULL is the initialization case.
     /// There may not be an initialization for all command groups.
-    if (dt == NULL) {
+    if (dth == NULL) {
         return 0;
     }
     
@@ -242,20 +242,20 @@ int cmd_set(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax
 }
 
 
-int cmd_sethome(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
+int cmd_sethome(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
 ///@todo make this a recipient for "set HOME" or simply remove it.  Must be aligned
 ///      with environment variable module.
 
     /// dt == NULL is the initialization case.
     /// There may not be an initialization for all command groups.
-    if (dt == NULL) {
+    if (dth == NULL) {
         return 0;
     }
     
     INPUT_SANITIZE();
     
     if (*inbytes >= 1023) {
-        dterm_puts(dt, "Error: supplied home-path is too long, must be < 1023 chars.\n");
+        dterm_puts(dth->dt, "Error: supplied home-path is too long, must be < 1023 chars.\n");
     }
     else {
         strcpy(home_path, (char*)src);
@@ -279,7 +279,7 @@ int cmd_sethome(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t ds
   * ------------------------------------------------------------------------
   */
 
-int cmd_chuser(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
+int cmd_chuser(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
 /// src is a string containing:
 /// - "guest" which is a single argument
 /// - "user [address]"
@@ -292,7 +292,7 @@ int cmd_chuser(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dst
 ///
 #if (OTTER_FEATURE(SECURITY) != ENABLED)
     /// dt == NULL is the initialization case, but it is unused here.
-    if (dt == NULL) {
+    if (dth == NULL) {
         return 0;
     }
     INPUT_SANITIZE();
@@ -305,7 +305,7 @@ int cmd_chuser(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dst
     
     /// dt == NULL is the initialization case.
     /// 
-    if (dt == NULL) {
+    if (dth == NULL) {
         return 0;
     }
     
@@ -344,8 +344,8 @@ int cmd_chuser(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dst
     /// If user parameter was entered as Admin/User or Root, then we need  
     /// to look for additional parameters.
     if ((test_id == -1) || (test_id > (int)USER_guest)) {
-        dterm_puts(dt, (char*)src);
-        dterm_puts(dt, " is not a recognized user type.\nTry: guest, admin, root\n");
+        dterm_puts(dth->dt, (char*)src);
+        dterm_puts(dth->dt, " is not a recognized user type.\nTry: guest, admin, root\n");
         goto cmd_chuser_END;
     }
     
@@ -373,7 +373,7 @@ int cmd_chuser(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dst
         // for l, look for a key parameter in BINTEX and pass it to user module
         // for d, look for ID parameter in BINTEX and pass it to user db module
         if ((mode != 'l') && (mode != 'd')) {
-            dterm_puts(dt, "--> Option not supported.  Use -l or -d.\n");
+            dterm_puts(dth->dt, "--> Option not supported.  Use -l or -d.\n");
         }
         else {
             if (mode == 'l') {
@@ -382,10 +382,10 @@ int cmd_chuser(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dst
                 key_size = bintex_ss((unsigned char*)src, aes128_key, 16);
 
                 if (key_size != 16) {
-                    dterm_puts(dt, "--> Key is not a recognized size: should be 128 bits.\n");
+                    dterm_puts(dth->dt, "--> Key is not a recognized size: should be 128 bits.\n");
                 }
                 else if (0 != user_set_local((USER_Type)test_id, 0, aes128_key)) {
-                    dterm_puts(dt, "--> Key cannot be added to this user.\n");
+                    dterm_puts(dth->dt, "--> Key cannot be added to this user.\n");
                 }
             }
             else {
@@ -397,7 +397,7 @@ int cmd_chuser(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dst
                     dterm_puts(dt, "--> User ID not found.\n");
                 }
 #               else
-                dterm_puts(dt, "--> This build of otter does not support external DB user lookup.\n");
+                dterm_puts(dth->dt, "--> This build of otter does not support external DB user lookup.\n");
 #               endif
             }
         }
@@ -419,37 +419,37 @@ int cmd_chuser(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dst
 
 
 
-int cmd_su(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
+int cmd_su(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
 /// su takes no arguments, and it wraps cmd_chuser
     int chuser_inbytes;
     char* chuser_cmd = "root";
     
-    if (dt == NULL) {
+    if (dth->dt == NULL) {
         return 0;
     }
     INPUT_SANITIZE();
 
-    return cmd_chuser(dt, dst, &chuser_inbytes, (uint8_t*)chuser_cmd, dstmax);
+    return cmd_chuser(dth, dst, &chuser_inbytes, (uint8_t*)chuser_cmd, dstmax);
 }
 
 
 
-int cmd_useradd(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
+int cmd_useradd(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
 /// su takes no arguments, and it wraps cmd_chuser
     int chuser_inbytes;
     char* chuser_cmd = "root";
     
-    if (dt == NULL) {
+    if (dth == NULL) {
         return 0;
     }
     INPUT_SANITIZE();
 
-    return cmd_chuser(dt, dst, &chuser_inbytes, (uint8_t*)chuser_cmd, dstmax);
+    return cmd_chuser(dth, dst, &chuser_inbytes, (uint8_t*)chuser_cmd, dstmax);
 }
 
 
 
-int cmd_whoami(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
+int cmd_whoami(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
 /// whoami command does not send any data to the target, it just checks to see
 /// who is the active CLI user, and if it has been authenticated successfully.
     char output[64];
@@ -457,15 +457,15 @@ int cmd_whoami(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dst
     
     /// dt == NULL is the initialization case.
     /// There may not be an initialization for all command groups.
-    if (dt == NULL) {
+    if (dth == NULL) {
         return 0;
     }
     
     INPUT_SANITIZE();     
     
     if (*inbytes != 0) {
-        dterm_puts(dt, "Usage: whoami [no parameters]\n");
-        dterm_puts(dt, "Indicates the current user and address\n");
+        dterm_puts(dth->dt, "Usage: whoami [no parameters]\n");
+        dterm_puts(dth->dt, "Indicates the current user and address\n");
     }
     else {
         if (user_idval_get() == 0) {
@@ -475,15 +475,15 @@ int cmd_whoami(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dst
             sprintf(output, "%s@%016llX", user_typestring_get(), user_idval_get());
         }
         
-        dterm_puts(dt, output);
+        dterm_puts(dth->dt, output);
         
         /// @todo indicate if authentication response has been successfully
         ///       received from the target.
         if (user_typeval_get() < USER_guest) {
-            dterm_puts(dt, " [no auth available yet]");
+            dterm_puts(dth->dt, " [no auth available yet]");
         }
         
-        dterm_putc(dt, '\n');
+        dterm_putc(dth->dt, '\n');
     }
     
     return 0;
@@ -502,14 +502,14 @@ int cmd_whoami(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dst
 ///@todo make separate commands for file & string based input
 // Raw Protocol Entry: This is implemented fully and it takes a Bintex
 // expression as input, with no special keywords or arguments.
-int cmd_raw(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
+int cmd_raw(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
     const char* filepath;
     FILE*       fp;
     int         bytesout;
     
     /// dt == NULL is the initialization case.
     /// There may not be an initialization for all command groups.
-    if (dt == NULL) {
+    if (dth == NULL) {
         return 0;
     }
     
@@ -544,7 +544,7 @@ int cmd_raw(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax
     
     ///@todo convert the character number into a line and character number
     if (bytesout < 0) {
-        dterm_printf(dt, "Bintex error on character %d.\n", -bytesout);
+        dterm_printf(dth->dt, "Bintex error on character %d.\n", -bytesout);
     }
     else if (cliopt_isverbose() && (bytesout > 0)) {
         fprintf(stdout, "--> raw packetizing %d bytes (max=%zu)\n", bytesout, dstmax);
@@ -558,7 +558,7 @@ int cmd_raw(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax
 
 
 
-int cmdext_hbuilder(void* hb_handle, void* cmd_handle, dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
+int cmdext_hbuilder(void* hb_handle, void* cmd_handle, dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
     bool is_eos     = false;
     size_t bytesout = 0;
     int rc;
@@ -579,13 +579,13 @@ int cmdext_hbuilder(void* hb_handle, void* cmd_handle, dterm_t* dt, uint8_t* dst
     
     if (rc < 0) {
         if (cliopt_getformat() == FORMAT_Default) {
-            dterm_printf(dt, "HBuilder Command Error (code %d)\n", rc);
+            dterm_printf(dth->dt, "HBuilder Command Error (code %d)\n", rc);
             if (rc == -2) {
-                dterm_printf(dt, "--> Input Error on character %zu\n", bytesout);
+                dterm_printf(dth->dt, "--> Input Error on character %zu\n", bytesout);
             }
         }
         else if (cliopt_getformat() == FORMAT_Json) {
-            dterm_printf(dt, "{\"cmd\":\"%s\", \"err\":%i}", "hb", rc);
+            dterm_printf(dth->dt, "{\"cmd\":\"%s\", \"err\":%i}", "hb", rc);
         }
     }
     else if ((rc > 0) && cliopt_isverbose()) {
@@ -593,7 +593,7 @@ int cmdext_hbuilder(void* hb_handle, void* cmd_handle, dterm_t* dt, uint8_t* dst
             fprintf(stdout, "--> HBuilder packetizing %zu bytes\n", bytesout);
         }
         else if (cliopt_getformat() == FORMAT_Json) {
-            dterm_printf(dt, "{\"cmd\":\"%s\", \"msg\":\"HBuilder packetizing %zu bytes\"}", "hb", bytesout);
+            dterm_printf(dth->dt, "{\"cmd\":\"%s\", \"msg\":\"HBuilder packetizing %zu bytes\"}", "hb", bytesout);
         }
     }
 
@@ -609,96 +609,15 @@ int cmdext_hbuilder(void* hb_handle, void* cmd_handle, dterm_t* dt, uint8_t* dst
 
 
 
-/*
-int cmd_hbcc(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
-/// HBCC src must be a code-word, then whitespace, then optionally a bintex string.
-/// @todo wrap this into command handling library
-    bool is_eos = false;
-    int output_code;
-    size_t bytesout = 0;
-    
-    /// Initialization
-    if (dt == NULL) {
-#       if defined(__HBUILDER__)
-        hbcc_init();
-#       endif
-        return 0;
-    }
-    
-    INPUT_SANITIZE_FLAG_EOS(is_eos);
-    
-#   if defined(__HBUILDER__)
-    {   //size_t      code_len;
-        //size_t      code_max;
-        uint8_t*    cursor;
-    
-        /// 1. This routine will isolate the command or argument string within
-        ///    the input string.  It updates the the position of src to remove
-        ///    preceding whitespace, and returns the position after the command
-        ///    or argument string.
-        cursor = sub_markstring(&src, inbytes, 32);
-        
-        /// 2. The code word might be an argument preceded by a hyphen ('-').
-        ///    This is of the typical format for unix command line apps.
-        ///@todo this functionality is not used exactly at this moment.
-        if (src[0] == '-') {
-            // Process parameter list.  Currently undefined
-            //mode = 1;
-            output_code = 0;
-        }
-        
-        /// 3. If not an argument, the command is an API command (not a control)
-        ///    and thus has the normal codeword+bintex format.
-        
-        else {
-            uint8_t temp_buffer[128];
-            bytesout = bintex_ss((unsigned char*)cursor, (unsigned char*)temp_buffer, (int)sizeof(temp_buffer));
-            
-#           if (defined(__PRINT_BINTEX))
-            test_dumpbytes(temp_buffer, bytesout, "HBCC Partial Bintex output");
-#           endif
-            
-            /// hbcc_generate() will create the complete, ALP-framed API message.
-            /// - It will return a negative number on error
-            /// - It returns 0 when command is queued
-            /// - It returns positive number when commands are queued and should
-            ///   be packetized over MPipe.
-            /// - Possible to call 'hbcc flush' anytime to page-out commands.
-            output_code = hbcc_generate(dst, &bytesout, dstmax, (const char*)src, (size_t)bytesout, temp_buffer);
-            
-            //if ((output_code == 0) && is_eos) {
-            //    bytesout = hbcc_flush();
-            //}
-            //fprintf(stderr, "hbcc called, generated %d bytes\n", bytesout);
-        }
-
-        if (cliopt_isverbose() && (output_code > 0)) {
-            fprintf(stdout, "--> hbcc packetizing %zu bytes\n", bytesout);
-        }
-
-        return (int)output_code;
-    }
-    
-#   else
-    fprintf(stderr, "hbcc invoked %s\n", src);
-    return -2;
-    
-#   endif
-}
-*/
-
-
-
-
 
 ///@todo these commands are simply for test purposes right now. 
 
 // ID = 0
-int app_null(dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
+int app_null(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
     
     /// dt == NULL is the initialization case.
     /// There may not be an initialization for all command groups.
-    if (dt == NULL) {
+    if (dth == NULL) {
         return 0;
     }
     

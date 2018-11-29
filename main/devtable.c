@@ -19,7 +19,6 @@
 #include "devtable.h"
 
 // HB libraries
-#include <judy.h>
 #if OTTER_FEATURE(SECURITY)
 #   include <oteax.h>
 #endif
@@ -31,15 +30,16 @@
 #include <stdbool.h>
 #include <ctype.h>
 
-#define JUDYKEYS_PER_UID    ((8+JUDY_key_size-1)/JUDY_key_size)
 
 typedef struct {
     uint16_t    flags;
     uint16_t    vid;
     uint64_t    uid;
     void*       intf;
+#   if OTTER_FEATURE(SECURITY)
     eax_ctx     root;
     eax_ctx     user;
+#   endif
 } devtab_item_t;
 
 typedef struct {
@@ -57,166 +57,15 @@ typedef struct {
 
 
 
+
+
+
+
 // comapres two values by integer compare
-static int local_cmp64(uint64_t a, uint64_t b);
-static int local_cmp16(uint16_t a, uint16_t b);
-
-devtab_item_t* devtab_searchins_uid(devtab_t* table, uint64_t uid, int operation);
-devtab_vid_t* devtab_searchins_vid(devtab_t* table, uint16_t vid, int operation);
-
-
-
-devtab_item_t* devtab_searchins_uid(devtab_t* table, uint64_t uid, int operation) {
-/// An important condition of using this function with insert is that table->alloc must
-/// be greater than table->size.
-///
-/// Verify that cmdname is not a zero-length string, then search for it in the
-/// list of available commands.
-///
-    devtab_item_t** head;
-    devtab_item_t* output = NULL;
-    int cci = 0;
-    int csc = -1;
-
-    if (table == NULL) {
-        return NULL;
-    }
-
-    {   int l   = 0;
-        int r   = (int)table->size - 1;
-        head    = table->cell;
-    
-        while (r >= l) {
-            cci = (l + r) >> 1;
-            csc = local_cmp64(head[cci]->uid, uid);
-            
-            switch (csc) {
-                case -1: r = cci - 1;
-                         break;
-                
-                case  1: l = cci + 1;
-                         break;
-                
-                default: output = head[cci];
-                         goto devtab_searchins_uid_DO;
-            }
-        }
-        
-        
-        devtab_searchins_uid_DO:
-        
-        /// Adding a new devtab_item_t, or removing an existing one
-        if ((operation > 0) && (output == NULL)) {
-            cci += (csc > 0);
-            for (int i=(int)table->size; i>cci; i--) {
-                head[i] = head[i-1];
-            }
-            
-            output = malloc(sizeof(devtab_item_t));
-            if (output == NULL) {
-                return NULL;
-            }
-            
-            output->flags   = 0;
-            output->uid     = uid;
-            head[cci]       = output;
-            table->size++;
-        }
-        else if ((operation < 0) && (output != NULL)) {
-            table->size--;
-            for (int i=cci; i<table->size; i++) {
-                head[i] = head[i+1];
-            }
-            output = head[cci];
-        }
-    }
-    
-    return output;
-}
-
-
-devtab_vid_t* devtab_searchins_vid(devtab_t* table, uint16_t vid, int operation) {
-/// An important condition of using this function with insert is that table->alloc must
-/// be greater than table->size.
-///
-/// Verify that cmdname is not a zero-length string, then search for it in the
-/// list of available commands.
-///
-    devtab_vid_t* head;
-    devtab_vid_t* output = NULL;
-    int cci = 0;
-    int csc = -1;
-
-    if (table == NULL) {
-        return NULL;
-    }
-
-    {   int l   = 0;
-        int r   = (int)table->vids - 1;
-        head    = table->vdex;
-    
-        while (r >= l) {
-            cci = (l + r) >> 1;
-            csc = local_cmp16(head[cci].vid, vid);
-            
-            switch (csc) {
-                case -1: r = cci - 1;
-                         break;
-                
-                case  1: l = cci + 1;
-                         break;
-                
-                default: output = &head[cci];
-                         goto devtab_searchins_vid_DO;
-            }
-        }
-        
-        /// Adding a new devtab_vid_t
-        /// If there is a matching name (output != NULL), the new one will replace old.
-        /// It will adjust the table and add the new item, otherwise.
-        devtab_searchins_vid_DO:
-        if ((operation > 0) && (output == NULL)) {
-            cci += (csc > 0);
-            for (int i=(int)table->vids; i>cci; i--) {
-                head[i] = head[i-1];
-            }
-            output          = &head[cci];
-            head[cci].vid   = vid;
-            table->vids++;
-        }
-        else if ((operation < 0) && (output != NULL)) {
-            output->cell->vid = 0;
-            table->vids--;
-            for (int i=cci; i<table->vids; i++) {
-                head[i] = head[i+1];
-            }
-            output = &head[cci];
-        }
-    }
-
-    return output;
-}
-
-
-static int local_cmp64(uint64_t a, uint64_t b) {
-    return (a < b) - (a > b);
-}
-
-static int local_cmp16(uint16_t a, uint16_t b) {
-    return (a < b) - (a > b);
-}
-
-
-
-
-
-
-
-
-
-
-
-
+static int sub_cmp64(uint64_t a, uint64_t b);
+static int sub_cmp16(uint16_t a, uint16_t b);
+static devtab_item_t* sub_searchop_uid(devtab_t* table, uint64_t uid, int operation);
+static devtab_vid_t* sub_searchop_vid(devtab_t* table, uint16_t vid, int operation);
 
 
 
@@ -236,22 +85,23 @@ int devtab_init(void** new_handle) {
         return -2;
     }
     
-    newtab->cell = malloc(OTTER_DEVTAB_CHUNK*sizeof(devtab_item_t*));
-    if (newtab->cell == NULL) {
-        free(newtab);
-        return -3;
-    }
     
-    newtab->vdex = calloc(OTTER_DEVTAB_CHUNK, sizeof(devtab_vid_t));
-    if (newtab->vdex == NULL) {
-        free(newtab->cell);
-        free(newtab);
-        return -4;
-    }
+//    newtab->cell = malloc(OTTER_DEVTAB_CHUNK*sizeof(devtab_item_t*));
+//    if (newtab->cell == NULL) {
+//        free(newtab);
+//        return -3;
+//    }
+//
+//    newtab->vdex = calloc(OTTER_DEVTAB_CHUNK, sizeof(devtab_vid_t));
+//    if (newtab->vdex == NULL) {
+//        free(newtab->cell);
+//        free(newtab);
+//        return -4;
+//    }
     
     newtab->size    = 0;
     newtab->vids    = 0;
-    newtab->alloc   = OTTER_DEVTAB_CHUNK;
+    newtab->alloc   = 0;
     
     return 0;
 }
@@ -320,8 +170,14 @@ int devtab_insert(void* handle, uint64_t uid, uint16_t vid, void* intf_handle, v
         size_t          newtable_alloc;
         
         newtable_alloc  = table->alloc + OTTER_DEVTAB_CHUNK;
-        newtable_cell   = realloc(table->cell, newtable_alloc * sizeof(devtab_item_t*));
-        newtable_vid    = realloc(table->vdex, newtable_alloc * sizeof(devtab_vid_t));
+        if (table->alloc == 0) {
+            newtable_cell   = malloc(newtable_alloc * sizeof(devtab_item_t*));
+            newtable_vid    = malloc(newtable_alloc * sizeof(devtab_vid_t));
+        }
+        else {
+            newtable_cell   = realloc(table->cell, newtable_alloc * sizeof(devtab_item_t*));
+            newtable_vid    = realloc(table->vdex, newtable_alloc * sizeof(devtab_vid_t));
+        }
         
         if ((newtable_cell == NULL) || (newtable_vid == NULL)) {
             return -2;
@@ -332,14 +188,14 @@ int devtab_insert(void* handle, uint64_t uid, uint16_t vid, void* intf_handle, v
     }
     
     ///2. Insert a new cmd item,
-    item = devtab_searchins_uid(table, uid, 1);
+    item = sub_searchop_uid(table, uid, 1);
     if (item == NULL) {
         return -3;
     }
     
     /// 3. add the vid index, if a VID is supplied, and link to the cell
     if (vid != 0) {
-        viditem = devtab_searchins_vid(table, vid, 1);
+        viditem = sub_searchop_vid(table, vid, 1);
         if (viditem == NULL) {
             return -4;
         }
@@ -350,6 +206,7 @@ int devtab_insert(void* handle, uint64_t uid, uint16_t vid, void* intf_handle, v
     item->vid   = vid;
     item->intf  = intf_handle;
 
+#   if OTTER_FEATURE(SECURITY)
     if (rootkey != NULL) {
         item->flags |= 1;
         eax_init_and_key((io_t*)rootkey, &item->root);
@@ -358,7 +215,8 @@ int devtab_insert(void* handle, uint64_t uid, uint16_t vid, void* intf_handle, v
         item->flags |= 2;
         eax_init_and_key((io_t*)userkey, &item->user);
     }
-    
+#   endif
+
     return 0;
 }
 
@@ -369,11 +227,11 @@ void devtab_remove(void* handle, uint64_t uid) {
     devtab_t* table = handle;
     uint16_t vid;
     
-    item = devtab_searchins_uid(table, uid, -1);
+    item = sub_searchop_uid(table, uid, -1);
     if (item != NULL) {
         vid = item->vid;
         free(item);
-        devtab_searchins_vid(table, vid, -1);
+        sub_searchop_vid(table, vid, -1);
     }
 }
 
@@ -381,23 +239,23 @@ void devtab_remove(void* handle, uint64_t uid) {
 
 void devtab_unlist(void* handle, uint16_t vid) {
     devtab_t* table = handle;
-    devtab_searchins_vid(table, vid, -1);
+    sub_searchop_vid(table, vid, -1);
 }
 
 
 
 devtab_node_t devtab_select(void* handle, uint64_t uid) {
-    return (devtab_node_t)devtab_searchins_uid((devtab_t*)handle, uid, 0);
+    return (devtab_node_t)sub_searchop_uid((devtab_t*)handle, uid, 0);
 }
 
 
 devtab_node_t devtab_select_vid(void* handle, uint16_t vid) {
-    return (devtab_node_t)devtab_searchins_vid((devtab_t*)handle, vid, 0);
+    return (devtab_node_t)sub_searchop_vid((devtab_t*)handle, vid, 0);
 }
 
 
 
-uint16_t devtab_getfromnode_vid(void* handle, devtab_node_t node) {
+uint16_t devtab_get_vid(void* handle, devtab_node_t node) {
     uint16_t vid = OTTER_PARAM_DEFMBSLAVE;
     if (handle != NULL) {
         if (node != NULL) {
@@ -408,7 +266,7 @@ uint16_t devtab_getfromnode_vid(void* handle, devtab_node_t node) {
 }
 
 
-void* devtab_getfromnode_intf(void* handle, devtab_node_t node) {
+void* devtab_get_intf(void* handle, devtab_node_t node) {
     void* intf = NULL;
     if (handle != NULL) {
         if (node != NULL) {
@@ -419,7 +277,8 @@ void* devtab_getfromnode_intf(void* handle, devtab_node_t node) {
 }
 
 
-void* devtab_getfromnode_rootctx(void* handle, devtab_node_t node) {
+void* devtab_get_rootctx(void* handle, devtab_node_t node) {
+#if OTTER_FEATURE(SECURITY)
     void* rootkey = NULL;
     if (handle != NULL) {
         if (node != NULL) {
@@ -427,10 +286,14 @@ void* devtab_getfromnode_rootctx(void* handle, devtab_node_t node) {
         }
     }
     return rootkey;
+#else
+    return NULL;
+#endif
 }
 
 
-void* devtab_getfromnode_userctx(void* handle, devtab_node_t node) {
+void* devtab_get_userctx(void* handle, devtab_node_t node) {
+#if OTTER_FEATURE(SECURITY)
     void* userkey = NULL;
     if (handle != NULL) {
         if (node != NULL) {
@@ -438,26 +301,187 @@ void* devtab_getfromnode_userctx(void* handle, devtab_node_t node) {
         }
     }
     return userkey;
+#else
+    return NULL;
+#endif
 }
 
 
-uint16_t devtab_get_vid(void* handle, uint64_t uid) {
-    return devtab_getfromnode_vid(handle, devtab_select(handle, uid));
+uint64_t devtab_lookup_uid(void* handle, uint16_t vid) {
+    devtab_node_t node;
+    uint64_t uid = 0;
+    node = devtab_select_vid(handle, vid);
+    if (node != NULL) {
+        uid = ((devtab_item_t*)node)->uid;
+    }
+    return uid;
 }
 
 
-void* devtab_get_intf(void* handle, uint64_t uid) {
-    return devtab_getfromnode_intf(handle, devtab_select(handle, uid));
+uint16_t devtab_lookup_vid(void* handle, uint64_t uid) {
+    return devtab_get_vid(handle, devtab_select(handle, uid));
 }
 
 
-void* devtab_get_rootctx(void* handle, uint64_t uid) {
-    return devtab_getfromnode_rootctx(handle, devtab_select(handle, uid));
+void* devtab_lookup_intf(void* handle, uint64_t uid) {
+    return devtab_get_intf(handle, devtab_select(handle, uid));
 }
 
 
-void* devtab_get_userctx(void* handle, uint64_t uid) {
-    return devtab_getfromnode_userctx(handle, devtab_select(handle, uid));
+void* devtab_lookup_rootctx(void* handle, uint64_t uid) {
+    return devtab_get_rootctx(handle, devtab_select(handle, uid));
+}
+
+
+void* devtab_lookup_userctx(void* handle, uint64_t uid) {
+    return devtab_get_userctx(handle, devtab_select(handle, uid));
+}
+
+
+
+
+
+
+
+
+static devtab_item_t* sub_searchop_uid(devtab_t* table, uint64_t uid, int operation) {
+/// An important condition of using this function with insert is that table->alloc must
+/// be greater than table->size.
+///
+/// Verify that cmdname is not a zero-length string, then search for it in the
+/// list of available commands.
+///
+    devtab_item_t** head;
+    devtab_item_t* output = NULL;
+    int cci = 0;
+    int csc = -1;
+
+    if (table == NULL) {
+        return NULL;
+    }
+
+    {   int l   = 0;
+        int r   = (int)table->size - 1;
+        head    = table->cell;
+    
+        while (r >= l) {
+            cci = (l + r) >> 1;
+            csc = sub_cmp64(head[cci]->uid, uid);
+            
+            switch (csc) {
+                case -1: r = cci - 1;
+                         break;
+                
+                case  1: l = cci + 1;
+                         break;
+                
+                default: output = head[cci];
+                         goto sub_searchop_uid_DO;
+            }
+        }
+        
+        
+        sub_searchop_uid_DO:
+        
+        /// Adding a new devtab_item_t, or removing an existing one
+        if ((operation > 0) && (output == NULL)) {
+            cci += (csc > 0);
+            for (int i=(int)table->size; i>cci; i--) {
+                head[i] = head[i-1];
+            }
+            
+            output = malloc(sizeof(devtab_item_t));
+            if (output == NULL) {
+                return NULL;
+            }
+            
+            output->flags   = 0;
+            output->uid     = uid;
+            head[cci]       = output;
+            table->size++;
+        }
+        else if ((operation < 0) && (output != NULL)) {
+            table->size--;
+            for (int i=cci; i<table->size; i++) {
+                head[i] = head[i+1];
+            }
+            output = head[cci];
+        }
+    }
+    
+    return output;
+}
+
+
+static devtab_vid_t* sub_searchop_vid(devtab_t* table, uint16_t vid, int operation) {
+/// An important condition of using this function with insert is that table->alloc must
+/// be greater than table->size.
+///
+/// Verify that cmdname is not a zero-length string, then search for it in the
+/// list of available commands.
+///
+    devtab_vid_t* head;
+    devtab_vid_t* output = NULL;
+    int cci = 0;
+    int csc = -1;
+
+    if (table == NULL) {
+        return NULL;
+    }
+
+    {   int l   = 0;
+        int r   = (int)table->vids - 1;
+        head    = table->vdex;
+    
+        while (r >= l) {
+            cci = (l + r) >> 1;
+            csc = sub_cmp16(head[cci].vid, vid);
+            
+            switch (csc) {
+                case -1: r = cci - 1;
+                         break;
+                
+                case  1: l = cci + 1;
+                         break;
+                
+                default: output = &head[cci];
+                         goto sub_searchop_vid_DO;
+            }
+        }
+        
+        /// Adding a new devtab_vid_t
+        /// If there is a matching name (output != NULL), the new one will replace old.
+        /// It will adjust the table and add the new item, otherwise.
+        sub_searchop_vid_DO:
+        if ((operation > 0) && (output == NULL)) {
+            cci += (csc > 0);
+            for (int i=(int)table->vids; i>cci; i--) {
+                head[i] = head[i-1];
+            }
+            output          = &head[cci];
+            head[cci].vid   = vid;
+            table->vids++;
+        }
+        else if ((operation < 0) && (output != NULL)) {
+            output->cell->vid = 0;
+            table->vids--;
+            for (int i=cci; i<table->vids; i++) {
+                head[i] = head[i+1];
+            }
+            output = &head[cci];
+        }
+    }
+
+    return output;
+}
+
+
+static int sub_cmp64(uint64_t a, uint64_t b) {
+    return (a < b) - (a > b);
+}
+
+static int sub_cmp16(uint16_t a, uint16_t b) {
+    return (a < b) - (a > b);
 }
 
 

@@ -69,7 +69,6 @@
 #endif
 
 /// Parameter configurations
-///@todo redefine 
 #define OTTER_PARAM(VAL)            OTTER_PARAM_##VAL
 #ifndef OTTER_PARAM_NAME
 #   define OTTER_PARAM_NAME         "otter"
@@ -96,7 +95,7 @@
 #   define OTTER_PARAM_ENCALIGN     1
 #endif
 #ifndef OTTER_DEVTAB_CHUNK
-#   define OTTER_DEVTAB_CHUNK       4
+#   define OTTER_DEVTAB_CHUNK       1
 #endif
 
 /// Automatic Checkss

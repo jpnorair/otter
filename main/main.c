@@ -508,7 +508,7 @@ int otter_main( const char* ttyfile,
     pktlist_t   mpipe_rlist;
     
     // DTerm Datastructs
-    dterm_arg_t dterm_args;
+    dterm_handle_t dterm_args;
     dterm_t     dterm;
     cmdhist     cmd_history;
     
@@ -540,17 +540,12 @@ int otter_main( const char* ttyfile,
     ///@todo in the future, let's pull this from an initialization file or
     ///      something dynamic as such.
     
-    /// Device Table initialization.  Only used if multi-device support is
-    /// enabled.
-    if (multi) {
-        if (devtab_init(&dterm_args.devtab_handle) != 0) {
-            ///@todo print an error
-            goto otter_main_TERM0;
-        }
+    /// Device Table initialization.
+    if (devtab_init(&dterm_args.devtab_handle) != 0) {
+        ///@todo print an error
+        goto otter_main_TERM0;
     }
-    else {
-        dterm_args.devtab_handle = NULL;
-    }
+
     
     /// Initialize the user manager.
     /// This must be done prior to command module init

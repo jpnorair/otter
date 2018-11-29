@@ -20,7 +20,7 @@
 #include "cmdhistory.h"
 #include "cmdsearch.h"
 #include "dterm.h"
-#include "test.h"
+#include "../test/test.h"
 #include "user.h"
 
 // Local Libraries/Headers
@@ -202,16 +202,17 @@ void* dterm_piper(void* args) {
     
     uint8_t             protocol_buf[1024];
     char                cmdname[32];
-    dterm_t*            dt          = ((dterm_arg_t*)args)->dt;
-    pktlist_t*          tlist       = ((dterm_arg_t*)args)->tlist;
-    pthread_mutex_t*    tlist_mutex = ((dterm_arg_t*)args)->tlist_mutex;
-    pthread_cond_t*     tlist_cond  = ((dterm_arg_t*)args)->tlist_cond;
+    dterm_handle_t*     dth = (dterm_handle_t*)args;
+    //dterm_t*            dt          = ((dterm_handle_t*)args)->dt;
+    //pktlist_t*          tlist       = ((dterm_handle_t*)args)->tlist;
+    //pthread_mutex_t*    tlist_mutex = ((dterm_handle_t*)args)->tlist_mutex;
+    //pthread_cond_t*     tlist_cond  = ((dterm_handle_t*)args)->tlist_cond;
     int                 loadlen     = 0;
-    char*               loadbuf     = dt->linebuf;
+    char*               loadbuf     = dth->dt->linebuf;
     
     
     // Initial state = off
-    dt->state = prompt_off;
+    dth->dt->state = prompt_off;
     
     /// Get each line from the pipe.
     while (1) {
@@ -220,9 +221,9 @@ void* dterm_piper(void* args) {
         const cmdtab_item_t* cmdptr;
     
         if (loadlen <= 0) {
-            dterm_reset(dt);
-            loadlen = (int)read(dt->fd_in, dt->linebuf, 1024);
-            loadbuf = dt->linebuf;
+            dterm_reset(dth->dt);
+            loadlen = (int)read(dth->dt->fd_in, dth->dt->linebuf, 1024);
+            loadbuf = dth->dt->linebuf;
             sub_str_sanitize(loadbuf, (size_t)loadlen);
         }
         
@@ -245,7 +246,7 @@ void* dterm_piper(void* args) {
             ///@todo build a nicer way to show where the error is,
             ///      possibly by using pi or ci (sign reversing)
             if (linelen > 0) {
-                dterm_puts(dt, "--> command not found\n");
+                dterm_puts(dth->dt, "--> command not found\n");
             }
         }
         else {
@@ -256,7 +257,7 @@ void* dterm_piper(void* args) {
             ///      to a non constant.
             //fprintf(stderr, "bytesin=%d\nloadlen=%d\n", bytesin, (char*)loadbuf);
             //fflush(stderr);
-            bytesout = cmd_run(cmdptr, dt, protocol_buf, &bytesin, (uint8_t*)(loadbuf+cmdlen), 1024);
+            bytesout = cmd_run(cmdptr, dth, protocol_buf, &bytesin, (uint8_t*)(loadbuf+cmdlen), 1024);
             
             // Test only
             //fprintf(stderr, "\noutput\nloadbuf=%s\nloadlen=%d\n", loadbuf, loadlen);
@@ -266,7 +267,7 @@ void* dterm_piper(void* args) {
             ///@todo spruce-up the command error reporting, maybe even with
             ///      a cursor showing where the first error was found.
             if (bytesout < 0) {
-                dterm_puts(dt, "--> command execution error\n");
+                dterm_puts(dth->dt, "--> command execution error\n");
             }
             
             // If there are bytes to send to MPipe, do that.
@@ -278,11 +279,11 @@ void* dterm_piper(void* args) {
                 }
                 else {
                     int list_size;
-                    pthread_mutex_lock(tlist_mutex);
-                    list_size = pktlist_add(tlist, true, protocol_buf, bytesout);
-                    pthread_mutex_unlock(tlist_mutex);
+                    pthread_mutex_lock(dth->tlist_mutex);
+                    list_size = pktlist_add(dth->tlist, true, protocol_buf, bytesout);
+                    pthread_mutex_unlock(dth->tlist_mutex);
                     if (list_size > 0) {
-                        pthread_cond_signal(tlist_cond);
+                        pthread_cond_signal(dth->tlist_cond);
                     }
                 }
             }
@@ -352,23 +353,24 @@ void* dterm_prompter(void* args) {
     char                cmdname[256];
     char                c           = 0;
     ssize_t             keychars    = 0;
-    dterm_t*            dt          = ((dterm_arg_t*)args)->dt;
-    cmdhist*            ch          = ((dterm_arg_t*)args)->ch;
-    pktlist_t*          tlist       = ((dterm_arg_t*)args)->tlist;
-    pthread_mutex_t*    write_mutex = ((dterm_arg_t*)args)->dtwrite_mutex;
-    pthread_mutex_t*    tlist_mutex = ((dterm_arg_t*)args)->tlist_mutex;
-    pthread_cond_t*     tlist_cond  = ((dterm_arg_t*)args)->tlist_cond;
+    dterm_handle_t*     dth         = (dterm_handle_t*)args;
+    //dterm_t*            dt          = ((dterm_handle_t*)args)->dt;
+    //cmdhist*            ch          = ((dterm_handle_t*)args)->ch;
+    //pktlist_t*          tlist       = ((dterm_handle_t*)args)->tlist;
+    //pthread_mutex_t*    write_mutex = ((dterm_handle_t*)args)->dtwrite_mutex;
+    //pthread_mutex_t*    tlist_mutex = ((dterm_handle_t*)args)->tlist_mutex;
+    //pthread_cond_t*     tlist_cond  = ((dterm_handle_t*)args)->tlist_cond;
     
     
     // Initial state = off
-    dt->state = prompt_off;
+    dth->dt->state = prompt_off;
     
     /// Get each keystroke.
     /// A keystoke is reported either as a single character or as three.
     /// triple-char keystrokes are for special keys like arrows and control
     /// sequences.
     ///@note dterm_read() will keep the thread asleep, blocking it until data arrives
-    while ((keychars = read(dt->fd_in, dt->readbuf, READSIZE)) > 0) {
+    while ((keychars = read(dth->dt->fd_in, dth->dt->readbuf, READSIZE)) > 0) {
         
         // Default: IGNORE
         cmd = ct_ignore;
@@ -376,8 +378,8 @@ void* dterm_prompter(void* args) {
         // If dterm state is off, ignore anything except ESCAPE
         ///@todo mutex unlocking on dt->state
         
-        if ((dt->state == prompt_off) && (keychars == 1) && (dt->readbuf[0] <= 0x1f)) {
-            cmd = npcodes[dt->readbuf[0]];
+        if ((dth->dt->state == prompt_off) && (keychars == 1) && (dth->dt->readbuf[0] <= 0x1f)) {
+            cmd = npcodes[dth->dt->readbuf[0]];
             
             // Only valid commands when prompt is OFF are prompt, sigint, sigquit
             // Using prompt (ESC) will open a prompt and ignore the escape
@@ -388,20 +390,20 @@ void* dterm_prompter(void* args) {
             }
         }
         
-        else if (dt->state == prompt_on) {
+        else if (dth->dt->state == prompt_on) {
             if (keychars == 1) {
-                c = dt->readbuf[0];   
+                c = dth->dt->readbuf[0];
                 if (c <= 0x1F)              cmd = npcodes[c];   // Non-printable characters except DELETE
                 else if (c == ASCII_DEL)    cmd = ct_delete;    // Delete (0x7F)
                 else                        cmd = ct_key;       // Printable characters
             }
             
             else if (keychars == 3) {
-                if ((dt->readbuf[0] == VT100_UPARR[0]) && (dt->readbuf[1] == VT100_UPARR[1])) {
-                    if (dt->readbuf[2] == VT100_UPARR[2]) {
+                if ((dth->dt->readbuf[0] == VT100_UPARR[0]) && (dth->dt->readbuf[1] == VT100_UPARR[1])) {
+                    if (dth->dt->readbuf[2] == VT100_UPARR[2]) {
                         cmd = ct_histnext;
                     }
-                    else if (dt->readbuf[2] == VT100_DWARR[2]) {
+                    else if (dth->dt->readbuf[2] == VT100_DWARR[2]) {
                         cmd = ct_histprev;
                     }
                 }
@@ -415,8 +417,8 @@ void* dterm_prompter(void* args) {
         
         // This mutex protects the terminal output from being written-to by
         // this thread and mpipe_parser() at the same time.
-        if (dt->state == prompt_off) {
-            pthread_mutex_lock(write_mutex);
+        if (dth->dt->state == prompt_off) {
+            pthread_mutex_lock(dth->dtwrite_mutex);
         }
         
         // These are error conditions
@@ -446,8 +448,8 @@ void* dterm_prompter(void* args) {
                                     break;
             }
             
-            dterm_reset(dt);
-            dterm_puts(dt, (char*)killstring);
+            dterm_reset(dth->dt);
+            dterm_puts(dth->dt, (char*)killstring);
             raise(sigcode);
             return NULL;
         }
@@ -464,19 +466,19 @@ void* dterm_prompter(void* args) {
             
             switch (cmd) {
                 // A printable key is used
-                case ct_key:        dterm_putcmd(dt, &c, 1);
+                case ct_key:        dterm_putcmd(dth->dt, &c, 1);
                                     //dterm_put(dt, &c, 1);
-                                    dterm_putc(dt, c);
+                                    dterm_putc(dth->dt, c);
                                     break;
                                     
                 // Prompt-Escape is pressed, 
-                case ct_prompt:     if (dt->state == prompt_on) {
-                                        dterm_remln(dt);
-                                        dt->state = prompt_off;
+                case ct_prompt:     if (dth->dt->state == prompt_on) {
+                                        dterm_remln(dth->dt);
+                                        dth->dt->state = prompt_off;
                                     }
                                     else {
-                                        dterm_puts(dt, (char*)prompt_str[user_typeval_get()]);
-                                        dt->state = prompt_on;
+                                        dterm_puts(dth->dt, (char*)prompt_str[user_typeval_get()]);
+                                        dth->dt->state = prompt_on;
                                     }
                                     break;
             
@@ -489,34 +491,34 @@ void* dterm_prompter(void* args) {
                 // 3. Search and try to execute cmd
                 // 4. Reset prompt, change to OFF State, unlock mutex on dterm
                 case ct_enter:      //dterm_put(dt, (char[]){ASCII_NEWLN}, 2);
-                                    dterm_putc(dt, '\n');
+                                    dterm_putc(dth->dt, '\n');
                                     
-                                    if (!ch_contains(ch, dt->linebuf)) {
-                                        ch_add(ch, dt->linebuf);
+                                    if (!ch_contains(dth->ch, dth->dt->linebuf)) {
+                                        ch_add(dth->ch, dth->dt->linebuf);
                                     }
                                     
-                                    cmdlen = cmd_getname(cmdname, dt->linebuf, 256);
+                                    cmdlen = cmd_getname(cmdname, dth->dt->linebuf, 256);
                                     cmdptr = cmd_search(cmdname);
                                     if (cmdptr == NULL) {
                                         ///@todo build a nicer way to show where the error is,
                                         ///      possibly by using pi or ci (sign reversing)
                                         if (cmdlen > 0) {
-                                            dterm_puts(dt, "--> command not found\n");
+                                            dterm_puts(dth->dt, "--> command not found\n");
                                         }
                                     }
                                     else {
                                         int outbytes;
                                         int inbytes = 0;
-                                        uint8_t* cursor = (uint8_t*)&dt->linebuf[cmdlen];
+                                        uint8_t* cursor = (uint8_t*)&(dth->dt->linebuf[cmdlen]);
                                         
                                         ///@todo change 1024 to a configured value
-                                        outbytes = cmd_run(cmdptr, dt, protocol_buf, &inbytes, cursor, 1024);
+                                        outbytes = cmd_run(cmdptr, dth, protocol_buf, &inbytes, cursor, 1024);
                                         
                                         // Error, print-out protocol_buf as an error message
                                         ///@todo spruce-up the command error reporting, maybe even with
                                         ///      a cursor showing where the first error was found.
                                         if (outbytes < 0) {
-                                            dterm_puts(dt, "--> command execution error\n");
+                                            dterm_puts(dth->dt, "--> command execution error\n");
                                         }
                                         
                                         // If there are bytes to send to MPipe, do that.
@@ -529,74 +531,74 @@ void* dterm_prompter(void* args) {
                                             else {
                                                 int list_size;
                                                 //fprintf(stderr, "packet added to tlist, size = %d bytes\n", outbytes);
-                                                pthread_mutex_lock(tlist_mutex);
-                                                list_size = pktlist_add(tlist, true, protocol_buf, outbytes);
-                                                pthread_mutex_unlock(tlist_mutex);
+                                                pthread_mutex_lock(dth->tlist_mutex);
+                                                list_size = pktlist_add(dth->tlist, true, protocol_buf, outbytes);
+                                                pthread_mutex_unlock(dth->tlist_mutex);
                                                 if (list_size > 0) {
-                                                    pthread_cond_signal(tlist_cond);
+                                                    pthread_cond_signal(dth->tlist_cond);
                                                 }
                                             }
                                         }
                                     }
                                     
-                                    dterm_reset(dt);
-                                    dt->state = prompt_close;
+                                    dterm_reset(dth->dt);
+                                    dth->dt->state = prompt_close;
                                     break;
                 
                 // TAB presses cause the autofill operation (a common feature)
                 // autofill will try to finish the command input
-                case ct_autofill:   cmdlen = cmd_getname((char*)cmdname, dt->linebuf, 256);
+                case ct_autofill:   cmdlen = cmd_getname((char*)cmdname, dth->dt->linebuf, 256);
                                     cmdptr = cmd_subsearch((char*)cmdname);
-                                    if ((cmdptr != NULL) && (dt->linebuf[cmdlen] == 0)) {
-                                        dterm_remln(dt);
-                                        dterm_puts(dt, (char*)prompt_str[user_typeval_get()]);
-                                        dterm_putsc(dt, (char*)cmdptr->name);
-                                        dterm_puts(dt, (char*)cmdptr->name);
+                                    if ((cmdptr != NULL) && (dth->dt->linebuf[cmdlen] == 0)) {
+                                        dterm_remln(dth->dt);
+                                        dterm_puts(dth->dt, (char*)prompt_str[user_typeval_get()]);
+                                        dterm_putsc(dth->dt, (char*)cmdptr->name);
+                                        dterm_puts(dth->dt, (char*)cmdptr->name);
                                     }
                                     else {
-                                        dterm_puts(dt, ASCII_BEL);
+                                        dterm_puts(dth->dt, ASCII_BEL);
                                     }
                                     break;
                 
                 // DOWN-ARROW presses fill the prompt with the next command 
                 // entry in the command history
-                case ct_histnext:   cmdstr = ch_next(ch);
-                                    if (ch->count && cmdstr) {
-                                        dterm_remln(dt);
-                                        dterm_puts(dt, (char*)prompt_str[user_typeval_get()]);
-                                        dterm_putsc(dt, cmdstr);
-                                        dterm_puts(dt, cmdstr);
+                case ct_histnext:   cmdstr = ch_next(dth->ch);
+                                    if (dth->ch->count && cmdstr) {
+                                        dterm_remln(dth->dt);
+                                        dterm_puts(dth->dt, (char*)prompt_str[user_typeval_get()]);
+                                        dterm_putsc(dth->dt, cmdstr);
+                                        dterm_puts(dth->dt, cmdstr);
                                     }
                                     break;
                 
                 // UP-ARROW presses fill the prompt with the last command
                 // entry in the command history
-                case ct_histprev:   cmdstr = ch_prev(ch);
-                                    if (ch->count && cmdstr) {
-                                        dterm_remln(dt);
-                                        dterm_puts(dt, (char*)prompt_str[user_typeval_get()]);
-                                        dterm_putsc(dt, cmdstr);
-                                        dterm_puts(dt, cmdstr);
+                case ct_histprev:   cmdstr = ch_prev(dth->ch);
+                                    if (dth->ch->count && cmdstr) {
+                                        dterm_remln(dth->dt);
+                                        dterm_puts(dth->dt, (char*)prompt_str[user_typeval_get()]);
+                                        dterm_putsc(dth->dt, cmdstr);
+                                        dterm_puts(dth->dt, cmdstr);
                                     }
                                     break;
                 
                 // DELETE presses issue a forward-DELETE
-                case ct_delete:     if (dt->linelen > 0) {
-                                        dterm_remc(dt, 1);
-                                        dterm_put(dt, VT100_CLEAR_CH, 4);
+                case ct_delete:     if (dth->dt->linelen > 0) {
+                                        dterm_remc(dth->dt, 1);
+                                        dterm_put(dth->dt, VT100_CLEAR_CH, 4);
                                     }
                                     break;
                 
                 // Every other command is ignored here.
-                default:            dt->state = prompt_close;
+                default:            dth->dt->state = prompt_close;
                                     break;
             }
         }
         
         // Unlock Mutex
-        if (dt->state != prompt_on) {
-            dt->state = prompt_off;
-            pthread_mutex_unlock(write_mutex);
+        if (dth->dt->state != prompt_on) {
+            dth->dt->state = prompt_off;
+            pthread_mutex_unlock(dth->dtwrite_mutex);
         }
         
     }

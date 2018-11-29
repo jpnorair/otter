@@ -27,19 +27,20 @@ typedef void* devtab_node_t;
 int devtab_init(void** new_handle);
 void devtab_free(void* handle);
 
-int devtab_insert(void* handle, uint64_t uid, uint16_t vid, void* intf_handle, void* rootkey, void* userkey)
+int devtab_insert(void* handle, uint64_t uid, uint16_t vid, void* intf_handle, void* rootkey, void* userkey);
 devtab_node_t devtab_select(void* handle, uint64_t uid);
 devtab_node_t devtab_select_vid(void* handle, uint16_t vid);
 
-uint16_t devtab_getfromnode_vid(void* handle, devtab_node_t node);
-void* devtab_getfromnode_intf(void* handle, devtab_node_t node);
-void* devtab_getfromnode_rootctx(void* handle, devtab_node_t node);
-void* devtab_getfromnode_userctx(void* handle, devtab_node_t node);
+uint16_t devtab_get_vid(void* handle, devtab_node_t node);
+void* devtab_get_intf(void* handle, devtab_node_t node);
+void* devtab_get_rootctx(void* handle, devtab_node_t node);
+void* devtab_get_userctx(void* handle, devtab_node_t node);
 
-uint16_t devtab_get_vid(void* handle, uint64_t uid);
-void* devtab_get_intf(void* handle, uint64_t uid);
-void* devtab_get_rootctx(void* handle, uint64_t uid);
-void* devtab_get_userctx(void* handle, uint64_t uid);
+uint64_t devtab_lookup_uid(void* handle, uint16_t vid);
+uint16_t devtab_lookup_vid(void* handle, uint64_t uid);
+void* devtab_lookup_intf(void* handle, uint64_t uid);
+void* devtab_lookup_rootctx(void* handle, uint64_t uid);
+void* devtab_lookup_userctx(void* handle, uint64_t uid);
 
 
 #endif

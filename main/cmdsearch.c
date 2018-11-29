@@ -202,137 +202,7 @@ int cmd_free(cmdtab_t* init_table) {
 
 
 
-int cmd_envvar_new(dterm_t* dt, const char* name, envdict_type_enum type, size_t size, void* data) {
-    size_t total_size;
-    uint32_t* jdata;
-    unsigned char name_val[16];
-    JudySlot* newcell;
-    int rc = 0;
-    
-    switch (type) {
-        case ENVDICT_string:
-            size = strlen( (char*)data ) + 1;
-            break;
-        case ENVDICT_int:
-            size *= sizeof(int);
-            break;
-        case ENVDICT_float:
-            size *= sizeof(double);
-            break;
-        case ENVDICT_double:
-            size *= sizeof(double);
-            break;
-       default:
-            break;
-    }
-    
-    total_size = (sizeof(uint32_t)*2) + size;
-    if (total_size > (JUDY_seg - 8)) {
-        rc = -1;
-        goto cmd_envvar_new_END;
-    }
-    
-    memset(name_val, 0, 16);
-    strncpy((char*)name_val, name, 15);
-    newcell = judy_cell(envdict.judy, name_val, (unsigned int)strlen((const char*)name_val));
-    if (newcell == NULL) {
-        rc = -2;
-        goto cmd_envvar_new_END;
-    }
-    
-    jdata = judy_data(envdict.judy, (unsigned int)total_size);
-    if (jdata == NULL) {
-        judy_del(envdict.judy);
-        rc = -3;
-        goto cmd_envvar_new_END;
-    }
-    
-    *newcell = (JudySlot)jdata;
-    jdata[0] = (uint32_t)type;
-    jdata[1] = (uint32_t)size;
-    if (size != 0) {
-        memcpy(&jdata[2], data, size);
-    }
-    
-    cmd_envvar_new_END:
-    return rc;
-}
-
-
-int cmd_envvar_del(dterm_t* dt, const char* name) {
-    unsigned int name_len;
-    void* val;
-    int rc;
-    
-    name_len = (unsigned int)strlen(name);
-    if (name_len > 15) {
-        name_len = 15;
-    }
-    
-    val = judy_slot(envdict.judy, (const unsigned char*)name, name_len);
-    
-    if (val != NULL) {
-        judy_del(envdict.judy);
-        rc = 0;
-    }
-    else {
-        rc = -1;
-    }
-    
-    return rc;
-}
-
-
-int cmd_envvar_get(dterm_t* dt, size_t* varsize, void** vardata, const char* name) {
-    unsigned int name_len;
-    uint32_t* envdata;
-    JudySlot* val;
-    int rc;
-    
-    if ((varsize == NULL) || (vardata == NULL)) {
-        return -1;
-    }
-    
-    name_len = (unsigned int)strlen(name);
-    if (name_len > 15) {
-        name_len = 15;
-    }
-    
-    val = judy_slot(envdict.judy, (const unsigned char*)name, name_len);
-    
-    if (val != NULL) {
-        envdata     = (uint32_t*)*val;
-        rc          = (envdict_type_enum)envdata[0];
-        *varsize    = (size_t)envdata[1];
-        *vardata    = &envdata[2];
-    }
-    else {
-        rc = -2;
-    }
-    
-    return rc;
-}
-
-
-int cmd_envvar_getint(dterm_t* dt, const char* name) {
-    size_t varsize;
-    void* vardata;
-    int rc;
-    
-    rc = cmd_envvar_get(dt, &varsize, &vardata, name);
-    if (rc < 0) {
-        rc = 0;
-    }
-    else {
-        rc = ((int*)vardata)[0];
-    }
-    
-    return rc;
-}
-
-
-
-int cmd_run(const cmdtab_item_t* cmd, dterm_t* dt, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
+int cmd_run(const cmdtab_item_t* cmd, dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
     int output;
 
     if (cmd == NULL) {
@@ -343,13 +213,13 @@ int cmd_run(const cmdtab_item_t* cmd, dterm_t* dt, uint8_t* dst, int* inbytes, u
     switch ((otter_extcmd_t)cmd->extcmd) {
         case EXTCMD_null:
             //fprintf(stderr, "EXTCMD_null: inbytes=%d, src=%s\n", *inbytes, (char*)src);
-            output = ((cmdaction_t)cmd->action)(dt, dst, inbytes, src, dstmax);
+            output = ((cmdaction_t)cmd->action)(dth, dst, inbytes, src, dstmax);
             break;
             
 #       if OTTER_FEATURE(HBUILDER)
         case EXTCMD_hbuilder:
             //fprintf(stderr, "EXTCMD_hbuilder: inbytes=%d, src=%s\n", *inbytes, (char*)src);
-            output = cmdext_hbuilder(hbuilder_handle, (void*)cmd->action, dt, dst, inbytes, src, dstmax);
+            output = cmdext_hbuilder(hbuilder_handle, (void*)cmd->action, dth, dst, inbytes, src, dstmax);
             break;
 #       endif
 
@@ -421,5 +291,140 @@ const cmdtab_item_t* cmd_subsearch(char *namepart) {
 
 
 
+
+
+// ENVIRONMENT VARIABLE EXPERIMENTAL SECTION ================================
+
+
+int cmd_envvar_new(dterm_handle_t* dth, const char* name, envdict_type_enum type, size_t size, void* data) {
+    size_t total_size;
+    uint32_t* jdata;
+    unsigned char name_val[16];
+    JudySlot* newcell;
+    int rc = 0;
+    
+    switch (type) {
+        case ENVDICT_string:
+            size = strlen( (char*)data ) + 1;
+            break;
+        case ENVDICT_int:
+            size *= sizeof(int);
+            break;
+        case ENVDICT_float:
+            size *= sizeof(double);
+            break;
+        case ENVDICT_double:
+            size *= sizeof(double);
+            break;
+       default:
+            break;
+    }
+    
+    total_size = (sizeof(uint32_t)*2) + size;
+    if (total_size > (JUDY_seg - 8)) {
+        rc = -1;
+        goto cmd_envvar_new_END;
+    }
+    
+    memset(name_val, 0, 16);
+    strncpy((char*)name_val, name, 15);
+    newcell = judy_cell(envdict.judy, name_val, (unsigned int)strlen((const char*)name_val));
+    if (newcell == NULL) {
+        rc = -2;
+        goto cmd_envvar_new_END;
+    }
+    
+    jdata = judy_data(envdict.judy, (unsigned int)total_size);
+    if (jdata == NULL) {
+        judy_del(envdict.judy);
+        rc = -3;
+        goto cmd_envvar_new_END;
+    }
+    
+    *newcell = (JudySlot)jdata;
+    jdata[0] = (uint32_t)type;
+    jdata[1] = (uint32_t)size;
+    if (size != 0) {
+        memcpy(&jdata[2], data, size);
+    }
+    
+    cmd_envvar_new_END:
+    return rc;
+}
+
+
+int cmd_envvar_del(dterm_handle_t* dth, const char* name) {
+    unsigned int name_len;
+    void* val;
+    int rc;
+    
+    name_len = (unsigned int)strlen(name);
+    if (name_len > 15) {
+        name_len = 15;
+    }
+    
+    val = judy_slot(envdict.judy, (const unsigned char*)name, name_len);
+    
+    if (val != NULL) {
+        judy_del(envdict.judy);
+        rc = 0;
+    }
+    else {
+        rc = -1;
+    }
+    
+    return rc;
+}
+
+
+int cmd_envvar_get(dterm_handle_t* dth, size_t* varsize, void** vardata, const char* name) {
+    unsigned int name_len;
+    uint32_t* envdata;
+    JudySlot* val;
+    int rc;
+    
+    if ((varsize == NULL) || (vardata == NULL)) {
+        return -1;
+    }
+    
+    name_len = (unsigned int)strlen(name);
+    if (name_len > 15) {
+        name_len = 15;
+    }
+    
+    val = judy_slot(envdict.judy, (const unsigned char*)name, name_len);
+    
+    if (val != NULL) {
+        envdata     = (uint32_t*)*val;
+        rc          = (envdict_type_enum)envdata[0];
+        *varsize    = (size_t)envdata[1];
+        *vardata    = &envdata[2];
+    }
+    else {
+        rc = -2;
+    }
+    
+    return rc;
+}
+
+
+int cmd_envvar_getint(dterm_handle_t* dth, const char* name) {
+    size_t varsize;
+    void* vardata;
+    int rc;
+    
+    rc = cmd_envvar_get(dth, &varsize, &vardata, name);
+    if (rc < 0) {
+        rc = 0;
+    }
+    else {
+        rc = ((int*)vardata)[0];
+    }
+    
+    return rc;
+}
+
+
+// ENVIRONMENT VARIABLE EXPERIMENTAL SECTION ================================
 
 
