@@ -17,6 +17,9 @@
 #ifndef user_h
 #define user_h
 
+#include "dterm.h"
+#include "devtable.h"
+
 #include <stdio.h>
 #include <stdint.h>
 
@@ -35,6 +38,13 @@ typedef enum {
 typedef enum {
     KEY_AES128 = 0
 } KEY_Type;
+
+
+
+typedef struct {
+    devtab_node_t   node;
+    USER_Type       usertype;
+} user_endpoint_t;
 
 
 
@@ -71,7 +81,7 @@ const char* user_typestring_get(void);
   *
   * Used by commands that need the user type value
   */ 
-USER_Type user_typeval_get(void);
+USER_Type user_typeval_get(dterm_handle_t* dth);
 
 
 

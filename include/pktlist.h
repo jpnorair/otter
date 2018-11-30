@@ -17,7 +17,7 @@
 #include <time.h>
 
 typedef struct pkt {
-    devtab_node_t   devnode;
+    //devtab_node_t   devnode;
     uint8_t*        buffer;
     size_t          size;
     int             crcqual;

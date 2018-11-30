@@ -30,16 +30,13 @@
 #include <stdbool.h>
 #include <ctype.h>
 
-
 typedef struct {
     uint16_t    flags;
     uint16_t    vid;
     uint64_t    uid;
     void*       intf;
-#   if OTTER_FEATURE(SECURITY)
-    eax_ctx     root;
-    eax_ctx     user;
-#   endif
+    eax_ctx*    root;
+    eax_ctx*    user;
 } devtab_item_t;
 
 typedef struct {
@@ -66,8 +63,8 @@ static int sub_cmp64(uint64_t a, uint64_t b);
 static int sub_cmp16(uint16_t a, uint16_t b);
 static devtab_item_t* sub_searchop_uid(devtab_t* table, uint64_t uid, int operation);
 static devtab_vid_t* sub_searchop_vid(devtab_t* table, uint16_t vid, int operation);
-
-
+static int sub_editop(devtab_t* table, uint64_t uid, uint16_t vid, void* intf_handle, void* rootkey, void* userkey, int operation);
+static int sub_edit_item(devtab_item_t* item, uint64_t uid, uint16_t vid, void* intf_handle, void* rootkey, void* userkey);
 
 
 
@@ -118,6 +115,8 @@ void devtab_free(void* handle) {
                 devtab_item_t* item;
                 item = table->cell[i];
                 if (item != NULL) {
+                    if (item->root != NULL) free(item->root);
+                    if (item->user != NULL) free(item->user);
                     free(item);
                 }
             }
@@ -155,8 +154,6 @@ int devtab_list(devtab_t* table, char* dst, size_t dstmax) {
 
 
 int devtab_insert(void* handle, uint64_t uid, uint16_t vid, void* intf_handle, void* rootkey, void* userkey) {
-    devtab_item_t* item;
-    devtab_vid_t* viditem;
     devtab_t* table = handle;
     
     if (table == NULL) {
@@ -188,41 +185,31 @@ int devtab_insert(void* handle, uint64_t uid, uint16_t vid, void* intf_handle, v
     }
     
     ///2. Insert a new cmd item,
-    item = sub_searchop_uid(table, uid, 1);
-    if (item == NULL) {
-        return -3;
-    }
-    
-    /// 3. add the vid index, if a VID is supplied, and link to the cell
-    if (vid != 0) {
-        viditem = sub_searchop_vid(table, vid, 1);
-        if (viditem == NULL) {
-            return -4;
-        }
-        viditem->cell = item;
-    }
-    
-    /// 4. Fill-up cell values.
-    item->vid   = vid;
-    item->intf  = intf_handle;
-
-#   if OTTER_FEATURE(SECURITY)
-    if (rootkey != NULL) {
-        item->flags |= 1;
-        eax_init_and_key((io_t*)rootkey, &item->root);
-    }
-    if (userkey != NULL) {
-        item->flags |= 2;
-        eax_init_and_key((io_t*)userkey, &item->user);
-    }
-#   endif
-
-    return 0;
+    return sub_editop(handle, uid, vid, intf_handle, rootkey, userkey, 1);
 }
 
 
 
-void devtab_remove(void* handle, uint64_t uid) {
+int devtab_edit(void* handle, uint64_t uid, uint16_t vid, void* intf_handle, void* rootkey, void* userkey) {
+    devtab_t* table = handle;
+    if (table == NULL) {
+        return -1;
+    }
+    return sub_editop(handle, uid, vid, intf_handle, rootkey, userkey, 0);
+}
+
+
+
+int devtab_edit_item(devtab_node_t node, uint64_t uid, uint16_t vid, void* intf_handle, void* rootkey, void* userkey) {
+    if (node == NULL) {
+        return -1;
+    }
+    return sub_edit_item(node, uid, vid, intf_handle, rootkey, userkey);
+}
+
+
+
+int devtab_remove(void* handle, uint64_t uid) {
     devtab_item_t* item;
     devtab_t* table = handle;
     uint16_t vid;
@@ -230,16 +217,24 @@ void devtab_remove(void* handle, uint64_t uid) {
     item = sub_searchop_uid(table, uid, -1);
     if (item != NULL) {
         vid = item->vid;
+        if (item->root != NULL) free(item->root);
+        if (item->user != NULL) free(item->user);
         free(item);
         sub_searchop_vid(table, vid, -1);
     }
+    
+    return 0 - (item == NULL);
 }
 
 
 
-void devtab_unlist(void* handle, uint16_t vid) {
+int devtab_unlist(void* handle, uint16_t vid) {
     devtab_t* table = handle;
-    sub_searchop_vid(table, vid, -1);
+    devtab_vid_t* item;
+    
+    item = sub_searchop_vid(table, vid, -1);
+    
+    return 0 - (item == NULL);
 }
 
 
@@ -251,6 +246,11 @@ devtab_node_t devtab_select(void* handle, uint64_t uid) {
 
 devtab_node_t devtab_select_vid(void* handle, uint16_t vid) {
     return (devtab_node_t)sub_searchop_vid((devtab_t*)handle, vid, 0);
+}
+
+
+devtab_endpoint_t* devtab_resolve_endpoint(devtab_node_t node) {
+    return (devtab_endpoint_t*)node;
 }
 
 
@@ -282,7 +282,7 @@ void* devtab_get_rootctx(void* handle, devtab_node_t node) {
     void* rootkey = NULL;
     if (handle != NULL) {
         if (node != NULL) {
-            rootkey = &((devtab_item_t*)node)->root;
+            rootkey = ((devtab_item_t*)node)->root;
         }
     }
     return rootkey;
@@ -297,7 +297,7 @@ void* devtab_get_userctx(void* handle, devtab_node_t node) {
     void* userkey = NULL;
     if (handle != NULL) {
         if (node != NULL) {
-            userkey = &((devtab_item_t*)node)->user;
+            userkey = ((devtab_item_t*)node)->user;
         }
     }
     return userkey;
@@ -379,7 +379,6 @@ static devtab_item_t* sub_searchop_uid(devtab_t* table, uint64_t uid, int operat
                          goto sub_searchop_uid_DO;
             }
         }
-        
         
         sub_searchop_uid_DO:
         
@@ -473,6 +472,63 @@ static devtab_vid_t* sub_searchop_vid(devtab_t* table, uint16_t vid, int operati
     }
 
     return output;
+}
+
+
+static int sub_editop(devtab_t* table, uint64_t uid, uint16_t vid, void* intf_handle, void* rootkey, void* userkey, int operation) {
+    devtab_item_t* item;
+    devtab_vid_t* viditem;
+    
+    ///2. Insert a new cmd item,
+    item = sub_searchop_uid(table, uid, operation);
+    if (item == NULL) {
+        return -3;
+    }
+    
+    /// 3. add the vid index, if a VID is supplied, and link to the cell
+    if (vid != 0) {
+        viditem = sub_searchop_vid(table, vid, operation);
+        if (viditem == NULL) {
+            return -4;
+        }
+        viditem->cell = item;
+    }
+    
+    return sub_edit_item(item, uid, vid, intf_handle, rootkey, userkey);
+}
+
+
+static int sub_edit_item(devtab_item_t* item, uint64_t uid, uint16_t vid, void* intf_handle, void* rootkey, void* userkey) {
+    /// 4. Fill-up cell values.
+    item->vid   = vid;
+    item->intf  = intf_handle;
+    item->root  = NULL;
+    item->user  = NULL;
+
+#   if OTTER_FEATURE(SECURITY)
+    if (rootkey != NULL) {
+        item->flags |= 1;
+        item->root = malloc(sizeof(eax_ctx));
+        if (item->root != NULL) {
+            eax_init_and_key((io_t*)rootkey, item->root);
+        }
+        else {
+            return -5;
+        }
+    }
+    if (userkey != NULL) {
+        item->flags |= 2;
+        item->user = malloc(sizeof(eax_ctx));
+        if (item->user != NULL) {
+            eax_init_and_key((io_t*)userkey, item->user);
+        }
+        else {
+            return -6;
+        }
+    }
+#   endif
+
+    return 0;
 }
 
 

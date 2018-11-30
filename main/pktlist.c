@@ -37,12 +37,12 @@ int pktlist_init(pktlist_t* plist) {
 
 
 
-void sub_frame_null(pkt_t* newpkt, uint8_t* data, size_t datalen) {
+void sub_frame_null(devtab_handle_t devtab, pkt_t* newpkt, uint8_t* data, size_t datalen) {
     memcpy(&newpkt->buffer[0], data, datalen);
 }
 
 
-void sub_readframe_modbus(pkt_t* newpkt, uint8_t* data, size_t datalen) {
+void sub_readframe_modbus(devtab_handle_t devtab, pkt_t* newpkt, uint8_t* data, size_t datalen) {
 /// Modbus read process will remove the encrypted data
     int         mbcmd       = data[1];
     size_t      frame_size  = datalen-2;            // Strip 2 byte CRC
@@ -75,7 +75,7 @@ void sub_readframe_modbus(pkt_t* newpkt, uint8_t* data, size_t datalen) {
         // frame_size will become the size of the decrypted data, at returned offset
         // If encryption failed, do not copy packet and leave size == 0
         mbcmd  -= 68;
-        offset  = user_decrypt((USER_Type)mbcmd, src_addr, data, &frame_size);
+        offset  = userdecrypt((USER_Type)mbcmd, src_addr, data, &frame_size);
         
 //        for (int i=0; i<datalen; i++) {
 //            fprintf(stderr, "%02X ", data[i]);
@@ -126,7 +126,7 @@ void sub_readframe_modbus(pkt_t* newpkt, uint8_t* data, size_t datalen) {
 }
 
 
-void sub_writeframe_modbus(pkt_t* newpkt, uint8_t* data, size_t datalen) {
+void sub_writeframe_modbus(devtab_handle_t devtab, pkt_t* newpkt, uint8_t* data, size_t datalen) {
 /// Adds 1, 3, or 11 bytes to payload depending on conditions
     int hdr_size;
     int pad_size;
@@ -144,7 +144,7 @@ void sub_writeframe_modbus(pkt_t* newpkt, uint8_t* data, size_t datalen) {
         int         cmdvariant;
         USER_Type   usertype;
         
-        usertype = user_typeval_get();
+        usertype = usertypeval_get();
         switch (usertype) {
             case USER_root: cmdvariant = 0; break;
             case USER_user: cmdvariant = 1; break;
@@ -152,7 +152,7 @@ void sub_writeframe_modbus(pkt_t* newpkt, uint8_t* data, size_t datalen) {
         }
         newpkt->buffer[1]   = 68 + cmdvariant;
         newpkt->buffer[2]   = cliopt_getsrcaddr() & 0xFF;
-        hdr_size            = user_preencrypt(usertype, user_idval_get(), &newpkt->buffer[0], &newpkt->buffer[0]);
+        hdr_size            = userpreencrypt(usertype, useridval_get(), &newpkt->buffer[0], &newpkt->buffer[0]);
         memcpy(&newpkt->buffer[hdr_size], data, datalen);
         
         // Perform encryption
@@ -172,7 +172,7 @@ void sub_writeframe_modbus(pkt_t* newpkt, uint8_t* data, size_t datalen) {
             }
 #           endif
             
-            hdr_size = user_encrypt(usertype, user_idval_get(), &newpkt->buffer[0], datalen);
+            hdr_size = userencrypt(usertype, useridval_get(), &newpkt->buffer[0], datalen);
             if (hdr_size < 0) {
                 goto sub_writeframe_modbus_ERR;
             }
@@ -197,7 +197,7 @@ void sub_writeframe_modbus(pkt_t* newpkt, uint8_t* data, size_t datalen) {
 }
 
 
-void sub_writeframe_mpipe(pkt_t* newpkt, uint8_t* data, size_t datalen) {
+void sub_writeframe_mpipe(devtab_handle_t devtab, pkt_t* newpkt, uint8_t* data, size_t datalen) {
 /// Adds 8 bytes to packet
     newpkt->buffer[0] = 0xff;
     newpkt->buffer[1] = 0x55;
@@ -240,10 +240,10 @@ void sub_writefooter_modbus(pkt_t* newpkt) {
 
 
 
-int pktlist_add(pktlist_t* plist, bool write_header, uint8_t* data, size_t size) {
+int pktlist_add(devtab_handle_t devtab, pktlist_t* plist, bool write_header, uint8_t* data, size_t size) {
     pkt_t* newpkt;
     size_t max_overhead;
-    void (*put_frame)(pkt_t*, uint8_t*, size_t);
+    void (*put_frame)(devtab_handle_t, pkt_t*, uint8_t*, size_t);
     void (*put_footer)(pkt_t*);
     
     if (plist == NULL) {
@@ -309,7 +309,7 @@ int pktlist_add(pktlist_t* plist, bool write_header, uint8_t* data, size_t size)
     // put_frame() with either write the TX frame or process the RX frame.
     // If there is no encryption, this doesn't do much, if anything, for RX.
     // If there's an error, we scrub the packet and exit with error.
-    put_frame(newpkt, data, size);
+    put_frame(devtab, newpkt, data, size);
     if (newpkt->size == 0) {
         free(newpkt->buffer);
         free(newpkt);

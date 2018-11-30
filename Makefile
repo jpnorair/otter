@@ -36,7 +36,7 @@ OBJEXT      := o
 CFLAGS_DEBUG:= -std=gnu99 -O -g -Wall -pthread
 CFLAGS      := -std=gnu99 -O3 -pthread
 #INC         := -I. -I./$(PKGDIR)/argtable -I./$(PKGDIR)/bintex -I./$(PKGDIR)/cJSON -I./$(PKGDIR)/cmdtab -I./$(PKGDIR)/hbuilder -I./$(PKGDIR)/liboteax -I./$(PKGDIR)/libotfs -I./$(PKGDIR)/m2def
-INC         := -I. -I./$(SYSDIR)/include
+INC         := -I. -I./include -I./$(SYSDIR)/include
 INCDEP      := -I.
 LIBINC      := -L./$(SYSDIR)/lib
 LIB         := -largtable -lbintex -lcJSON -lcmdtab -lhbuilder -lotfs -loteax -ljudy -lm -lc $(LIBBSD)

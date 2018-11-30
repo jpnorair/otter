@@ -44,15 +44,15 @@
 #include "modbus.h"
 #include "ppipe.h"
 #include "ppipelist.h"
-#include "cmdsearch.h"
+#include "cmd_api.h"
 #include "cmdhistory.h"
 #include "cliopt.h"
 #include "user.h"
 #include "debug.h"
 
 // Local Libraries
-#include "argtable3.h"
-#include "cJSON.h"
+#include <argtable3.h>
+#include <cJSON.h>
 
 //Package libraries
 #include <cmdtab.h>
@@ -541,11 +541,15 @@ int otter_main( const char* ttyfile,
     ///      something dynamic as such.
     
     /// Device Table initialization.
+    /// Device 0 is used for implicit addressing
     if (devtab_init(&dterm_args.devtab_handle) != 0) {
         ///@todo print an error
         goto otter_main_TERM0;
     }
-
+    if (devtab_insert(dterm_args.devtab_handle, 0, 0, NULL, NULL, NULL) != 0) {
+        ///@todo print an error
+        goto otter_main_TERM1;
+    }
     
     /// Initialize the user manager.
     /// This must be done prior to command module init
@@ -619,13 +623,14 @@ int otter_main( const char* ttyfile,
     mpipe_fd = mpipe_open(&mpipe_ctl, ttyfile, baudrate, enc_bits, enc_parity, enc_stopbits, 0, 0, 0);
     if (mpipe_fd < 0) {
         cli.exitcode = -1;
-        goto otter_main_TERM1;
+        goto otter_main_TERM2;
     }
     
     /// Open DTerm interface & Setup DTerm threads
     /// The dterm thread will deal with all other aspects, such as command
     /// entry and history initialization.
     ///@todo "STDIN_FILENO" and "STDOUT_FILENO" could be made dynamic
+    ///@todo it might be nice to put this routine into a dterm_init() function.
     _dtputs_dterm               = &dterm;
     dterm.fd_in                 = STDIN_FILENO;
     dterm.fd_out                = STDOUT_FILENO;
@@ -637,11 +642,13 @@ int otter_main( const char* ttyfile,
     dterm_args.tlist_cond       = &tlist_cond;
     dterm_args.kill_mutex       = &cli.kill_mutex;
     dterm_args.kill_cond        = &cli.kill_cond;
+    dterm_args.endpoint.node    = devtab_select(dterm_args.devtab_handle, 0);
+    dterm_args.endpoint.usertype= USER_guest;
     dterm_fn                    = (pipe == false) ? &dterm_prompter : &dterm_piper;
     
     if (dterm_open(&dterm, pipe) < 0) {
         cli.exitcode = -2;
-        goto otter_main_TERM2;
+        goto otter_main_TERM3;
     }
 
     
@@ -675,7 +682,7 @@ int otter_main( const char* ttyfile,
         }
         else {
             DEBUG_PRINTF("No active interface is available\n");
-            goto otter_main_TERM2;
+            goto otter_main_TERM3;
         }
     }
     
@@ -723,20 +730,22 @@ int otter_main( const char* ttyfile,
         dterm_close(&dterm);
     }
     
-    otter_main_TERM2:
+    otter_main_TERM3:
     DEBUG_PRINTF("Closing MPipe\n");
     mpipe_close(&mpipe_ctl);
     DEBUG_PRINTF("Freeing DTerm and Command History\n");
     dterm_free(&dterm);
     ch_free(&cmd_history);
     
-    otter_main_TERM1:
+    otter_main_TERM2:
     DEBUG_PRINTF("Freeing Mpipe Packet Lists\n");
     mpipe_freelists(&mpipe_rlist, &mpipe_tlist);
     DEBUG_PRINTF("Freeing PPipe lists\n");
     ppipelist_deinit();
     cmd_free(NULL);
     user_deinit();
+    
+    otter_main_TERM1:
     devtab_free(dterm_args.devtab_handle);
     
     otter_main_TERM0:

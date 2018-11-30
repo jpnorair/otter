@@ -20,7 +20,18 @@
 
 #include <stdint.h>
 
+typedef void* devtab_handle_t;
+
 typedef void* devtab_node_t;
+
+typedef struct {
+    uint16_t    flags;
+    uint16_t    vid;
+    uint64_t    uid;
+    void*       intf;
+    void*       rootctx;
+    void*       userctx;
+} devtab_endpoint_t;
 
 
 
@@ -31,6 +42,15 @@ int devtab_insert(void* handle, uint64_t uid, uint16_t vid, void* intf_handle, v
 devtab_node_t devtab_select(void* handle, uint64_t uid);
 devtab_node_t devtab_select_vid(void* handle, uint16_t vid);
 
+
+
+int devtab_edit(void* handle, uint64_t uid, uint16_t vid, void* intf_handle, void* rootkey, void* userkey);
+int devtab_edit_item(devtab_node_t node, uint64_t uid, uint16_t vid, void* intf_handle, void* rootkey, void* userkey);
+
+int devtab_remove(void* handle, uint64_t uid);
+int devtab_unlist(void* handle, uint16_t vid);
+
+devtab_endpoint_t* devtab_resolve_endpoint(devtab_node_t node);
 uint16_t devtab_get_vid(void* handle, devtab_node_t node);
 void* devtab_get_intf(void* handle, devtab_node_t node);
 void* devtab_get_rootctx(void* handle, devtab_node_t node);

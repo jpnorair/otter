@@ -14,29 +14,18 @@
   *
   */
 
+///@todo THIS MODULE SHOULD BE REMOVED
+
+
 #include "user.h"
+
+#include "crypto.h"
 #include "cliopt.h"
 #include "otter_cfg.h"
 
 #include <stdint.h>
-
 #include <stdlib.h>
-#ifdef __linux__
-#   include <bsd/stdlib.h>
-#endif
-
-
 #include <string.h>
-
-
-
-#if OTTER_FEATURE(SECURITY)
-#   include <oteax.h>
-#endif
-#if OTTER_FEATURE(OTDB)
-#   include <otdb.h>
-#endif
-
 
 
 typedef struct {
@@ -47,32 +36,6 @@ typedef struct {
 static user_t   current_user;
 
 
-#if OTTER_FEATURE(SECURITY)
-#   undef   OTTER_NUM_KEYS
-#   define  OTTER_NUM_KEYS  2
-
-    typedef struct {
-        eax_ctx   ctx;
-    } dllsctx_t;
-
-    static uint32_t     dlls_nonce;
-    static dllsctx_t    dlls_ctx[OTTER_NUM_KEYS];
-
-
-    void sec_init(void);
-    void sec_deinit(void);
-    void sec_putnonce(uint8_t* dst, unsigned int total_size);
-    uint32_t sec_getnonce(void);
-    int sec_update_key(USER_Type usertype, uint8_t* keydata);
-    int sec_encrypt(uint8_t* nonce, uint8_t* data, size_t datalen, unsigned int key_index);
-    int sec_decrypt(uint8_t* nonce, uint8_t* data, size_t datalen, unsigned int key_index);
-    
-#endif
-
-
-
-
-
 
 
 int user_init(void) {
@@ -80,7 +43,7 @@ int user_init(void) {
     current_user.id         = 0;
     
 #   if OTTER_FEATURE(SECURITY)
-    sec_init();
+    crypto_init();
 #   endif
 
     return 0;
@@ -88,7 +51,7 @@ int user_init(void) {
 
 void user_deinit(void) {
 #   if OTTER_FEATURE(SECURITY)
-    sec_deinit();
+    crypto_deinit();
 #   endif
 }
 
@@ -106,8 +69,8 @@ const char* user_typestring_get(void) {
 }
 
 
-USER_Type user_typeval_get(void) {
-    return current_user.usertype;
+USER_Type user_typeval_get(dterm_handle_t* dth) {
+    return dth->endpoint.usertype;
 }
 
 
@@ -116,7 +79,15 @@ uint64_t user_idval_get(void) {
 }
 
 
+int user_set() {
+    
+    return 0;
+}
+
+
+
 int user_set_local(USER_Type usertype, KEY_Type keytype, uint8_t* keyval) {
+/*
 #if (OTTER_FEATURE(SECURITY))
     unsigned int key_index;
     int rc;
@@ -127,7 +98,7 @@ int user_set_local(USER_Type usertype, KEY_Type keytype, uint8_t* keyval) {
     
     // Use pre-existing key if keyval is null
     if (keyval != NULL) {
-        rc = sec_update_key((unsigned int)usertype, (uint8_t*)keyval);
+        rc = crypto_update_key(0, (uint8_t*)keyval);
     }
     else {
         rc = 0;
@@ -136,16 +107,13 @@ int user_set_local(USER_Type usertype, KEY_Type keytype, uint8_t* keyval) {
     return rc;
 
 #endif
+*/
     return -1;
 }
 
 
 int user_set_db(USER_Type usertype, uint64_t uid) {
-#if (OTTER_FEATURE(SECURITY) && OTTER_FEATURE(OTDB))
-
-#else
     return -1;
-#endif
 }
 
 
@@ -166,7 +134,7 @@ int user_preencrypt(USER_Type usertype, uint64_t uid, uint8_t* dst, uint8_t* hdr
         bytes_added = 3;
         
         if (key_index < (unsigned int)USER_guest) {
-            sec_putnonce(dst, 7);
+            crypto_putnonce(dst, 7);
             bytes_added += 4;
         }
     }
@@ -197,7 +165,7 @@ int user_encrypt(USER_Type usertype, uint64_t uid, uint8_t* front, size_t payloa
         return 3;
     }
     if (key_index < (unsigned int)USER_guest) {
-        int rc = sec_encrypt(front, front+7, payload_len, key_index);
+        int rc = crypto_encrypt(front, front+7, payload_len, /*key_index*/ NULL);
         return (rc != 0) ? rc : 7 + 4;
     }
 
@@ -229,10 +197,10 @@ int user_decrypt(USER_Type usertype, uint64_t uid, uint8_t* front, size_t* frame
         *frame_len -= 3;    // 24 bit header
         
         if (key_index < (unsigned int)USER_guest) {
-            //fprintf(stderr, "sec_decrypt(%016llX, %016llX, %zu, %u)\n", (uint64_t)front, (uint64_t)(front+7), *frame_len-(4+4), key_index);
-            if (0 != sec_decrypt(front, front+7, *frame_len-(4+4), key_index)) {
+            //fprintf(stderr, "crypto_decrypt(%016llX, %016llX, %zu, %u)\n", (uint64_t)front, (uint64_t)(front+7), *frame_len-(4+4), key_index);
+            if (0 != crypto_decrypt(front, front+7, *frame_len-(4+4), /*key_index*/ NULL)) {
                 bytes_added = -1;       // error
-                //fprintf(stderr, "sec_decrypt() error\n");
+                //fprintf(stderr, "crypto_decrypt() error\n");
             }
             else {
                 bytes_added += 4;       // nonce (4)
@@ -253,99 +221,4 @@ int user_decrypt(USER_Type usertype, uint64_t uid, uint8_t* front, size_t* frame
 #endif
 }
 
-
-
-
-
-
-
-
-#if OTTER_FEATURE(SECURITY)
-
-/** High Level Cryptographic Interface Functions <BR>
-  * ========================================================================<BR>
-  * init, encrypt, decrypt
-  */
-
-void sec_init(void) {
-    sec_deinit();
-    dlls_nonce = arc4random();
-}
-
-
-void sec_deinit(void) {
-/// clear all memory used for key storage, and free it if necessary.
-    // Clear memory elements.  They are statically allocated in this case,
-    // so no freeing is required.
-    memset(dlls_ctx, 0, sizeof(dlls_ctx));
-}
-
-
-void sec_putnonce(uint8_t* dst, unsigned int total_size) {
-/// Nonce is 4 bytes.
-/// - If total_size < 4, only the LSBs of the nonce are written.  Not recommended.
-/// - If total_size == 4, the whole nonce is written.
-/// - If total_size > 4, the 4 byte nonce is placed at a latter position on dst,
-///   thus the nonce gets padded with whatever bytes are already in dst.
-    int         pad_bytes;
-    int         write_bytes;
-    uint32_t    output_nonce;
-    
-    write_bytes = 4;
-    pad_bytes   = total_size - 4;
-    if (pad_bytes > 0) {
-        dst += pad_bytes;
-    }
-    else {
-        write_bytes += pad_bytes;
-    }
-    
-    /// Increment the internal nonce integer each time a nonce is put.
-    /// It's also possible to change to network endian here, but it
-    /// doesn't technically matter as long as the nonce data is 
-    /// conveyed congruently.
-    output_nonce = dlls_nonce++;
-    
-    memcpy(dst, &output_nonce, write_bytes);
-}
-
-
-uint32_t sec_getnonce(void) {
-/// Increment the internal nonce integer each time a nonce is got.
-    uint32_t output_nonce = dlls_nonce++;
-    return output_nonce;
-}
-
-
-int sec_update_key(unsigned int key_index, uint8_t* keydata) {
-    if (key_index < OTTER_NUM_KEYS) {
-        eax_init_and_key((io_t*)keydata, &dlls_ctx[key_index].ctx);
-        return 0;
-    }
-    return -1;
-}
-
-
-
-/// EAX cryptography is symmetric, so decrypt and encrypt are almost identical.
-
-static int sub_do_crypto(uint8_t* nonce, uint8_t* data, size_t datalen, unsigned int key_index,
-                        int (*EAXdrv_fn)(const void*, void*, unsigned long, eax_ctx*) ) {
-
-    /// Error if key index is not available
-    if (key_index >= OTTER_NUM_KEYS) {
-        return -1;
-    }
-    
-    return EAXdrv_fn(nonce, data, datalen, (eax_ctx*)&dlls_ctx[key_index].ctx);
-}
-
-int sec_encrypt(uint8_t* nonce, uint8_t* data, size_t datalen, unsigned int key_index) {
-    return sub_do_crypto(nonce, data, datalen, key_index, &eax_encrypt_message);
-}
-int sec_decrypt(uint8_t* nonce, uint8_t* data, size_t datalen, unsigned int key_index) {
-    return sub_do_crypto(nonce, data, datalen, key_index, &eax_decrypt_message);
-}
-
-#endif
 

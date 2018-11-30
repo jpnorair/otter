@@ -43,8 +43,12 @@ int cmd_quit(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, size
 
 int cmd_cmdlist(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax);
 
-// To be deprecated and linked to cmd_set
+
+/// Set an Otter environment variable.  sethome is deprecated.
+int cmd_set(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax);
 int cmd_sethome(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax);
+
+
 
 /// User commands
 /// chuser  : Change user.              chuser guest|user|root [address]
@@ -56,12 +60,17 @@ int cmd_su(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, size_t
 int cmd_useradd(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax);
 int cmd_whoami(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax);
 
+/// Node commands
+int cmd_mknode(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax);
+int cmd_chnode(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax);
+int cmd_rmnode(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax);
+
+
+
+
+
 // Raw Protocol Entry: 
 int cmd_raw(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax);
-
-// Set an Otter environment variable
-int cmd_set(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax);
-
 
 // External command call to HBuilder
 int cmdext_hbuilder(void* hb_handle, void* cmd_handle, dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax);
@@ -69,14 +78,9 @@ int cmdext_hbuilder(void* hb_handle, void* cmd_handle, dterm_handle_t* dth, uint
 
 
 
-// HBCC is a client-side generator of sequential ASAPI Calls into simple, 
-// atomic API messages
-int cmd_hbcc(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax);
-
 
 /// Application protocol commands sent over the MPipe
 ///@todo These could probably be moved into m2def or something else.
-
 
 // ID = 0
 int app_null(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax);

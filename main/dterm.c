@@ -16,9 +16,8 @@
 
 // Application Headers
 #include "cliopt.h"
-#include "cmds.h"
 #include "cmdhistory.h"
-#include "cmdsearch.h"
+#include "cmd_api.h"
 #include "dterm.h"
 #include "../test/test.h"
 #include "user.h"
@@ -477,7 +476,7 @@ void* dterm_prompter(void* args) {
                                         dth->dt->state = prompt_off;
                                     }
                                     else {
-                                        dterm_puts(dth->dt, (char*)prompt_str[user_typeval_get()]);
+                                        dterm_puts(dth->dt, (char*)prompt_str[dth->endpoint.usertype]);
                                         dth->dt->state = prompt_on;
                                     }
                                     break;
@@ -551,7 +550,7 @@ void* dterm_prompter(void* args) {
                                     cmdptr = cmd_subsearch((char*)cmdname);
                                     if ((cmdptr != NULL) && (dth->dt->linebuf[cmdlen] == 0)) {
                                         dterm_remln(dth->dt);
-                                        dterm_puts(dth->dt, (char*)prompt_str[user_typeval_get()]);
+                                        dterm_puts(dth->dt, (char*)prompt_str[dth->endpoint.usertype]);
                                         dterm_putsc(dth->dt, (char*)cmdptr->name);
                                         dterm_puts(dth->dt, (char*)cmdptr->name);
                                     }
@@ -565,7 +564,7 @@ void* dterm_prompter(void* args) {
                 case ct_histnext:   cmdstr = ch_next(dth->ch);
                                     if (dth->ch->count && cmdstr) {
                                         dterm_remln(dth->dt);
-                                        dterm_puts(dth->dt, (char*)prompt_str[user_typeval_get()]);
+                                        dterm_puts(dth->dt, (char*)prompt_str[dth->endpoint.usertype]);
                                         dterm_putsc(dth->dt, cmdstr);
                                         dterm_puts(dth->dt, cmdstr);
                                     }
@@ -576,7 +575,7 @@ void* dterm_prompter(void* args) {
                 case ct_histprev:   cmdstr = ch_prev(dth->ch);
                                     if (dth->ch->count && cmdstr) {
                                         dterm_remln(dth->dt);
-                                        dterm_puts(dth->dt, (char*)prompt_str[user_typeval_get()]);
+                                        dterm_puts(dth->dt, (char*)prompt_str[dth->endpoint.usertype]);
                                         dterm_putsc(dth->dt, cmdstr);
                                         dterm_puts(dth->dt, cmdstr);
                                     }
