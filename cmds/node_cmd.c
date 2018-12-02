@@ -67,7 +67,7 @@ static int sub_editnode(dterm_handle_t* dth, int argc, char** argv, bool require
     
     /// UID is a required element
     bintex_ss(uid->sval[0], (uint8_t*)&uid_val, 8);
-    node = devtab_select(dth->devtab_handle, uid_val);
+    node = devtab_select(dth->endpoint.devtab, uid_val);
     if ((require_exists && (node == NULL)) || (!require_exists && (node != NULL))) {
         rc = -3;
         goto sub_editnode_TERM;
@@ -91,7 +91,7 @@ static int sub_editnode(dterm_handle_t* dth, int argc, char** argv, bool require
         bintex_ss(userkey->sval[0], userkey_dat, 16);
     }
 
-    rc = devtab_insert(dth->devtab_handle, uid_val, vid_val, intf_val, rootkey_val, userkey_val);
+    rc = devtab_insert(dth->endpoint.devtab, uid_val, vid_val, intf_val, rootkey_val, userkey_val);
     
     sub_editnode_TERM:
     arg_freetable(argtable, sizeof(argtable)/sizeof(argtable[0]));
@@ -199,7 +199,7 @@ int cmd_rmnode(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, si
         
         /// UID is a required element
         bintex_ss(uid->sval[0], (uint8_t*)&uid_val, 8);
-        rc = devtab_remove(dth->devtab_handle, uid_val);
+        rc = devtab_remove(dth->endpoint.devtab, uid_val);
 
         cmd_rmnode_TERM:
         arg_freetable(argtable, sizeof(argtable)/sizeof(argtable[0]));

@@ -13,6 +13,10 @@
   * limitations under the License.
   *
   */
+
+#ifndef envvar_h
+#define envvar_h
+
 // Otter Headers
 #include "cliopt.h"
 #include "cmds.h"
@@ -55,4 +59,6 @@ int envvar_get(void* handle, size_t* varsize, void** vardata, const char* name);
 
 
 int envvar_getint(void* handle, const char* name);
+
+#endif
 

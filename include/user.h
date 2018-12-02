@@ -14,10 +14,9 @@
   *
   */
 
-#ifndef user_h
-#define user_h
+#ifndef user_h_main
+#define user_h_main
 
-#include "dterm.h"
 #include "devtable.h"
 
 #include <stdio.h>
@@ -42,10 +41,10 @@ typedef enum {
 
 
 typedef struct {
-    devtab_node_t   node;
     USER_Type       usertype;
+    devtab_node_t   node;
+    devtab_handle_t devtab;
 } user_endpoint_t;
-
 
 
 
@@ -86,8 +85,7 @@ int user_preencrypt(USER_Type usertype, uint8_t* dst, uint8_t* hdr24);
 
 
 /** @brief Put encrypted data, in-place, into frame
-  * @param devtab       (devtab_handle_t) handle to device table
-  * @param usertype     (USER_Type) Type value of user.
+  * @param endpoint     (user_endpoint_t*) User Endpoint Pointer
   * @param vid          (uint16_t) User VID value.  Set to 0 to use UID instead.
   * @param uid          (uint64_t) User UID value.  Set to 0 for local user.
   * @param front        (uint8_t*) front of frame buffer, at header position
@@ -104,13 +102,12 @@ int user_preencrypt(USER_Type usertype, uint8_t* dst, uint8_t* hdr24);
   * the header bytes (always 7), the payload length (supplied as argument), and
   * the 4 byte authentication tag footer.
   */ 
-int user_encrypt(devtab_handle_t devtab, USER_Type usertype, uint16_t vid, uint64_t uid, uint8_t* front, size_t payload_len);
+int user_encrypt(user_endpoint_t* endpoint, uint16_t vid, uint64_t uid, uint8_t* front, size_t payload_len);
 
 
 
 /** @brief Decrypt data, in-place, from frame
-  * @param devtab       (devtab_handle_t) handle to device table
-  * @param usertype     (USER_Type) Type value of user.
+  * @param endpoint     (user_endpoint_t*) User Endpoint Pointer
   * @param vid          (uint16_t) User VID value.  Set to 0 to use UID instead.
   * @param uid          (uint64_t) User UID value.  Set to 0 for local user.
   * @param front        (uint8_t*) front of frame buffer, at header position
@@ -128,7 +125,7 @@ int user_encrypt(devtab_handle_t devtab, USER_Type usertype, uint16_t vid, uint6
   * such that, as output, frame_len represents the number of bytes of the 
   * payload only, with header, nonce, padding, and footer removed.
   */ 
-int user_decrypt(devtab_handle_t devtab, USER_Type usertype, uint16_t vid, uint64_t uid, uint8_t* front, size_t* frame_len);
+int user_decrypt(user_endpoint_t* endpoint, uint16_t vid, uint64_t uid, uint8_t* front, size_t* frame_len);
 
 
 #endif /* user_h */

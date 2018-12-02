@@ -19,6 +19,7 @@
 
 // Configuration Header
 #include "otter_cfg.h"
+#include "pktlist.h"
 #include "user.h"
 
 // Application Headers
@@ -101,9 +102,8 @@ typedef struct {
     dterm_t*            dt;
     cmdhist*            ch;
     cmdtab_t*           cmdtab;
-    void*               devtab_handle;
-    user_endpoint_t     endpoint;
     pktlist_t*          tlist;
+    user_endpoint_t     endpoint;
     
     pthread_mutex_t*    dtwrite_mutex;
     pthread_mutex_t*    tlist_mutex;

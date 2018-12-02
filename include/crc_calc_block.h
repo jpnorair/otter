@@ -14,6 +14,9 @@
   *
   */
 
+#ifndef crc_calc_block_h
+#define crc_calc_block_h
+
 #include <stdio.h>
 #include <stdint.h>
 
@@ -22,3 +25,5 @@
 uint16_t crc_calc_block(uint8_t* src, size_t size);
 
 uint16_t mbcrc_calc_block(uint8_t *src, size_t size);
+
+#endif

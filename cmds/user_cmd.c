@@ -40,32 +40,6 @@
 
 
 
-/// This key is hardcoded for AES128
-///@todo have a way to make this dynamic based on cli parameters, or mode params
-static uint8_t user_key[16];
-
-
-/*
-struct arg_str* uid     = arg_str1(NULL,NULL,"UID",             "64 bit UID as Bintex expression");
-    struct arg_int* vid     = arg_int0("v","vid","VID",             "VID as integer, 0-65535.");
-    struct arg_str* intf    = arg_str0("i", "intf", "ttyfile",      "TTY associated with node.");
-    struct arg_str* rootkey = arg_str0("r", "root", "key",          "128 bit AES key as Bintex expression");
-    struct arg_str* userkey = arg_str0("r", "user", "key",          "128 bit AES key as Bintex expression");
-    struct arg_end* end     = arg_end(6);
-    void* argtable[]        = { uid, vid, intf, rootkey, userkey, end };
-    uint16_t vid_val        = 0;
-    uint64_t uid_val        = 0;
-    char* intf_val          = NULL;
-    uint8_t* rootkey_val    = NULL;
-    uint8_t* userkey_val    = NULL;
-    uint8_t rootkey_dat[16];
-    uint8_t userkey_dat[16];
-    int rc = 0;
-    devtab_node_t node = NULL;
-*/
-
-
-
 int cmd_chuser(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
 /// src is a string containing:
 /// - "guest" which is a single argument
@@ -117,13 +91,13 @@ int cmd_chuser(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, si
         if (uid->count > 0) {
             uint64_t uidval = 0;
             bintex_ss(uid->sval[0], (uint8_t*)&uidval, 8);
-            node = devtab_select(dth->devtab_handle, uidval);
+            node = devtab_select(dth->endpoint.devtab, uidval);
         }
         else if (vid->count > 0) {
-            node = devtab_select_vid(dth->devtab_handle, (uint16_t)vid->ival[0]);
+            node = devtab_select_vid(dth->endpoint.devtab, (uint16_t)vid->ival[0]);
         }
         else {
-            node = devtab_select(dth->devtab_handle, 0);
+            node = devtab_select(dth->endpoint.devtab, 0);
         }
         
         /// Make sure a node is found

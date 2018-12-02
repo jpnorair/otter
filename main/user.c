@@ -69,52 +69,8 @@ const char* user_typestring_get(void) {
 }
 
 
-USER_Type user_typeval_get(dterm_handle_t* dth) {
-    return dth->endpoint.usertype;
-}
 
 
-uint64_t user_idval_get(void) {
-    return current_user.id;
-}
-
-
-int user_set() {
-    
-    return 0;
-}
-
-
-
-int user_set_local(USER_Type usertype, KEY_Type keytype, uint8_t* keyval) {
-/*
-#if (OTTER_FEATURE(SECURITY))
-    unsigned int key_index;
-    int rc;
-    
-    // Set to local ID, and with requested user type
-    current_user.id         = 0;
-    current_user.usertype   = usertype;
-    
-    // Use pre-existing key if keyval is null
-    if (keyval != NULL) {
-        rc = crypto_update_key(0, (uint8_t*)keyval);
-    }
-    else {
-        rc = 0;
-    }
-    
-    return rc;
-
-#endif
-*/
-    return -1;
-}
-
-
-int user_set_db(USER_Type usertype, uint64_t uid) {
-    return -1;
-}
 
 
 int user_preencrypt(USER_Type usertype, uint8_t* dst, uint8_t* hdr24) {
@@ -148,29 +104,28 @@ int user_preencrypt(USER_Type usertype, uint8_t* dst, uint8_t* hdr24) {
 }
 
 
-int user_encrypt(devtab_handle_t devtab, USER_Type usertype, uint16_t vid, uint64_t uid, uint8_t* front, size_t payload_len) {
+int user_encrypt(user_endpoint_t* endpoint, uint16_t vid, uint64_t uid, uint8_t* front, size_t payload_len) {
 #if (OTTER_FEATURE(SECURITY))
-    unsigned int key_index;
     int rc;
     
-    if (front == NULL)
+    if ((endpoint == NULL) || (front == NULL))
         return -3;
     
-    if (usertype < USER_guest) {
-        devtab_endpoint_t* endpoint;
+    if (endpoint->usertype < USER_guest) {
+        devtab_endpoint_t* devEP;
         void* ctx;
         
         if (vid != 0) {
-            endpoint = devtab_resolve_endpoint(devtab_select_vid(devtab, vid));
+            devEP = devtab_resolve_endpoint(devtab_select_vid(endpoint->devtab, vid));
         }
         else {
-            endpoint = devtab_resolve_endpoint(devtab_select(devtab, uid));
+            devEP = devtab_resolve_endpoint(devtab_select(endpoint->devtab, uid));
         }
-        if (endpoint == NULL) {
+        if (devEP == NULL) {
             rc = -1;
         }
         else {
-            ctx = (usertype == USER_root) ? endpoint->rootctx : endpoint->userctx;
+            ctx = (endpoint->usertype == USER_root) ? devEP->rootctx : devEP->userctx;
             rc  = crypto_encrypt(front, front+7, payload_len, ctx);
             rc  = (rc != 0) ? rc : 7+4;
         }
@@ -186,16 +141,21 @@ int user_encrypt(devtab_handle_t devtab, USER_Type usertype, uint16_t vid, uint6
 }
 
 
-int user_decrypt(devtab_handle_t devtab, USER_Type usertype, uint16_t vid, uint64_t uid, uint8_t* front, size_t* frame_len) {
+int user_decrypt(user_endpoint_t* endpoint, uint16_t vid, uint64_t uid, uint8_t* front, size_t* frame_len) {
 #if (OTTER_FEATURE(SECURITY))
     int bytes_added;
+    USER_Type usertype;
     
+    if (endpoint == NULL)   return -2;
     if (front == NULL)      return -3;
     if (frame_len == NULL)  return -4;
     if (*frame_len < 11)    return -4;
     
-    if (devtab == NULL) {
+    if (endpoint->devtab == NULL) {
         usertype = USER_guest;
+    }
+    else {
+        usertype = endpoint->usertype;
     }
     
     if (usertype <= USER_guest) {
@@ -204,19 +164,19 @@ int user_decrypt(devtab_handle_t devtab, USER_Type usertype, uint16_t vid, uint6
         
         if (usertype < USER_guest) {
             void* ctx;
-            devtab_endpoint_t* endpoint;
+            devtab_endpoint_t* devEP;
             
             if (vid != 0) {
-                endpoint = devtab_resolve_endpoint(devtab_select_vid(devtab, vid));
+                devEP = devtab_resolve_endpoint(devtab_select_vid(endpoint->devtab, vid));
             }
             else {
-                endpoint = devtab_resolve_endpoint(devtab_select(devtab, uid));
+                devEP = devtab_resolve_endpoint(devtab_select(endpoint->devtab, uid));
             }
-            if (endpoint == NULL) {
+            if (devEP == NULL) {
                 bytes_added = -1;   // error
             }
             else {
-                ctx = (usertype == USER_root) ? endpoint->rootctx : endpoint->userctx;
+                ctx = (usertype == USER_root) ? devEP->rootctx : devEP->userctx;
                 if (crypto_decrypt(front, front+7, *frame_len-(4+4), ctx) != 0) {
                     bytes_added = -1;       // error
                 }

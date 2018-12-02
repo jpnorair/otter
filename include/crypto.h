@@ -14,6 +14,8 @@
   *
   */
 
+#ifndef crypto_h
+#define crypto_h
 
 #include <stdio.h>
 #include <stdint.h>
@@ -30,5 +32,6 @@ uint32_t crypto_getnonce(void);
 int crypto_encrypt(uint8_t* nonce, uint8_t* data, size_t datalen, void* ctx);
 
 int crypto_decrypt(uint8_t* nonce, uint8_t* data, size_t datalen, void* ctx);
+
 
 #endif

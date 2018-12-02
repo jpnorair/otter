@@ -27,7 +27,7 @@ endif
 
 DEFAULT_DEF := -D__HBUILDER__
 LIBMODULES  := argtable cJSON cmdtab bintex m2def libjudy OTEAX libotfs hbuilder-lib $(EXT_LIBS)
-SUBMODULES  := main test
+SUBMODULES  := cmds main test
 
 SRCEXT      := c
 DEPEXT      := d

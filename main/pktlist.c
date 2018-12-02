@@ -41,12 +41,12 @@ int pktlist_init(pktlist_t* plist) {
 
 
 
-static void sub_frame_null(void* handle, pkt_t* newpkt, uint8_t* data, size_t datalen) {
+static void sub_frame_null(user_endpoint_t* endpoint, pkt_t* newpkt, uint8_t* data, size_t datalen) {
     memcpy(&newpkt->buffer[0], data, datalen);
 }
 
 
-static void sub_readframe_modbus(void* devtab, pkt_t* newpkt, uint8_t* data, size_t datalen) {
+static void sub_readframe_modbus(user_endpoint_t* endpoint, pkt_t* newpkt, uint8_t* data, size_t datalen) {
 /// Modbus read process will remove the encrypted data
     int         mbcmd       = data[1];
     size_t      frame_size  = datalen-2;            // Strip 2 byte CRC
@@ -73,7 +73,7 @@ static void sub_readframe_modbus(void* devtab, pkt_t* newpkt, uint8_t* data, siz
         // frame_size will become the size of the decrypted data, at returned offset
         // If encryption failed, do not copy packet and leave size == 0
         mbcmd -= 68;
-        offset  = user_decrypt(devtab, (USER_Type)mbcmd, src_addr, 0, data, &frame_size);
+        offset  = user_decrypt(endpoint, src_addr, 0, data, &frame_size);
         
         if (offset < 0) {
             newpkt->crcqual = -1;
@@ -107,12 +107,12 @@ static void sub_readframe_modbus(void* devtab, pkt_t* newpkt, uint8_t* data, siz
 }
 
 
-static void sub_writeframe_modbus(void* dth, pkt_t* newpkt, uint8_t* data, size_t datalen) {
+static void sub_writeframe_modbus(user_endpoint_t* endpoint, pkt_t* newpkt, uint8_t* data, size_t datalen) {
 /// Adds 1, 3, or 11 bytes to payload depending on conditions
     int hdr_size;
     int pad_size;
     uint8_t mbaddr;
-    devtab_endpoint_t* devEP = (devtab_endpoint_t*)((dterm_handle_t*)dth)->endpoint.node;
+    devtab_endpoint_t* devEP = endpoint->node;
     
     /// Destination address is derived from the endpoint VID
     if (devEP->vid == 0)        mbaddr = cliopt_getdstaddr();
@@ -132,7 +132,7 @@ static void sub_writeframe_modbus(void* dth, pkt_t* newpkt, uint8_t* data, size_
     if ((data[0] == 0xC0) || (data[0] == 0xD0)) {
         int cmdvariant;
         
-        switch (((dterm_handle_t*)dth)->endpoint.usertype) {
+        switch (endpoint->usertype) {
             case USER_root: cmdvariant = 0; break;
             case USER_user: cmdvariant = 1; break;
             default:        cmdvariant = 2; break;
@@ -140,7 +140,7 @@ static void sub_writeframe_modbus(void* dth, pkt_t* newpkt, uint8_t* data, size_
         newpkt->buffer[1]   = 68 + cmdvariant;
         newpkt->buffer[2]   = cliopt_getsrcaddr() & 0xFF;
         hdr_size            = user_preencrypt(
-                                ((dterm_handle_t*)dth)->endpoint.usertype,
+                                endpoint->usertype,
                                 &newpkt->buffer[0],
                                 &newpkt->buffer[0]);
         
@@ -158,8 +158,7 @@ static void sub_writeframe_modbus(void* dth, pkt_t* newpkt, uint8_t* data, size_
 #           endif
 
             hdr_size = user_encrypt(
-                        ((dterm_handle_t*)dth)->devtab_handle,
-                        ((dterm_handle_t*)dth)->endpoint.usertype,
+                        endpoint,
                         0, devEP->uid,
                         &newpkt->buffer[0], datalen);
             
@@ -181,7 +180,7 @@ static void sub_writeframe_modbus(void* dth, pkt_t* newpkt, uint8_t* data, size_
 }
 
 
-static void sub_writeframe_mpipe(void* dth, pkt_t* newpkt, uint8_t* data, size_t datalen) {
+static void sub_writeframe_mpipe(user_endpoint_t* endpoint, pkt_t* newpkt, uint8_t* data, size_t datalen) {
 /// Adds 8 bytes to packet
     newpkt->buffer[0] = 0xff;
     newpkt->buffer[1] = 0x55;
@@ -222,13 +221,13 @@ static void sub_writefooter_modbus(pkt_t* newpkt) {
 }
 
 
-static int sub_pktlist_add(void* handle, pktlist_t* plist, uint8_t* data, size_t size, bool iswrite) {
+static int sub_pktlist_add(user_endpoint_t* endpoint, pktlist_t* plist, uint8_t* data, size_t size, bool iswrite) {
     pkt_t* newpkt;
     size_t max_overhead;
-    void (*put_frame)(void*, pkt_t*, uint8_t*, size_t);
+    void (*put_frame)(user_endpoint_t*, pkt_t*, uint8_t*, size_t);
     void (*put_footer)(pkt_t*);
     
-    if ((handle == NULL) || (plist == NULL)) {
+    if ((endpoint == NULL) || (plist == NULL)) {
         return -1;
     }
     
@@ -291,7 +290,7 @@ static int sub_pktlist_add(void* handle, pktlist_t* plist, uint8_t* data, size_t
     // put_frame() with either write the TX frame or process the RX frame.
     // If there is no encryption, this doesn't do much, if anything, for RX.
     // If there's an error, we scrub the packet and exit with error.
-    put_frame(handle, newpkt, data, size);
+    put_frame(endpoint, newpkt, data, size);
     if (newpkt->size == 0) {
         free(newpkt->buffer);
         free(newpkt);
@@ -347,12 +346,12 @@ static int sub_pktlist_add(void* handle, pktlist_t* plist, uint8_t* data, size_t
 
 
 
-int pktlist_add_tx(dterm_handle_t* dth, pktlist_t* plist, uint8_t* data, size_t size) {
-    return sub_pktlist_add(dth, plist, data, size, true);
+int pktlist_add_tx(user_endpoint_t* endpoint, pktlist_t* plist, uint8_t* data, size_t size) {
+    return sub_pktlist_add(endpoint, plist, data, size, true);
 }
 
-int pktlist_add_rx(devtab_handle_t devtab, pktlist_t* plist, uint8_t* data, size_t size) {
-    return sub_pktlist_add(devtab, plist, data, size, false);
+int pktlist_add_rx(user_endpoint_t* endpoint, pktlist_t* plist, uint8_t* data, size_t size) {
+    return sub_pktlist_add(endpoint, plist, data, size, false);
 }
 
 

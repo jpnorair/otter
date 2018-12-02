@@ -542,11 +542,11 @@ int otter_main( const char* ttyfile,
     
     /// Device Table initialization.
     /// Device 0 is used for implicit addressing
-    if (devtab_init(&dterm_args.devtab_handle) != 0) {
+    if (devtab_init(&dterm_args.endpoint.devtab) != 0) {
         ///@todo print an error
         goto otter_main_TERM0;
     }
-    if (devtab_insert(dterm_args.devtab_handle, 0, 0, NULL, NULL, NULL) != 0) {
+    if (devtab_insert(dterm_args.endpoint.devtab, 0, 0, NULL, NULL, NULL) != 0) {
         ///@todo print an error
         goto otter_main_TERM1;
     }
@@ -642,7 +642,7 @@ int otter_main( const char* ttyfile,
     dterm_args.tlist_cond       = &tlist_cond;
     dterm_args.kill_mutex       = &cli.kill_mutex;
     dterm_args.kill_cond        = &cli.kill_cond;
-    dterm_args.endpoint.node    = devtab_select(dterm_args.devtab_handle, 0);
+    dterm_args.endpoint.node    = devtab_select(dterm_args.endpoint.devtab, 0);
     dterm_args.endpoint.usertype= USER_guest;
     dterm_fn                    = (pipe == false) ? &dterm_prompter : &dterm_piper;
     
@@ -746,7 +746,7 @@ int otter_main( const char* ttyfile,
     user_deinit();
     
     otter_main_TERM1:
-    devtab_free(dterm_args.devtab_handle);
+    devtab_free(dterm_args.endpoint.devtab);
     
     otter_main_TERM0:
     // cli.exitcode is set to 0, unless sigint is raised.
