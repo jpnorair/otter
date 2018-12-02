@@ -10,6 +10,7 @@
 #define pktlist_h
 
 #include "devtable.h"
+#include "dterm.h"
 
 #include <stdio.h>
 #include <stdint.h>
@@ -41,10 +42,11 @@ typedef struct {
 
 // Packet List Manipulation Functions
 int pktlist_init(pktlist_t* plist);
-int pktlist_add(pktlist_t* list, bool write_header, uint8_t* data, size_t size);
 int pktlist_del(pktlist_t* plist, pkt_t* pkt);
 int pktlist_getnew(pktlist_t* plist);
 
+int pktlist_add_tx(dterm_handle_t* dth, pktlist_t* plist, uint8_t* data, size_t size);
+int pktlist_add_rx(devtab_handle_t devtab, pktlist_t* plist, uint8_t* data, size_t size);
 
 
 #endif /* pktlist_h */

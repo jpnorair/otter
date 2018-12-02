@@ -25,6 +25,7 @@
 
 
 // Standard libs
+#include <pthread.h>
 #include <string.h>
 #include <stdio.h>
 #include <stdbool.h>
@@ -50,6 +51,7 @@ typedef struct {
     size_t          vids;
     size_t          size;
     size_t          alloc;
+    pthread_mutex_t access_mutex;
 } devtab_t;
 
 
@@ -70,7 +72,7 @@ static int sub_edit_item(devtab_item_t* item, uint64_t uid, uint16_t vid, void* 
 
 
 
-int devtab_init(void** new_handle) {
+int devtab_init(devtab_handle_t* new_handle) {
     devtab_t* newtab;
 
     if (new_handle == NULL) {
@@ -82,19 +84,10 @@ int devtab_init(void** new_handle) {
         return -2;
     }
     
-    
-//    newtab->cell = malloc(OTTER_DEVTAB_CHUNK*sizeof(devtab_item_t*));
-//    if (newtab->cell == NULL) {
-//        free(newtab);
-//        return -3;
-//    }
-//
-//    newtab->vdex = calloc(OTTER_DEVTAB_CHUNK, sizeof(devtab_vid_t));
-//    if (newtab->vdex == NULL) {
-//        free(newtab->cell);
-//        free(newtab);
-//        return -4;
-//    }
+    if (pthread_mutex_init(&newtab->access_mutex, NULL) != 0) {
+        free(newtab);
+        return -3;
+    }
     
     newtab->size    = 0;
     newtab->vids    = 0;
@@ -104,11 +97,15 @@ int devtab_init(void** new_handle) {
 }
 
 
-void devtab_free(void* handle) {
+void devtab_free(devtab_handle_t handle) {
     devtab_t* table = (devtab_t*)handle;
     int i;
     
     if (table != NULL) {
+        if (pthread_mutex_lock(&table->access_mutex) != 0) {
+            return;
+        }
+    
         if (table->cell != NULL) {
             i = (int)table->size;
             while (--i >= 0) {
@@ -126,6 +123,9 @@ void devtab_free(void* handle) {
             free(table->vdex);
         }
         
+        pthread_mutex_unlock(&table->access_mutex);
+        pthread_mutex_destroy(&table->access_mutex);
+        
         free(table);
     }
 }
@@ -136,6 +136,15 @@ void devtab_free(void* handle) {
 int devtab_list(devtab_t* table, char* dst, size_t dstmax) {
     int i;
     int chars_out = 0;
+    
+    if (table == NULL) {
+        return -1;
+    }
+    
+    if (pthread_mutex_lock(&table->access_mutex) != 0) {
+        return -2;
+    }
+    
     for (i=0; i<table->size; i++) {
         chars_out  += (16+1+4+1);
         if (chars_out < dstmax) {
@@ -147,17 +156,24 @@ int devtab_list(devtab_t* table, char* dst, size_t dstmax) {
         }
     }
     
+    pthread_mutex_unlock(&table->access_mutex);
+    
     return chars_out;
 }
 
 
 
 
-int devtab_insert(void* handle, uint64_t uid, uint16_t vid, void* intf_handle, void* rootkey, void* userkey) {
+int devtab_insert(devtab_handle_t handle, uint64_t uid, uint16_t vid, void* intf_handle, void* rootkey, void* userkey) {
     devtab_t* table = handle;
+    int rc;
     
     if (table == NULL) {
         return -1;
+    }
+    
+    if (pthread_mutex_lock(&table->access_mutex) != 0) {
+        return -2;
     }
     
     ///1. Make sure there is room in the tables
@@ -185,34 +201,61 @@ int devtab_insert(void* handle, uint64_t uid, uint16_t vid, void* intf_handle, v
     }
     
     ///2. Insert a new cmd item,
-    return sub_editop(handle, uid, vid, intf_handle, rootkey, userkey, 1);
+    rc = sub_editop(handle, uid, vid, intf_handle, rootkey, userkey, 1);
+    
+    pthread_mutex_unlock(&table->access_mutex);
+    return rc;
 }
 
 
 
-int devtab_edit(void* handle, uint64_t uid, uint16_t vid, void* intf_handle, void* rootkey, void* userkey) {
+int devtab_edit(devtab_handle_t handle, uint64_t uid, uint16_t vid, void* intf_handle, void* rootkey, void* userkey) {
     devtab_t* table = handle;
+    int rc;
     if (table == NULL) {
         return -1;
     }
-    return sub_editop(handle, uid, vid, intf_handle, rootkey, userkey, 0);
+    
+    pthread_mutex_lock(&table->access_mutex);
+    rc = sub_editop(handle, uid, vid, intf_handle, rootkey, userkey, 0);
+    pthread_mutex_unlock(&table->access_mutex);
+    
+    return rc;
 }
 
 
 
-int devtab_edit_item(devtab_node_t node, uint64_t uid, uint16_t vid, void* intf_handle, void* rootkey, void* userkey) {
-    if (node == NULL) {
+int devtab_edit_item(devtab_handle_t handle, devtab_node_t node, uint64_t uid, uint16_t vid, void* intf_handle, void* rootkey, void* userkey) {
+    devtab_t* table = handle;
+    int rc;
+    if ((table == NULL) || (node == NULL)) {
         return -1;
     }
-    return sub_edit_item(node, uid, vid, intf_handle, rootkey, userkey);
+    
+    if (pthread_mutex_lock(&table->access_mutex) != 0) {
+        return -2;
+    }
+    
+    rc = sub_edit_item(node, uid, vid, intf_handle, rootkey, userkey);
+    pthread_mutex_unlock(&table->access_mutex);
+    
+    return rc;
 }
 
 
 
-int devtab_remove(void* handle, uint64_t uid) {
+int devtab_remove(devtab_handle_t handle, uint64_t uid) {
     devtab_item_t* item;
     devtab_t* table = handle;
     uint16_t vid;
+    
+    if (handle == NULL) {
+        return -1;
+    }
+    
+    if (pthread_mutex_lock(&table->access_mutex) != 0) {
+        return -2;
+    }
     
     item = sub_searchop_uid(table, uid, -1);
     if (item != NULL) {
@@ -223,29 +266,66 @@ int devtab_remove(void* handle, uint64_t uid) {
         sub_searchop_vid(table, vid, -1);
     }
     
+    pthread_mutex_unlock(&table->access_mutex);
+    
     return 0 - (item == NULL);
 }
 
 
 
-int devtab_unlist(void* handle, uint16_t vid) {
+int devtab_unlist(devtab_handle_t handle, uint16_t vid) {
     devtab_t* table = handle;
     devtab_vid_t* item;
     
+    if (handle == NULL) {
+        return -1;
+    }
+    
+    if (pthread_mutex_lock(&table->access_mutex) != 0) {
+        return -2;
+    }
+    
     item = sub_searchop_vid(table, vid, -1);
+    pthread_mutex_unlock(&table->access_mutex);
     
     return 0 - (item == NULL);
 }
 
 
 
-devtab_node_t devtab_select(void* handle, uint64_t uid) {
-    return (devtab_node_t)sub_searchop_uid((devtab_t*)handle, uid, 0);
+devtab_node_t devtab_select(devtab_handle_t handle, uint64_t uid) {
+    devtab_t* table = handle;
+    devtab_node_t node;
+    if (table == NULL) {
+        return NULL;
+    }
+    
+    if (pthread_mutex_lock(&table->access_mutex) != 0) {
+        return NULL;
+    }
+    
+    node = (devtab_node_t)sub_searchop_uid((devtab_t*)handle, uid, 0);
+    pthread_mutex_unlock(&table->access_mutex);
+    
+    return node;
 }
 
 
-devtab_node_t devtab_select_vid(void* handle, uint16_t vid) {
-    return (devtab_node_t)sub_searchop_vid((devtab_t*)handle, vid, 0);
+devtab_node_t devtab_select_vid(devtab_handle_t handle, uint16_t vid) {
+    devtab_t* table = handle;
+    devtab_node_t node;
+    if (table == NULL) {
+        return NULL;
+    }
+    
+    if (pthread_mutex_lock(&table->access_mutex) != 0) {
+        return NULL;
+    }
+    
+    node = (devtab_node_t)sub_searchop_vid((devtab_t*)handle, vid, 0);
+    pthread_mutex_unlock(&table->access_mutex);
+    
+    return node;
 }
 
 
@@ -255,34 +335,53 @@ devtab_endpoint_t* devtab_resolve_endpoint(devtab_node_t node) {
 
 
 
-uint16_t devtab_get_vid(void* handle, devtab_node_t node) {
+uint16_t devtab_get_vid(devtab_handle_t handle, devtab_node_t node) {
+    devtab_t* table = handle;
     uint16_t vid = OTTER_PARAM_DEFMBSLAVE;
-    if (handle != NULL) {
+    
+    if (table != NULL) {
         if (node != NULL) {
+            if (pthread_mutex_lock(&table->access_mutex) != 0) {
+                return 0;
+            }
             vid = ((devtab_item_t*)node)->vid;
+            pthread_mutex_unlock(&table->access_mutex);
         }
     }
+    
     return vid;
 }
 
 
-void* devtab_get_intf(void* handle, devtab_node_t node) {
+void* devtab_get_intf(devtab_handle_t handle, devtab_node_t node) {
+    devtab_t* table = handle;
     void* intf = NULL;
-    if (handle != NULL) {
+    
+    if (table != NULL) {
         if (node != NULL) {
+            if (pthread_mutex_lock(&table->access_mutex) != 0) {
+                return NULL;
+            }
             intf = ((devtab_item_t*)node)->intf;
+            pthread_mutex_unlock(&table->access_mutex);
         }
     }
     return intf;
 }
 
 
-void* devtab_get_rootctx(void* handle, devtab_node_t node) {
+void* devtab_get_rootctx(devtab_handle_t handle, devtab_node_t node) {
 #if OTTER_FEATURE(SECURITY)
+    devtab_t* table = handle;
     void* rootkey = NULL;
-    if (handle != NULL) {
+    
+    if (table != NULL) {
         if (node != NULL) {
+            if (pthread_mutex_lock(&table->access_mutex) != 0) {
+                return NULL;
+            }
             rootkey = ((devtab_item_t*)node)->root;
+            pthread_mutex_unlock(&table->access_mutex);
         }
     }
     return rootkey;
@@ -292,12 +391,18 @@ void* devtab_get_rootctx(void* handle, devtab_node_t node) {
 }
 
 
-void* devtab_get_userctx(void* handle, devtab_node_t node) {
+void* devtab_get_userctx(devtab_handle_t handle, devtab_node_t node) {
 #if OTTER_FEATURE(SECURITY)
+    devtab_t* table = handle;
     void* userkey = NULL;
-    if (handle != NULL) {
+    
+    if (table != NULL) {
         if (node != NULL) {
+            if (pthread_mutex_lock(&table->access_mutex) != 0) {
+                return NULL;
+            }
             userkey = ((devtab_item_t*)node)->user;
+            pthread_mutex_unlock(&table->access_mutex);
         }
     }
     return userkey;
@@ -307,7 +412,7 @@ void* devtab_get_userctx(void* handle, devtab_node_t node) {
 }
 
 
-uint64_t devtab_lookup_uid(void* handle, uint16_t vid) {
+uint64_t devtab_lookup_uid(devtab_handle_t handle, uint16_t vid) {
     devtab_node_t node;
     uint64_t uid = 0;
     node = devtab_select_vid(handle, vid);
@@ -318,22 +423,22 @@ uint64_t devtab_lookup_uid(void* handle, uint16_t vid) {
 }
 
 
-uint16_t devtab_lookup_vid(void* handle, uint64_t uid) {
+uint16_t devtab_lookup_vid(devtab_handle_t handle, uint64_t uid) {
     return devtab_get_vid(handle, devtab_select(handle, uid));
 }
 
 
-void* devtab_lookup_intf(void* handle, uint64_t uid) {
+void* devtab_lookup_intf(devtab_handle_t handle, uint64_t uid) {
     return devtab_get_intf(handle, devtab_select(handle, uid));
 }
 
 
-void* devtab_lookup_rootctx(void* handle, uint64_t uid) {
+void* devtab_lookup_rootctx(devtab_handle_t handle, uint64_t uid) {
     return devtab_get_rootctx(handle, devtab_select(handle, uid));
 }
 
 
-void* devtab_lookup_userctx(void* handle, uint64_t uid) {
+void* devtab_lookup_userctx(devtab_handle_t handle, uint64_t uid) {
     return devtab_get_userctx(handle, devtab_select(handle, uid));
 }
 
@@ -355,10 +460,6 @@ static devtab_item_t* sub_searchop_uid(devtab_t* table, uint64_t uid, int operat
     devtab_item_t* output = NULL;
     int cci = 0;
     int csc = -1;
-
-    if (table == NULL) {
-        return NULL;
-    }
 
     {   int l   = 0;
         int r   = (int)table->size - 1;
@@ -423,10 +524,6 @@ static devtab_vid_t* sub_searchop_vid(devtab_t* table, uint16_t vid, int operati
     devtab_vid_t* output = NULL;
     int cci = 0;
     int csc = -1;
-
-    if (table == NULL) {
-        return NULL;
-    }
 
     {   int l   = 0;
         int r   = (int)table->vids - 1;

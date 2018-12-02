@@ -37,12 +37,16 @@ int pktlist_init(pktlist_t* plist) {
 
 
 
-void sub_frame_null(devtab_handle_t devtab, pkt_t* newpkt, uint8_t* data, size_t datalen) {
+
+
+
+
+static void sub_frame_null(void* handle, pkt_t* newpkt, uint8_t* data, size_t datalen) {
     memcpy(&newpkt->buffer[0], data, datalen);
 }
 
 
-void sub_readframe_modbus(devtab_handle_t devtab, pkt_t* newpkt, uint8_t* data, size_t datalen) {
+static void sub_readframe_modbus(void* devtab, pkt_t* newpkt, uint8_t* data, size_t datalen) {
 /// Modbus read process will remove the encrypted data
     int         mbcmd       = data[1];
     size_t      frame_size  = datalen-2;            // Strip 2 byte CRC
@@ -65,34 +69,17 @@ void sub_readframe_modbus(devtab_handle_t devtab, pkt_t* newpkt, uint8_t* data, 
         newpkt->buffer[2]   = data[2];
         src_addr            = (uint64_t)data[2];
         
-        // Encryption I/O debugging
-//        for (int i=0; i<datalen; i++) {
-//            fprintf(stderr, "%02X ", data[i]);
-//        }
-//        fprintf(stderr, "\n");
-        
         // For 68/69 packets, there's an encrypted subframe.
         // frame_size will become the size of the decrypted data, at returned offset
         // If encryption failed, do not copy packet and leave size == 0
-        mbcmd  -= 68;
-        offset  = userdecrypt((USER_Type)mbcmd, src_addr, data, &frame_size);
-        
-//        for (int i=0; i<datalen; i++) {
-//            fprintf(stderr, "%02X ", data[i]);
-//        }
-//        fprintf(stderr, "\n");
+        mbcmd -= 68;
+        offset  = user_decrypt(devtab, (USER_Type)mbcmd, src_addr, 0, data, &frame_size);
         
         if (offset < 0) {
             newpkt->crcqual = -1;
             if (cliopt_isverbose()) goto sub_readframe_modbus_LOAD;
             else                    goto sub_readframe_modbus_ERR;
         }
-        
-        // Encryption I/O debugging
-//        for (int i=0; i<datalen; i++) {
-//            fprintf(stderr, "%02X ", data[i]);
-//        }
-//        fprintf(stderr, "\n");
         
         // Realign headers
         hdr24[0]    = data[0];
@@ -103,12 +90,6 @@ void sub_readframe_modbus(devtab_handle_t devtab, pkt_t* newpkt, uint8_t* data, 
         data[0]     = hdr24[0];
         data[1]     = hdr24[1];
         data[2]     = hdr24[2];
-        
-        // Encryption I/O debugging
-//        for (int i=0; i<datalen; i++) {
-//            fprintf(stderr, "%02X ", newpkt->buffer[i]);
-//        }
-//        fprintf(stderr, "\n");
     }
     else {
         datalen -= 2;
@@ -126,13 +107,21 @@ void sub_readframe_modbus(devtab_handle_t devtab, pkt_t* newpkt, uint8_t* data, 
 }
 
 
-void sub_writeframe_modbus(devtab_handle_t devtab, pkt_t* newpkt, uint8_t* data, size_t datalen) {
+static void sub_writeframe_modbus(void* dth, pkt_t* newpkt, uint8_t* data, size_t datalen) {
 /// Adds 1, 3, or 11 bytes to payload depending on conditions
     int hdr_size;
     int pad_size;
+    uint8_t mbaddr;
+    devtab_endpoint_t* devEP = (devtab_endpoint_t*)((dterm_handle_t*)dth)->endpoint.node;
     
-    /// Basic Modbus just puts the destination address.
-    newpkt->buffer[0]   = cliopt_getdstaddr() & 0xFF;
+    /// Destination address is derived from the endpoint VID
+    if (devEP->vid == 0)        mbaddr = cliopt_getdstaddr();
+    else if (devEP->vid < 2)    mbaddr = 2;
+    else if (devEP->vid > 249)  mbaddr = 249;
+    else                        mbaddr = (uint8_t)devEP->vid;
+    
+    /// Basic Modbus header includes only destination address and cmd code
+    newpkt->buffer[0]   = mbaddr;
     hdr_size            = 1;
     pad_size            = 0;
     
@@ -141,28 +130,24 @@ void sub_writeframe_modbus(devtab_handle_t devtab, pkt_t* newpkt, uint8_t* data,
     /// We know it's enhanced modbus if first byte is 0xC0/D0, which is the ALP
     /// Specifier as well as an illegal Function ID in regular modbus.
     if ((data[0] == 0xC0) || (data[0] == 0xD0)) {
-        int         cmdvariant;
-        USER_Type   usertype;
+        int cmdvariant;
         
-        usertype = usertypeval_get();
-        switch (usertype) {
+        switch (((dterm_handle_t*)dth)->endpoint.usertype) {
             case USER_root: cmdvariant = 0; break;
             case USER_user: cmdvariant = 1; break;
             default:        cmdvariant = 2; break;
         }
         newpkt->buffer[1]   = 68 + cmdvariant;
         newpkt->buffer[2]   = cliopt_getsrcaddr() & 0xFF;
-        hdr_size            = userpreencrypt(usertype, useridval_get(), &newpkt->buffer[0], &newpkt->buffer[0]);
+        hdr_size            = user_preencrypt(
+                                ((dterm_handle_t*)dth)->endpoint.usertype,
+                                &newpkt->buffer[0],
+                                &newpkt->buffer[0]);
+        
         memcpy(&newpkt->buffer[hdr_size], data, datalen);
         
         // Perform encryption
         if (cmdvariant < 2) {
-            // Encryption I/O debugging
-//            for (int i=0; i<(hdr_size+datalen); i++) {
-//                fprintf(stderr, "%02X ", newpkt->buffer[i]);
-//            }
-//            fprintf(stderr, "\n");
-        
             // Apply zero padding for alignment requirements
 #           if (OTTER_PARAM_ENCALIGN != 1)
             while (datalen & (OTTER_PARAM_ENCALIGN-1)) {
@@ -171,17 +156,16 @@ void sub_writeframe_modbus(devtab_handle_t devtab, pkt_t* newpkt, uint8_t* data,
                 pad_size++;
             }
 #           endif
+
+            hdr_size = user_encrypt(
+                        ((dterm_handle_t*)dth)->devtab_handle,
+                        ((dterm_handle_t*)dth)->endpoint.usertype,
+                        0, devEP->uid,
+                        &newpkt->buffer[0], datalen);
             
-            hdr_size = userencrypt(usertype, useridval_get(), &newpkt->buffer[0], datalen);
             if (hdr_size < 0) {
                 goto sub_writeframe_modbus_ERR;
             }
-
-            // Encryption I/O debugging
-//            for (int i=0; i<(hdr_size+datalen); i++) {
-//                fprintf(stderr, "%02X ", newpkt->buffer[i]);
-//            }
-//            fprintf(stderr, "\n");
         }
     }
     else {
@@ -197,7 +181,7 @@ void sub_writeframe_modbus(devtab_handle_t devtab, pkt_t* newpkt, uint8_t* data,
 }
 
 
-void sub_writeframe_mpipe(devtab_handle_t devtab, pkt_t* newpkt, uint8_t* data, size_t datalen) {
+static void sub_writeframe_mpipe(void* dth, pkt_t* newpkt, uint8_t* data, size_t datalen) {
 /// Adds 8 bytes to packet
     newpkt->buffer[0] = 0xff;
     newpkt->buffer[1] = 0x55;
@@ -214,11 +198,11 @@ void sub_writeframe_mpipe(devtab_handle_t devtab, pkt_t* newpkt, uint8_t* data, 
 }
 
 
-void sub_footer_null(pkt_t* newpkt) {
+static void sub_footer_null(pkt_t* newpkt) {
 }
 
 
-void sub_writefooter_mpipe(pkt_t* newpkt) {
+static void sub_writefooter_mpipe(pkt_t* newpkt) {
 /// Adds no bytes to packet
     uint16_t crcval;
     newpkt->buffer[6]   = newpkt->sequence;
@@ -228,7 +212,7 @@ void sub_writefooter_mpipe(pkt_t* newpkt) {
 }
 
 
-void sub_writefooter_modbus(pkt_t* newpkt) {
+static void sub_writefooter_modbus(pkt_t* newpkt) {
 /// Adds two bytes to packet
     size_t crcpos               = newpkt->size;
     uint16_t crcval             = mbcrc_calc_block(&newpkt->buffer[0], newpkt->size);
@@ -238,15 +222,13 @@ void sub_writefooter_modbus(pkt_t* newpkt) {
 }
 
 
-
-
-int pktlist_add(devtab_handle_t devtab, pktlist_t* plist, bool write_header, uint8_t* data, size_t size) {
+static int sub_pktlist_add(void* handle, pktlist_t* plist, uint8_t* data, size_t size, bool iswrite) {
     pkt_t* newpkt;
     size_t max_overhead;
-    void (*put_frame)(devtab_handle_t, pkt_t*, uint8_t*, size_t);
+    void (*put_frame)(void*, pkt_t*, uint8_t*, size_t);
     void (*put_footer)(pkt_t*);
     
-    if (plist == NULL) {
+    if ((handle == NULL) || (plist == NULL)) {
         return -1;
     }
     
@@ -257,9 +239,9 @@ int pktlist_add(devtab_handle_t devtab, pktlist_t* plist, bool write_header, uin
     
     // Offset is dependent if we are writing a header (8 bytes) or not.
     ///@todo this code can be optimized quite a lot
-    if (write_header) {
+    if (iswrite) {
         switch (cliopt_getintf()) {
-            case INTF_mpipe:    
+            case INTF_mpipe:
                 max_overhead= 8;
                 put_frame   = &sub_writeframe_mpipe;
                 put_footer  = &sub_writefooter_mpipe;
@@ -280,7 +262,7 @@ int pktlist_add(devtab_handle_t devtab, pktlist_t* plist, bool write_header, uin
     }
     else {
         switch (cliopt_getintf()) {
-            case INTF_mpipe:    
+            case INTF_mpipe:
                 put_frame   = &sub_frame_null; ///@todo &sub_readframe_mpipe;
                 break;
             
@@ -309,7 +291,7 @@ int pktlist_add(devtab_handle_t devtab, pktlist_t* plist, bool write_header, uin
     // put_frame() with either write the TX frame or process the RX frame.
     // If there is no encryption, this doesn't do much, if anything, for RX.
     // If there's an error, we scrub the packet and exit with error.
-    put_frame(devtab, newpkt, data, size);
+    put_frame(handle, newpkt, data, size);
     if (newpkt->size == 0) {
         free(newpkt->buffer);
         free(newpkt);
@@ -356,6 +338,23 @@ int pktlist_add(devtab_handle_t devtab, pktlist_t* plist, bool write_header, uin
     
     return (int)plist->size;
 }
+
+
+
+
+
+
+
+
+
+int pktlist_add_tx(dterm_handle_t* dth, pktlist_t* plist, uint8_t* data, size_t size) {
+    return sub_pktlist_add(dth, plist, data, size, true);
+}
+
+int pktlist_add_rx(devtab_handle_t devtab, pktlist_t* plist, uint8_t* data, size_t size) {
+    return sub_pktlist_add(devtab, plist, data, size, false);
+}
+
 
 
 

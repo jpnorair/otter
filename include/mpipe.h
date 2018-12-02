@@ -17,6 +17,11 @@
 #ifndef mpipe_h
 #define mpipe_h
 
+// Local Libraries
+#include "formatters.h"
+#include "pktlist.h"
+#include "cJSON.h"
+
 // Standard C & POSIX Libraries
 #include <pthread.h>
 #include <stdbool.h>
@@ -24,10 +29,6 @@
 #include <stdio.h>
 #include <time.h>
 
-// Local Libraries
-#include "formatters.h"
-#include "pktlist.h"
-#include "cJSON.h"
 
 // MPipe Data Type(s)
 ///@todo bury these in a code module
@@ -42,7 +43,11 @@ typedef struct {
     mpipe_ctl_t*    mpctl;
     pktlist_t*      tlist;           // should be used only by...
     pktlist_t*      rlist;           // should be used only by...
+    devtab_handle_t devtab;
+    
     mpipe_printer_t puts_fn;
+    
+    ///@todo this msgcall feature is deprecated
     cJSON*          msgcall;
 
     pthread_mutex_t*    dtwrite_mutex;

@@ -91,7 +91,7 @@ int crypto_encrypt(uint8_t* nonce, uint8_t* data, size_t datalen, void* ctx) {
 
 
 int crypto_decrypt(uint8_t* nonce, uint8_t* data, size_t datalen, void* ctx) {
-    return eax_decrypt_message(nonce, data, datalen, ctx, (eax_ctx*)ctx);
+    return eax_decrypt_message(nonce, data, datalen, (eax_ctx*)ctx);
 }
 
 
