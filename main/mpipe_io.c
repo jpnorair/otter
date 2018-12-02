@@ -222,7 +222,7 @@ void* mpipe_reader(void* args) {
 
     /// Copy the packet to the rlist and signal mpipe_parser()
     pthread_mutex_lock(rlist_mutex);
-    pktlist_add_rx(devtab, rlist, false, rbuf, (size_t)(header_length + payload_length));      ///@todo pktlist_read function without dth requirement
+    pktlist_add_rx(devtab, rlist, rbuf, (size_t)(header_length + payload_length));
     pthread_mutex_unlock(rlist_mutex);
     
     /// Error Handler: wait a few milliseconds, then handle the error.

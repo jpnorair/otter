@@ -157,7 +157,7 @@ void* modbus_reader(void* args) {
 
     /// Copy the packet to the rlist and signal modbus_parser()
     pthread_mutex_lock(rlist_mutex);
-    frame_length = pktlist_add_rx(devtab, rlist, false, rbuf, (size_t)frame_length);   ///@todo pktlist function for read, without dth requirement
+    frame_length = pktlist_add_rx(devtab, rlist, rbuf, (size_t)frame_length);
     pthread_mutex_unlock(rlist_mutex);
     if (frame_length <= 0) {
         errcode = 3;
