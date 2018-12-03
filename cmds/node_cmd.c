@@ -41,12 +41,12 @@ static int sub_editnode(dterm_handle_t* dth, int argc, char** argv, bool require
     struct arg_int* vid     = arg_int0("v","vid","VID",             "VID as integer, 0-65535.");
     struct arg_str* intf    = arg_str0("i", "intf", "ttyfile",      "TTY associated with node.");
     struct arg_str* rootkey = arg_str0("r", "root", "key",          "128 bit AES key as Bintex expression");
-    struct arg_str* userkey = arg_str0("r", "user", "key",          "128 bit AES key as Bintex expression");
-    struct arg_end* end     = arg_end(6);
+    struct arg_str* userkey = arg_str0("u", "user", "key",          "128 bit AES key as Bintex expression");
+    struct arg_end* end     = arg_end(10);
     void* argtable[]        = { uid, vid, intf, rootkey, userkey, end };
-    uint16_t vid_val        = 0;
-    uint64_t uid_val        = 0;
-    char* intf_val          = NULL;
+    uint16_t vid_val;
+    uint64_t uid_val = 0;
+    void* intf_val;
     uint8_t* rootkey_val    = NULL;
     uint8_t* userkey_val    = NULL;
     uint8_t rootkey_dat[16];
@@ -76,23 +76,50 @@ static int sub_editnode(dterm_handle_t* dth, int argc, char** argv, bool require
     if (vid->count > 0) {
         vid_val = (uint16_t)vid->ival[0];
     }
+    else if (require_exists) {
+        vid_val = devtab_get_vid(dth->endpoint.devtab, node);
+    }
+    else {
+        vid_val = 0;
+    }
+    
     if (intf->count > 0) {
         ///@todo search for interface pointer based on device
-        
+        intf_val = (void*)intf->sval[0];
     }
+    else if (require_exists) {
+        intf_val = devtab_get_intf(dth->endpoint.devtab, node);
+    }
+    else {
+        intf_val = NULL;
+    }
+    
     if (rootkey->count > 0) {
         rootkey_val = rootkey_dat;
         memset(rootkey_dat, 0, 16);
         bintex_ss(rootkey->sval[0], rootkey_dat, 16);
     }
+    else if (require_exists) {
+        rootkey_val = devtab_get_rootctx(dth->endpoint.devtab, node);
+    }
+    else {
+        rootkey_val = NULL;
+    }
+    
     if (userkey->count > 0) {
         userkey_val = userkey_dat;
         memset(userkey_dat, 0, 16);
         bintex_ss(userkey->sval[0], userkey_dat, 16);
     }
+    else if (require_exists) {
+        userkey_val = devtab_get_userctx(dth->endpoint.devtab, node);
+    }
+    else {
+        userkey_val = NULL;
+    }
 
     rc = devtab_insert(dth->endpoint.devtab, uid_val, vid_val, intf_val, rootkey_val, userkey_val);
-    
+
     sub_editnode_TERM:
     arg_freetable(argtable, sizeof(argtable)/sizeof(argtable[0]));
     
@@ -125,7 +152,7 @@ int cmd_mknode(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, si
     INPUT_SANITIZE();
     
     argc = cmdutils_parsestring(&argv, "mknode", (char*)src, (char*)src, (size_t)*inbytes);
-    if (argc != 0) {
+    if (argc <= 0) {
         rc = -256 + argc;
     }
     else {
@@ -151,7 +178,7 @@ int cmd_chnode(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, si
     INPUT_SANITIZE();
     
     argc = cmdutils_parsestring(&argv, "chnode", (char*)src, (char*)src, (size_t)*inbytes);
-    if (argc != 0) {
+    if (argc <= 0) {
         rc = -256 + argc;
     }
     else {
@@ -177,7 +204,7 @@ int cmd_rmnode(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, si
     INPUT_SANITIZE();
     
     argc = cmdutils_parsestring(&argv, "rmnode", (char*)src, (char*)src, (size_t)*inbytes);
-    if (argc != 0) {
+    if (argc <= 0) {
         rc = -256 + argc;
     }
     else {
@@ -209,4 +236,23 @@ int cmd_rmnode(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, si
     return rc;
 }
 
+
+int cmd_lsnode(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
+    int bytes_out;
+    char printbuf[1024];
+
+    /// dt == NULL is the initialization case.
+    /// There may not be an initialization for all command groups.
+    if (dth == NULL) {
+        return 0;
+    }
+    
+    INPUT_SANITIZE();
+    
+    bytes_out = devtab_list(dth->endpoint.devtab, printbuf, 1024);
+    dterm_puts(dth->dt, "Nodes available:\n");
+    dterm_puts(dth->dt, printbuf);
+
+    return 0;
+}
 

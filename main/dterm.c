@@ -232,7 +232,7 @@ void* dterm_piper(void* args) {
         while (isspace(*loadbuf)) { loadbuf++; loadlen--; }
         linelen = (int)sub_str_mark(loadbuf, (size_t)loadlen);
         cmdlen  = cmd_getname(cmdname, loadbuf, 32);
-        cmdptr  = cmd_search(cmdname);
+        cmdptr  = cmd_search(dth->cmdtab, cmdname);
         
         // Test only
         //fprintf(stderr, "\nlinebuf=%s\nlinelen=%d\ncmdname=%s, len=%d, ptr=%016X\n", loadbuf, linelen, cmdname, cmdlen, cmdptr);
@@ -497,7 +497,7 @@ void* dterm_prompter(void* args) {
                                     }
                                     
                                     cmdlen = cmd_getname(cmdname, dth->dt->linebuf, 256);
-                                    cmdptr = cmd_search(cmdname);
+                                    cmdptr = cmd_search(dth->cmdtab, cmdname);
                                     if (cmdptr == NULL) {
                                         ///@todo build a nicer way to show where the error is,
                                         ///      possibly by using pi or ci (sign reversing)
@@ -547,7 +547,7 @@ void* dterm_prompter(void* args) {
                 // TAB presses cause the autofill operation (a common feature)
                 // autofill will try to finish the command input
                 case ct_autofill:   cmdlen = cmd_getname((char*)cmdname, dth->dt->linebuf, 256);
-                                    cmdptr = cmd_subsearch((char*)cmdname);
+                                    cmdptr = cmd_subsearch(dth->cmdtab, (char*)cmdname);
                                     if ((cmdptr != NULL) && (dth->dt->linebuf[cmdlen] == 0)) {
                                         dterm_remln(dth->dt);
                                         dterm_puts(dth->dt, (char*)prompt_str[dth->endpoint.usertype]);

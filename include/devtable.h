@@ -17,7 +17,7 @@
 #ifndef devtable_h
 #define devtable_h
 
-
+#include <stdio.h>
 #include <stdint.h>
 
 typedef void* devtab_handle_t;
@@ -37,6 +37,7 @@ typedef struct {
 
 int devtab_init(devtab_handle_t* new_handle);
 void devtab_free(devtab_handle_t handle);
+int devtab_list(devtab_handle_t handle, char* dst, size_t dstmax);
 
 int devtab_insert(devtab_handle_t handle, uint64_t uid, uint16_t vid, void* intf_handle, void* rootkey, void* userkey);
 devtab_node_t devtab_select(devtab_handle_t handle, uint64_t uid);

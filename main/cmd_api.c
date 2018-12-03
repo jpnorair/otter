@@ -61,6 +61,7 @@ static const cmd_t otter_commands[] = {
     { "chnode",     &cmd_chnode },
     { "chuser",     &cmd_chuser },
     { "cmdls",      &cmd_cmdlist },
+    { "lsnode",     &cmd_lsnode },
     { "mknode",     &cmd_mknode },
     { "null",       &app_null },
     { "quit",       &cmd_quit },
@@ -72,11 +73,8 @@ static const cmd_t otter_commands[] = {
     { "whoami",     &cmd_whoami },
 };
 
-///@todo Command Table, hbuilder, and Judy handles (envdict) should get wrapped
+///@todo hbuilder, and Judy handles (envdict) should get wrapped
 ///      into a cmd handle that is stored in dterm object.
-static cmdtab_t cmdtab_default;
-cmdtab_t* otter_cmdtab;
-
 #if OTTER_FEATURE(HBUILDER)
 static void* hbuilder_handle;
 #endif
@@ -95,13 +93,25 @@ typedef enum {
 
 
 
-int cmd_init(cmdtab_t* init_table, const char* xpath) {
+int cmd_init(cmdtab_t** init_table, const char* xpath) {
     
-    otter_cmdtab = (init_table == NULL) ? &cmdtab_default : init_table;
+    if (init_table == NULL) {
+        return -1;
+    }
+
+    if (*init_table == NULL) {
+        *init_table = malloc(sizeof(cmdtab_t));
+        if (*init_table == NULL) {
+            return -2;
+        }
+        if (cmdtab_init(*init_table) != 0) {
+            return -3;
+        }
+    }
 
     /// cmdtab_add prioritizes subsequent command adds, so the highest priority
     /// commands should be added last.
-    
+
     /// First, add commands that are available from the external command path.
     if (xpath != NULL) {
         size_t xpath_len = strlen(xpath);
@@ -109,7 +119,6 @@ int cmd_init(cmdtab_t* init_table, const char* xpath) {
         char* cmd;
         FILE* stream;
         int test;
-        
         if (xpath_len > 0) { 
             ///@todo make this find call work properly on mac and linux.
 #           if defined(__APPLE__) || defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__)
@@ -121,14 +130,13 @@ int cmd_init(cmdtab_t* init_table, const char* xpath) {
 #           else
             stream = NULL;
 #           endif
-            
             if (stream != NULL) {
                 do {
                     test = fscanf(stream, "%s", buffer);
                     if (test == 1) {
                         cmd = &buffer[xpath_len];
                         if (strlen(cmd) >= 2) {
-                            cmdtab_add(otter_cmdtab, buffer, (void*)xpath, (void*)EXTCMD_path);
+                            cmdtab_add(*init_table, buffer, (void*)xpath, (void*)EXTCMD_path);
                         }
                     }
                 } while (test != EOF);
@@ -137,28 +145,26 @@ int cmd_init(cmdtab_t* init_table, const char* xpath) {
             }
         }
     }
-    
+
     /// Second, if HBuilder is enabled, pass this table into the hbuilder 
     /// initializer.
 #   if OTTER_FEATURE(HBUILDER)
-        hbuilder_handle = hbuilder_init(otter_cmdtab, (void*)EXTCMD_hbuilder);
+        hbuilder_handle = hbuilder_init(*init_table, (void*)EXTCMD_hbuilder);
 #   endif
 
     /// Last, Add Otter commands to the cmdtab.
     for (int i=0; i<(sizeof(otter_commands)/sizeof(cmd_t)); i++) {
         int rc;
 
-        rc = cmdtab_add(otter_cmdtab, otter_commands[i].name, (void*)otter_commands[i].action, (void*)EXTCMD_null);
+        rc = cmdtab_add(*init_table, otter_commands[i].name, (void*)otter_commands[i].action, (void*)EXTCMD_null);
         if (rc != 0) {
-            fprintf(stderr, "ERROR: cmdtab_add() from %s line %d returned %d.\n", __FUNCTION__, __LINE__, rc);
             return -1;
         }
-        
+
         /// Run command with dt=NULL to initialize the command
         ///@note This is specific to otter, it's not a requirement of cmdtab
         otter_commands[i].action(NULL, NULL, NULL, NULL, 0);
     }
-    
 
     return 0;
 }
@@ -166,7 +172,9 @@ int cmd_init(cmdtab_t* init_table, const char* xpath) {
 
 int cmd_free(cmdtab_t* init_table) {
     
-    init_table = (init_table == NULL) ? otter_cmdtab : init_table;
+    if (init_table == NULL) {
+        return -1;
+    }
     
     /// First, free commands on xpath (should require nothing)
     
@@ -177,6 +185,9 @@ int cmd_free(cmdtab_t* init_table) {
     
     /// third, free cmdtab
     cmdtab_free(init_table);
+    
+    /// fourth, free the object itself
+    free(init_table);
     
     return 0;
 }
@@ -260,14 +271,14 @@ int cmd_getname(char* cmdname, char* cmdline, size_t max_cmdname) {
 
 
 
-const cmdtab_item_t* cmd_search(char *cmdname) {
-    return cmdtab_search(otter_cmdtab, cmdname);
+const cmdtab_item_t* cmd_search(cmdtab_t* cmdtab, char *cmdname) {
+    return cmdtab_search(cmdtab, cmdname);
 }
 
 
 
-const cmdtab_item_t* cmd_subsearch(char *namepart) {
-    return cmdtab_subsearch(otter_cmdtab, namepart);
+const cmdtab_item_t* cmd_subsearch(cmdtab_t* cmdtab, char *namepart) {
+    return cmdtab_subsearch(cmdtab, namepart);
 }
 
 

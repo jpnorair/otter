@@ -500,6 +500,8 @@ int otter_main( const char* ttyfile,
                 const char* xpath,
                 cJSON* params) {    
     
+    int rc;
+    
     // MPipe Datastructs
     int         mpipe_fd;
     mpipe_arg_t mpipe_args;
@@ -511,6 +513,7 @@ int otter_main( const char* ttyfile,
     dterm_handle_t dterm_args;
     dterm_t     dterm;
     cmdhist     cmd_history;
+    cmdtab_t*   cmdtab_handle = NULL;
     
     // Child Threads (4)
     pthread_t   thr_mpreader;
@@ -539,31 +542,40 @@ int otter_main( const char* ttyfile,
     /// This must be the first module to be initialized.
     ///@todo in the future, let's pull this from an initialization file or
     ///      something dynamic as such.
-    
+
     /// Device Table initialization.
     /// Device 0 is used for implicit addressing
-    if (devtab_init(&dterm_args.endpoint.devtab) != 0) {
-        ///@todo print an error
+    rc = devtab_init(&dterm_args.endpoint.devtab);
+    if (rc != 0) {
+        fprintf(stderr, "Device Table Initialization Failure (%i)\n", rc);
         goto otter_main_TERM0;
     }
-    if (devtab_insert(dterm_args.endpoint.devtab, 0, 0, NULL, NULL, NULL) != 0) {
-        ///@todo print an error
+    rc = devtab_insert(dterm_args.endpoint.devtab, 0, 0, NULL, NULL, NULL);
+    if (rc != 0) {
+        fprintf(stderr, "Device Table Insertion Failure (%i)\n", rc);
         goto otter_main_TERM1;
     }
-    
+
     /// Initialize the user manager.
     /// This must be done prior to command module init
-    user_init();
-    
+    rc = user_init();
+    if (rc != 0) {
+        fprintf(stderr, "User Construct Initialization Failure (%i)\n", rc);
+        goto otter_main_TERM2;
+    }
+
     /// Initialize command search table.  
     ///@todo in the future, let's pull this from an initialization file or
     ///      something dynamic as such.
-    cmd_init(NULL, xpath);
-    
+    rc = cmd_init(&cmdtab_handle, xpath);
+    if (rc != 0) {
+        fprintf(stderr, "Command Table Initialization Failure (%i)\n", rc);
+        goto otter_main_TERM3;
+    }
+
     /// Initialize packet lists for transmitted packets and received packets
     pktlist_init(&mpipe_rlist);
     pktlist_init(&mpipe_tlist);
-    
     
     /// Initialize the ppipe system of named pipes, based on the input json
     /// configuration file.  We have input and output pipes of several types.
@@ -587,7 +599,7 @@ int otter_main( const char* ttyfile,
             break;
         }
     }
-    
+
     /// Initialize Thread Mutexes & Conds.  This is finnicky and it must be
     /// done before assignment into the argument containers, possibly due to 
     /// C-compiler foolishly optimizing.
@@ -603,7 +615,6 @@ int otter_main( const char* ttyfile,
     assert( pthread_mutex_init(&pktrx_mutex, NULL) == 0 );
     pthread_cond_init(&pktrx_cond, NULL);
 
-    
     /// Open the mpipe TTY & Setup MPipe threads
     /// The MPipe Filename (e.g. /dev/ttyACMx) is sent as the first argument
     mpipe_args.mpctl            = &mpipe_ctl;
@@ -620,11 +631,11 @@ int otter_main( const char* ttyfile,
     mpipe_args.kill_mutex       = &cli.kill_mutex;
     mpipe_args.kill_cond        = &cli.kill_cond;
     mpipe_args.endpoint         = &dterm_args.endpoint;
-    
+
     mpipe_fd = mpipe_open(&mpipe_ctl, ttyfile, baudrate, enc_bits, enc_parity, enc_stopbits, 0, 0, 0);
     if (mpipe_fd < 0) {
         cli.exitcode = -1;
-        goto otter_main_TERM2;
+        goto otter_main_TERM4;
     }
     
     /// Open DTerm interface & Setup DTerm threads
@@ -638,18 +649,19 @@ int otter_main( const char* ttyfile,
     dterm_args.ch               = ch_init(&cmd_history);
     dterm_args.dt               = &dterm;
     dterm_args.tlist            = &mpipe_tlist;
+    dterm_args.cmdtab           = cmdtab_handle;
+    dterm_args.endpoint.node    = devtab_select(dterm_args.endpoint.devtab, 0);
+    dterm_args.endpoint.usertype= USER_guest;
     dterm_args.dtwrite_mutex    = &dtwrite_mutex;
     dterm_args.tlist_mutex      = &tlist_mutex;
     dterm_args.tlist_cond       = &tlist_cond;
     dterm_args.kill_mutex       = &cli.kill_mutex;
     dterm_args.kill_cond        = &cli.kill_cond;
-    dterm_args.endpoint.node    = devtab_select(dterm_args.endpoint.devtab, 0);
-    dterm_args.endpoint.usertype= USER_guest;
     dterm_fn                    = (pipe == false) ? &dterm_prompter : &dterm_piper;
-    
+
     if (dterm_open(&dterm, pipe) < 0) {
         cli.exitcode = -2;
-        goto otter_main_TERM3;
+        goto otter_main_TERM5;
     }
 
     
@@ -683,7 +695,7 @@ int otter_main( const char* ttyfile,
         }
         else {
             DEBUG_PRINTF("No active interface is available\n");
-            goto otter_main_TERM3;
+            goto otter_main_TERM5;
         }
     }
     
@@ -731,19 +743,23 @@ int otter_main( const char* ttyfile,
         dterm_close(&dterm);
     }
     
-    otter_main_TERM3:
+    otter_main_TERM5:
     DEBUG_PRINTF("Closing MPipe\n");
     mpipe_close(&mpipe_ctl);
     DEBUG_PRINTF("Freeing DTerm and Command History\n");
     dterm_free(&dterm);
     ch_free(&cmd_history);
     
-    otter_main_TERM2:
+    otter_main_TERM4:
     DEBUG_PRINTF("Freeing Mpipe Packet Lists\n");
     mpipe_freelists(&mpipe_rlist, &mpipe_tlist);
     DEBUG_PRINTF("Freeing PPipe lists\n");
     ppipelist_deinit();
-    cmd_free(NULL);
+    
+    otter_main_TERM3:
+    cmd_free(cmdtab_handle);
+    
+    otter_main_TERM2:
     user_deinit();
     
     otter_main_TERM1:

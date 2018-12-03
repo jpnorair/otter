@@ -53,16 +53,16 @@ int cmd_chuser(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, si
 ///
     char** argv;
     int argc;
-    int rc;
+    int rc = 0;
     
     if (dth == NULL) {
         return 0;
     }
     
     INPUT_SANITIZE();
-    
+
     argc = cmdutils_parsestring(&argv, "chuser", (char*)src, (char*)src, (size_t)*inbytes);
-    if (argc != 0) {
+    if (argc <= 0) {
         rc = -256 + argc;
     }
     else {
@@ -74,7 +74,7 @@ int cmd_chuser(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, si
         devtab_node_t node;
         devtab_endpoint_t* endpoint;
         USER_Type usertype;
-        
+
         ///@todo wrap this routine into cmdutils subroutine
         if (arg_nullcheck(argtable) != 0) {
             rc = -1;
@@ -85,7 +85,7 @@ int cmd_chuser(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, si
             rc = -2;
             goto cmd_chuser_TERM;
         }
-        
+
         /// UID and VID are optional.  If UID is present, it takes precedence.
         /// If neither are present, the implicit address 0 is used.
         if (uid->count > 0) {
@@ -99,20 +99,20 @@ int cmd_chuser(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, si
         else {
             node = devtab_select(dth->endpoint.devtab, 0);
         }
-        
+
         /// Make sure a node is found
         if (node == NULL) {
             rc = -3;
             goto cmd_chuser_TERM;
         }
-        
+
         /// Make sure node has the necessary keys
         endpoint = devtab_resolve_endpoint(node);
         if (endpoint == NULL) {
             rc = -4;
             goto cmd_chuser_TERM;
         }
-        
+
         /// User Type is a Mandatory Field.
         if ((strcmp("admin", utype->sval[0]) == 0)
         || (strcmp("user", utype->sval[0]) == 0)) {
@@ -132,15 +132,15 @@ int cmd_chuser(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, si
         else {
             usertype = USER_guest;
         }
-        
+
         rc = 0;
         dth->endpoint.usertype  = usertype;
         dth->endpoint.node      = node;
-        
+
         cmd_chuser_TERM:
         arg_freetable(argtable, sizeof(argtable)/sizeof(argtable[0]));
     }
-    
+
     cmdutils_freeargv(argv);
     
     return rc;
@@ -153,7 +153,7 @@ int cmd_su(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, size_t
     int chuser_inbytes;
     char* chuser_cmd = "root";
     
-    if (dth->dt == NULL) {
+    if (dth == NULL) {
         return 0;
     }
     INPUT_SANITIZE();

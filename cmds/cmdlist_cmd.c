@@ -48,6 +48,6 @@ int cmd_cmdlist(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, s
     bytes_out = cmdtab_list(dth->cmdtab, cmdprint, 1024);
     dterm_puts(dth->dt, "Commands available:\n");
     dterm_puts(dth->dt, cmdprint);
-    
+
     return 0;
 }

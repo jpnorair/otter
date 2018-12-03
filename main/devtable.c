@@ -23,6 +23,9 @@
 #   include <oteax.h>
 #endif
 
+///@todo bring some of these utils out of cmds dir
+#include "../cmds/cmdutils.h"
+
 
 // Standard libs
 #include <pthread.h>
@@ -36,8 +39,8 @@ typedef struct {
     uint16_t    vid;
     uint64_t    uid;
     void*       intf;
-    eax_ctx*    root;
-    eax_ctx*    user;
+    void*       root;
+    void*       user;
 } devtab_item_t;
 
 typedef struct {
@@ -93,6 +96,8 @@ int devtab_init(devtab_handle_t* new_handle) {
     newtab->vids    = 0;
     newtab->alloc   = 0;
     
+    *new_handle     = newtab;
+    
     return 0;
 }
 
@@ -133,9 +138,12 @@ void devtab_free(devtab_handle_t handle) {
 
 
 
-int devtab_list(devtab_t* table, char* dst, size_t dstmax) {
+int devtab_list(devtab_handle_t handle, char* dst, size_t dstmax) {
+    static const char* yes = "yes";
+    static const char* no = "no";
     int i;
     int chars_out = 0;
+    devtab_t* table = handle;
     
     if (table == NULL) {
         return -1;
@@ -148,8 +156,16 @@ int devtab_list(devtab_t* table, char* dst, size_t dstmax) {
     for (i=0; i<table->size; i++) {
         chars_out  += (16+1+4+1);
         if (chars_out < dstmax) {
-            dst    += sprintf(dst, "%016llX %04X", table->cell[i]->uid, table->cell[i]->vid);
-            *dst++  = '\n';
+            char uidstr[17];
+            cmdutils_uint8_to_hexstr(uidstr, (uint8_t*)&table->cell[i]->uid, 8);
+        
+            dst += sprintf(dst, "%i. %s [vid:%i] [root:%s] [user:%s]\n",
+                        i+1,
+                        uidstr,
+                        table->cell[i]->vid,
+                        (table->cell[i]->root == NULL) ? no : yes,
+                        (table->cell[i]->user == NULL) ? no : yes
+                    );
         }
         else {
             break;
@@ -166,22 +182,22 @@ int devtab_list(devtab_t* table, char* dst, size_t dstmax) {
 
 int devtab_insert(devtab_handle_t handle, uint64_t uid, uint16_t vid, void* intf_handle, void* rootkey, void* userkey) {
     devtab_t* table = handle;
-    int rc;
+    int rc = 0;
     
     if (table == NULL) {
         return -1;
     }
-    
+
     if (pthread_mutex_lock(&table->access_mutex) != 0) {
         return -2;
     }
-    
+
     ///1. Make sure there is room in the tables
     if (table->alloc <= table->size) {
         devtab_item_t** newtable_cell;
         devtab_vid_t*   newtable_vid;
         size_t          newtable_alloc;
-        
+
         newtable_alloc  = table->alloc + OTTER_DEVTAB_CHUNK;
         if (table->alloc == 0) {
             newtable_cell   = malloc(newtable_alloc * sizeof(devtab_item_t*));
@@ -191,15 +207,16 @@ int devtab_insert(devtab_handle_t handle, uint64_t uid, uint16_t vid, void* intf
             newtable_cell   = realloc(table->cell, newtable_alloc * sizeof(devtab_item_t*));
             newtable_vid    = realloc(table->vdex, newtable_alloc * sizeof(devtab_vid_t));
         }
-        
+
         if ((newtable_cell == NULL) || (newtable_vid == NULL)) {
             return -2;
         }
-        
+
+        table->vdex     = newtable_vid;
         table->cell     = newtable_cell;
         table->alloc    = newtable_alloc;
     }
-    
+
     ///2. Insert a new cmd item,
     rc = sub_editop(handle, uid, vid, intf_handle, rootkey, userkey, 1);
     
@@ -497,6 +514,9 @@ static devtab_item_t* sub_searchop_uid(devtab_t* table, uint64_t uid, int operat
             
             output->flags   = 0;
             output->uid     = uid;
+            output->intf    = NULL;
+            output->root    = NULL;
+            output->user    = NULL;
             head[cci]       = output;
             table->size++;
         }
@@ -544,7 +564,7 @@ static devtab_vid_t* sub_searchop_vid(devtab_t* table, uint16_t vid, int operati
                          goto sub_searchop_vid_DO;
             }
         }
-        
+
         /// Adding a new devtab_vid_t
         /// If there is a matching name (output != NULL), the new one will replace old.
         /// It will adjust the table and add the new item, otherwise.
@@ -575,13 +595,13 @@ static devtab_vid_t* sub_searchop_vid(devtab_t* table, uint16_t vid, int operati
 static int sub_editop(devtab_t* table, uint64_t uid, uint16_t vid, void* intf_handle, void* rootkey, void* userkey, int operation) {
     devtab_item_t* item;
     devtab_vid_t* viditem;
-    
+
     ///2. Insert a new cmd item,
     item = sub_searchop_uid(table, uid, operation);
     if (item == NULL) {
         return -3;
     }
-    
+
     /// 3. add the vid index, if a VID is supplied, and link to the cell
     if (vid != 0) {
         viditem = sub_searchop_vid(table, vid, operation);
@@ -590,41 +610,58 @@ static int sub_editop(devtab_t* table, uint64_t uid, uint16_t vid, void* intf_ha
         }
         viditem->cell = item;
     }
-    
+
     return sub_edit_item(item, uid, vid, intf_handle, rootkey, userkey);
 }
 
 
+static int sub_setkey(void** ctx, void* key) {
+#if OTTER_FEATURE(SECURITY)
+    if (key != NULL) {
+        if (*ctx == NULL) {
+            *ctx = malloc(sizeof(eax_ctx));
+        }
+        if (*ctx != NULL) {
+            eax_init_and_key((io_t*)key, (eax_ctx*)*ctx);
+        }
+        else {
+            return -1;
+        }
+    }
+    else {
+        if (*ctx != NULL) {
+            free(*ctx);
+        }
+        *ctx = NULL;
+    }
+    
+    return 0;
+    
+#else
+    *ctx = NULL;
+    return 0;
+    
+#endif
+}
+
+
 static int sub_edit_item(devtab_item_t* item, uint64_t uid, uint16_t vid, void* intf_handle, void* rootkey, void* userkey) {
+    int rc;
+
     /// 4. Fill-up cell values.
     item->vid   = vid;
     item->intf  = intf_handle;
-    item->root  = NULL;
-    item->user  = NULL;
-
-#   if OTTER_FEATURE(SECURITY)
-    if (rootkey != NULL) {
-        item->flags |= 1;
-        item->root = malloc(sizeof(eax_ctx));
-        if (item->root != NULL) {
-            eax_init_and_key((io_t*)rootkey, item->root);
-        }
-        else {
-            return -5;
-        }
+    
+    rc = sub_setkey(&item->root, rootkey);
+    if (rc != 0) {
+        return -1;
     }
-    if (userkey != NULL) {
-        item->flags |= 2;
-        item->user = malloc(sizeof(eax_ctx));
-        if (item->user != NULL) {
-            eax_init_and_key((io_t*)userkey, item->user);
-        }
-        else {
-            return -6;
-        }
+    
+    rc = sub_setkey(&item->user, userkey);
+    if (rc != 0) {
+        return -2;
     }
-#   endif
-
+    
     return 0;
 }
 
