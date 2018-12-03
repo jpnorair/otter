@@ -619,6 +619,7 @@ int otter_main( const char* ttyfile,
     mpipe_args.pktrx_cond       = &pktrx_cond;
     mpipe_args.kill_mutex       = &cli.kill_mutex;
     mpipe_args.kill_cond        = &cli.kill_cond;
+    mpipe_args.endpoint         = &dterm_args.endpoint;
     
     mpipe_fd = mpipe_open(&mpipe_ctl, ttyfile, baudrate, enc_bits, enc_parity, enc_stopbits, 0, 0, 0);
     if (mpipe_fd < 0) {

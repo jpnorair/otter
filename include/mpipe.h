@@ -17,9 +17,12 @@
 #ifndef mpipe_h
 #define mpipe_h
 
-// Local Libraries
+// Local Headers
 #include "formatters.h"
 #include "pktlist.h"
+#include "user.h"
+
+// HB Library Headers
 #include "cJSON.h"
 
 // Standard C & POSIX Libraries
@@ -43,7 +46,7 @@ typedef struct {
     mpipe_ctl_t*    mpctl;
     pktlist_t*      tlist;           // should be used only by...
     pktlist_t*      rlist;           // should be used only by...
-    devtab_handle_t devtab;
+    user_endpoint_t* endpoint;
     
     mpipe_printer_t puts_fn;
     

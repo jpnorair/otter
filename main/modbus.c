@@ -89,7 +89,7 @@ void* modbus_reader(void* args) {
     pktlist_t* rlist                = ((mpipe_arg_t*)args)->rlist;
     pthread_mutex_t* rlist_mutex    = ((mpipe_arg_t*)args)->rlist_mutex;
     pthread_cond_t* pktrx_cond      = ((mpipe_arg_t*)args)->pktrx_cond;
-    devtab_handle_t devtab          = ((mpipe_arg_t*)args)->devtab;
+    user_endpoint_t* endpoint       = ((mpipe_arg_t*)args)->endpoint;
 
     // blocking should be in initialization... Here just as a reminder
     //fnctl(dt->fd_in, F_SETFL, 0);  
@@ -157,7 +157,7 @@ void* modbus_reader(void* args) {
 
     /// Copy the packet to the rlist and signal modbus_parser()
     pthread_mutex_lock(rlist_mutex);
-    frame_length = pktlist_add_rx(devtab, rlist, rbuf, (size_t)frame_length);
+    frame_length = pktlist_add_rx(endpoint, rlist, rbuf, (size_t)frame_length);
     pthread_mutex_unlock(rlist_mutex);
     if (frame_length <= 0) {
         errcode = 3;
