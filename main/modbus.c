@@ -302,10 +302,6 @@ void* modbus_parser(void* args) {
     pthread_cond_t* pktrx_cond      = ((mpipe_arg_t*)args)->pktrx_cond;
     pthread_mutex_t* pktrx_mutex    = ((mpipe_arg_t*)args)->pktrx_mutex;
     cJSON* msgcall                  = ((mpipe_arg_t*)args)->msgcall;
-    
-    /// In order to parse messages from modbus through smut, smut must be initialized.
-    /// This thread runs only once and just loops.
-    smut_init();
 
     while (1) {
         int pkt_condition;  // tracks some error conditions

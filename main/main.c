@@ -53,6 +53,9 @@
 // Local Libraries
 #include <argtable3.h>
 #include <cJSON.h>
+#if OTTER_FEATURE(MODBUS)
+#   include <smut.h>
+#endif
 
 //Package libraries
 #include <cmdtab.h>
@@ -508,6 +511,7 @@ int otter_main( const char* ttyfile,
     mpipe_ctl_t mpipe_ctl;
     pktlist_t   mpipe_tlist;
     pktlist_t   mpipe_rlist;
+    void*       smut_handle = NULL;
     
     // DTerm Datastructs
     dterm_handle_t dterm_args;
@@ -681,19 +685,24 @@ int otter_main( const char* ttyfile,
     /// i.e. raise(SIGINT).
     DEBUG_PRINTF("Creating theads\n");
     if (mpipe_fd != 0) {
-        if (OTTER_FEATURE(MODBUS) && (cliopt_getintf() == INTF_modbus)) {
+#       if OTTER_FEATURE(MODBUS)
+        if (cliopt_getintf() == INTF_modbus) {
             DEBUG_PRINTF("Opening Modbus Interface\n");
+            smut_handle = smut_init();
             pthread_create(&thr_mpreader, NULL, &modbus_reader, (void*)&mpipe_args);
             pthread_create(&thr_mpwriter, NULL, &modbus_writer, (void*)&mpipe_args);
             pthread_create(&thr_mpparser, NULL, &modbus_parser, (void*)&mpipe_args);
-        }
-        else if (OTTER_FEATURE(MPIPE) && (cliopt_getintf() == INTF_mpipe)) {
+        } else
+#       endif
+#       if OTTER_FEATURE(MPIPE)
+        if (cliopt_getintf() == INTF_mpipe) {
             DEBUG_PRINTF("Opening Mpipe Interface\n");
             pthread_create(&thr_mpreader, NULL, &mpipe_reader, (void*)&mpipe_args);
             pthread_create(&thr_mpwriter, NULL, &mpipe_writer, (void*)&mpipe_args);
             pthread_create(&thr_mpparser, NULL, &mpipe_parser, (void*)&mpipe_args);
-        }
-        else {
+        } else
+#       endif
+        {
             DEBUG_PRINTF("No active interface is available\n");
             goto otter_main_TERM5;
         }
@@ -713,6 +722,11 @@ int otter_main( const char* ttyfile,
         pthread_cancel(thr_mpreader);
         pthread_cancel(thr_mpwriter);
         pthread_cancel(thr_mpparser);
+#       if OTTER_FEATURE(MODBUS)
+        if (cliopt_getintf() == INTF_modbus) {
+            smut_free(smut_handle);
+        }
+#       endif
     }
     pthread_cancel(thr_dterm);
     
