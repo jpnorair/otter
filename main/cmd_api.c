@@ -61,6 +61,7 @@ static const cmd_t otter_commands[] = {
     { "chnode",     &cmd_chnode },
     { "chuser",     &cmd_chuser },
     { "cmdls",      &cmd_cmdlist },
+    { "loopx",      &cmd_loopx },
     { "lsnode",     &cmd_lsnode },
     { "mknode",     &cmd_mknode },
     { "null",       &app_null },

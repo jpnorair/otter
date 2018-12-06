@@ -205,17 +205,18 @@ void _output_textlog(mpipe_printer_t puts_fn, uint8_t* payload, int length) {
 ///@todo bypass ALPs that don't have Message-End bit set, save them for later.
 ///      Will require building an application buffer and maintaining it for an
 ///      ALP ID until Message End or next Message Start is found.
-void fmt_fprintalp(mpipe_printer_t puts_fn, cJSON* msgcall, uint8_t* src, size_t src_bytes) {
+int fmt_fprintalp(mpipe_printer_t puts_fn, cJSON* msgcall, uint8_t* src, size_t src_bytes) {
     uint8_t* payload;
     int flags;
     int length;
     int rem_bytes;
     int cmd;
     int id;
+    int rc = 0;
 
     /// Early exit conditions
     if ((src_bytes < 4) || (src_bytes > 65535)) {
-        return;
+        return -1;
     }
     
     /// Null Terminate the end
@@ -266,7 +267,7 @@ void fmt_fprintalp(mpipe_printer_t puts_fn, cJSON* msgcall, uint8_t* src, size_t
         /// If length is 0, print out the ALP header only
         if (length == 0) {
             fmt_printhex(puts_fn, src, 4, 16);
-            return;
+            return -2;
         }
         
         ///Logger (id 0x04) has special treatment (it gets logged to stdout)
@@ -326,7 +327,7 @@ void fmt_fprintalp(mpipe_printer_t puts_fn, cJSON* msgcall, uint8_t* src, size_t
         /// Punt non supported ALPs to HBUILDER, if HBUILDER is enabled.
 #       if OTTER_FEATURE(HBUILDER)
         else if (id != 0) {
-            hbuilder_fmtalp(puts_fn, (HBFMT_Type)cliopt_getformat(), id, cmd, payload, length);
+            rc = hbuilder_fmtalp(puts_fn, (HBFMT_Type)cliopt_getformat(), id, cmd, payload, length);
         }
 #       endif
         
@@ -341,6 +342,8 @@ void fmt_fprintalp(mpipe_printer_t puts_fn, cJSON* msgcall, uint8_t* src, size_t
         rem_bytes  -= length;
         src        += length+4;
     } while (rem_bytes > 0);
+    
+    return rc;
 }
 
 

@@ -156,6 +156,29 @@ int dterm_close(dterm_t* dt) {
 
 
 
+int dterm_squelch(dterm_t* dt) {
+    int fd_out = -1;
+    
+    if (dt != NULL) {
+        fd_out          = dt->fd_out;
+        dt->fd_squelch  = dt->fd_out;
+        dt->fd_out      = -1;
+    }
+    
+    return fd_out;
+}
+
+
+
+void dterm_unsquelch(dterm_t* dt) {
+    if (dt != NULL) {
+        if (dt->fd_out < 0) {
+            dt->fd_out      = dt->fd_squelch;
+            dt->fd_squelch  = -1;
+        }
+    }
+}
+
 
 
 

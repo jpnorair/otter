@@ -158,40 +158,8 @@ void sub_json_loadargs(cJSON* json,
 void ppipelist_populate(cJSON* obj);
 
 
-// NOTE Change to transparent mutex usage or not?
-/*
-void _cli_block(bool set) {
-    pthread_mutex_lock(&cli.block_mutex);
-    cli.block_in = set;
-    pthread_mutex_unlock(&cli.block_mutex);
-}
-
-bool _cli_is_blocked(void) {
-    volatile bool retval;
-    pthread_mutex_lock(&cli.block_mutex);
-    retval = cli.block_in;
-    pthread_mutex_unlock(&cli.block_mutex);
-    
-    return retval;
-}
-*/
 
 
-
-
-
-
-
-// notes:
-// 0. ch_inc/ch_dec (w/ ?:) and history pointers can be replaced by integers and modulo
-// 1. command history is glitching when command takes whole history buf (not c string)
-// 2. delete and remove line do not work for multiline command
-
-static dterm_t* _dtputs_dterm;
-
-int _dtputs(char* str) {
-    return dterm_puts(_dtputs_dterm, str);
-}
 
 
 
@@ -511,7 +479,9 @@ int otter_main( const char* ttyfile,
     mpipe_ctl_t mpipe_ctl;
     pktlist_t   mpipe_tlist;
     pktlist_t   mpipe_rlist;
+#   if OTTER_FEATURE(MODBUS)
     void*       smut_handle = NULL;
+#   endif
     
     // DTerm Datastructs
     dterm_handle_t dterm_args;
@@ -624,7 +594,8 @@ int otter_main( const char* ttyfile,
     mpipe_args.mpctl            = &mpipe_ctl;
     mpipe_args.rlist            = &mpipe_rlist;
     mpipe_args.tlist            = &mpipe_tlist;
-    mpipe_args.puts_fn          = &_dtputs;
+    //mpipe_args.puts_fn          = &_dtputs;
+    mpipe_args.dtprint          = &dterm;
     mpipe_args.dtwrite_mutex    = &dtwrite_mutex;
     mpipe_args.rlist_mutex      = &rlist_mutex;
     mpipe_args.tlist_mutex      = &tlist_mutex;
@@ -647,7 +618,6 @@ int otter_main( const char* ttyfile,
     /// entry and history initialization.
     ///@todo "STDIN_FILENO" and "STDOUT_FILENO" could be made dynamic
     ///@todo it might be nice to put this routine into a dterm_init() function.
-    _dtputs_dterm               = &dterm;
     dterm.fd_in                 = STDIN_FILENO;
     dterm.fd_out                = STDOUT_FILENO;
     dterm_args.ch               = ch_init(&cmd_history);

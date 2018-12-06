@@ -223,3 +223,21 @@ void cmdutils_freeargv(char** argv) {
         free(argv);
     }
 }
+
+
+
+int cmdutils_argcheck(void* argtable, struct arg_end* end, int argc, char** argv) {
+    int rc = 0;
+    
+    if (arg_nullcheck(argtable) != 0) {
+        rc = -1;
+    }
+    if ((argc <= 1) || (arg_parse(argc, argv, argtable) > 0)) {
+        arg_print_errors(stderr, end, argv[0]);
+        ///@todo print help
+        rc = -2;
+    }
+
+    return rc;
+}
+
