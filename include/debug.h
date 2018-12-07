@@ -39,14 +39,14 @@
 #   define TTY_PRINTF(...)      do { if (cliopt_isdebug()) fprintf(stderr, "TTY: " __VA_ARGS__); } while(0)
 #   define TTY_TX_PRINTF(...)   do { if (cliopt_isdebug()) fprintf(stderr, "TTY_TX: " __VA_ARGS__); } while(0)
 #   define TTY_RX_PRINTF(...)   do { if (cliopt_isdebug()) fprintf(stderr, "TTY_RX: " __VA_ARGS__); } while(0)
-#   define HEX_DUMP(LABEL, HEX, ...) do { if (cliopt_isdebug()) _HEX_(HEX, SIZE, ...) } while(0)
+#   define HEX_DUMP(HEX, SIZE, ...) do { if (cliopt_isdebug()) { _HEX_(HEX, SIZE, __VA_ARGS__); } } while(0)
 
 #else
 #   define DEBUG_PRINTF(...)    do { } while(0)
 #   define TTY_PRINTF(...)      do { } while(0)
 #   define TTY_TX_PRINTF(...)   do { } while(0)
 #   define TTY_RX_PRINTF(...)   do { } while(0)
-#   define HEX_DUMP(LABEL, HEX, ...) do { } while(0)
+#   define HEX_DUMP(HEX, SIZE, ...) do { if (cliopt_isdebug()) { _HEX_(HEX, SIZE, __VA_ARGS__); } } while(0)
 
 #endif
 
