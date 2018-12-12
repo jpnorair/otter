@@ -131,10 +131,19 @@ int cmd_loopx(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, siz
         
         loopcurs = loopbytes;
         
+        /// Squelch the dterm so the parser doesn't output, but inlock the
+        /// dtwrite mutex to allow parser thread to operate.
+        dterm_squelch(dth->dt);
+        pthread_mutex_unlock(dth->dtwrite_mutex);
+        
         /// --- Loopy command part
         
         
         /// ---
+        
+        /// Relock the dtwrite mutex to block the parser thread while this
+        /// command finishes.
+        pthread_mutex_lock(dth->dtwrite_mutex);
         
         free(loopbytes);
         
