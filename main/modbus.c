@@ -85,6 +85,7 @@ void* modbus_reader(void* args) {
     uint8_t* rbuf_cursor;
     int read_limit;
     int frame_length;
+    int list_size;
     int errcode;
     
     // Local copy of MPipe Ctl data: it is used in multiple threads without
@@ -163,9 +164,9 @@ void* modbus_reader(void* args) {
 
     /// Copy the packet to the rlist and signal modbus_parser()
     pthread_mutex_lock(rlist_mutex);
-    frame_length = pktlist_add_rx(endpoint, rlist, rbuf, (size_t)frame_length);
+    list_size = pktlist_add_rx(endpoint, rlist, rbuf, (size_t)frame_length);
     pthread_mutex_unlock(rlist_mutex);
-    if (frame_length <= 0) {
+    if (list_size <= 0) {
         errcode = 3;
     }
     
@@ -174,7 +175,7 @@ void* modbus_reader(void* args) {
     modbus_reader_ERR:
     switch (errcode) {
         case 0: TTY_RX_PRINTF("Packet Received Successfully (%d bytes).\n", frame_length);
-                HEX_DUMP(rbuf, frame_length, "Packet Detected: ");
+                HEX_DUMP(rbuf, frame_length, "Reading %d Bytes on tty\n", frame_length);
                 pthread_cond_signal(pktrx_cond);
                 goto modbus_reader_START;
         

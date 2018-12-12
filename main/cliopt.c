@@ -26,11 +26,8 @@ cliopt_t* cliopt_init(cliopt_t* new_master) {
     //master->verbose_on  = false;
     //master->debug_on    = false;
     master->dummy_tty   = false;
-    
-    ///@note settings for modbus addressing, and perhaps future versions of
-    ///      MPipe that have encryption.
-    master->src_addr    = 1;
-    master->dst_addr    = 2;
+    master->src_addr    = 1;    //1 = master
+    master->dst_addr    = 0;    //0 = broadcast
     
     return master;
 }

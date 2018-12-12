@@ -27,6 +27,10 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifdef __linux__
+#   include <bsd/stdlib.h>
+#endif
+
 
 typedef struct {
     USER_Type   usertype;
