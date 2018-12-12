@@ -31,6 +31,9 @@
 #   include <bsd/stdlib.h>
 #endif
 
+//For test only
+#include "../test/test.h"
+
 
 typedef struct {
     USER_Type   usertype;
@@ -116,15 +119,19 @@ int user_encrypt(user_endpoint_t* endpoint, uint16_t vid, uint64_t uid, uint8_t*
         return -3;
     
     if (endpoint->usertype < USER_guest) {
+        devtab_node_t node;
         devtab_endpoint_t* devEP;
         void* ctx;
         
         if (vid != 0) {
-            devEP = devtab_resolve_endpoint(devtab_select_vid(endpoint->devtab, vid));
+            node = devtab_select_vid(endpoint->devtab, vid);
         }
         else {
-            devEP = devtab_resolve_endpoint(devtab_select(endpoint->devtab, uid));
+            node = devtab_select(endpoint->devtab, uid);
         }
+        
+        devEP = devtab_resolve_endpoint(node);
+
         if (devEP == NULL) {
             rc = -1;
         }
@@ -149,6 +156,7 @@ int user_decrypt(user_endpoint_t* endpoint, uint16_t vid, uint64_t uid, uint8_t*
 #if (OTTER_FEATURE(SECURITY))
     int bytes_added;
     USER_Type usertype;
+    int test;
     
     if (endpoint == NULL)   return -2;
     if (front == NULL)      return -3;
@@ -169,19 +177,25 @@ int user_decrypt(user_endpoint_t* endpoint, uint16_t vid, uint64_t uid, uint8_t*
         if (usertype < USER_guest) {
             void* ctx;
             devtab_endpoint_t* devEP;
+            devtab_node_t node;
             
             if (vid != 0) {
-                devEP = devtab_resolve_endpoint(devtab_select_vid(endpoint->devtab, vid));
+                node = devtab_select_vid(endpoint->devtab, vid);
             }
             else {
-                devEP = devtab_resolve_endpoint(devtab_select(endpoint->devtab, uid));
+                node = devtab_select(endpoint->devtab, uid);
             }
+
+            devEP = devtab_resolve_endpoint(node);
+            
             if (devEP == NULL) {
                 bytes_added = -1;   // error
             }
             else {
                 ctx = (usertype == USER_root) ? devEP->rootctx : devEP->userctx;
-                if (crypto_decrypt(front, front+7, *frame_len-(4+4), ctx) != 0) {
+                test = crypto_decrypt(front, front+7, *frame_len-(4+4), ctx);
+                
+                if (test != 0) {
                     bytes_added = -1;       // error
                 }
                 else {

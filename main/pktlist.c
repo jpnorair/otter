@@ -61,13 +61,13 @@ static void sub_readframe_modbus(user_endpoint_t* endpoint, pkt_t* newpkt, uint8
     // If the frame uses encryption, decrypt it.
     // Else, pass it through with CRC removed.
     if ((mbcmd >= 68) && (mbcmd <= 70)) {
-        uint64_t    src_addr;
+        uint16_t    src_addr;
         uint8_t     hdr24[3];
         int         offset;
         
         // Copy the source address to packet.  This is in all 68-70 packets
         newpkt->buffer[2]   = data[2];
-        src_addr            = (uint64_t)data[2];
+        src_addr            = (uint16_t)data[2];
         
         // For 68/69 packets, there's an encrypted subframe.
         // frame_size will become the size of the decrypted data, at returned offset
