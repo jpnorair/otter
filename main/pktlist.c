@@ -54,8 +54,7 @@ static void sub_readframe_modbus(user_endpoint_t* endpoint, pkt_t* newpkt, uint8
     // Qualify CRC.
     newpkt->crcqual = mbcrc_calc_block(data, datalen);
     if (newpkt->crcqual != 0) {
-        if (cliopt_isverbose()) goto sub_readframe_modbus_LOAD;
-        else                    goto sub_readframe_modbus_ERR;
+        goto sub_readframe_modbus_ERR;
     }
         
     // If the frame uses encryption, decrypt it.
@@ -77,8 +76,7 @@ static void sub_readframe_modbus(user_endpoint_t* endpoint, pkt_t* newpkt, uint8
         
         if (offset < 0) {
             newpkt->crcqual = -1;
-            if (cliopt_isverbose()) goto sub_readframe_modbus_LOAD;
-            else                    goto sub_readframe_modbus_ERR;
+            goto sub_readframe_modbus_ERR;
         }
         
         // Realign headers

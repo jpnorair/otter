@@ -427,10 +427,22 @@ char* fmt_hexdump_header(uint8_t* data) {
 }
 
 
-char* fmt_crc(unsigned int crcqual) {
-    static char invalid[] = "invalid";
-    static char valid[] = "valid";
-    return (crcqual) ? invalid : valid;
+const char* fmt_crc(int crcqual) {
+    static const char invalid_CRC[] = "invalid CRC";
+    static const char valid_CRC[] = "valid CRC";
+    static const char decrypt_err[] = "Decryption Err";
+    const char* retval;
+    
+    if (crcqual < 0) {
+        retval = decrypt_err;
+    }
+    else if (crcqual != 0) {
+        retval = invalid_CRC;
+    }
+    else {
+        retval = valid_CRC;
+    }
+    return retval;
 }
 
 

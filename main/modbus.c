@@ -356,7 +356,7 @@ void* modbus_parser(void* args) {
             // If Verbose, Print received header in real language
             // If not Verbose, just print the encoded packet status
             if (cliopt_isverbose()) {
-                sprintf(putsbuf, "\nRX'ed %zu bytes at %s, %s CRC: %s\n",
+                sprintf(putsbuf, "\nRX'ed %zu bytes at %s, %s CRC: (%s ...)\n",
                         rlist->cursor->size,
                         fmt_time(&rlist->cursor->tstamp),
                         fmt_crc(rlist->cursor->crcqual),
@@ -382,9 +382,15 @@ void* modbus_parser(void* args) {
             }
             _PUTS(putsbuf);
             
-            /// If CRC is bad, dump hex of buffer-size and discard packet now.
+            /// If CRC/Qual is bad, dump hex of buffer-size and discard packet now.
             if (rlist->cursor->crcqual != 0) {
-                fmt_printhex(_PUTS, &rlist->cursor->buffer[0], rlist->cursor->size, 16);
+                if (cliopt_isverbose()) {
+                    fmt_printhex(_PUTS, &rlist->cursor->buffer[0], rlist->cursor->size, 16);
+                }
+                else {
+                    sprintf(putsbuf, "(%s ...)\n", fmt_hexdump_header(rlist->cursor->buffer));
+                    _PUTS(putsbuf);
+                }
                 pktlist_del(rlist, rlist->cursor);
                 goto modbus_parser_END;
             }
