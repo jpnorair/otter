@@ -61,6 +61,7 @@ int cmd_loopx(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, siz
         int bsize_val   = 128;
         int timeout_val = 1000;
         int retries_val = 3;
+        int fd_out;
         
         struct arg_lit* file    = arg_lit0("-f","file",                 "Use file for loop input, instead of line input");
         struct arg_int* bsize   = arg_int0("-b","bsize","bytes",        "Segment binary inputs into blocks of specified size");
@@ -131,9 +132,20 @@ int cmd_loopx(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, siz
         
         loopcurs = loopbytes;
         
-        /// Squelch the dterm so the parser doesn't output, but inlock the
-        /// dtwrite mutex to allow parser thread to operate.
-        dterm_squelch(dth->dt);
+        /// Loop setup
+        /// 1.  Squelch the dterm so the parser doesn't output anything during
+        ///     the command looping.
+        /// 2.  Set up a subscriber, which lets the parser post some data to a
+        ///     buffer which the command looper can access.
+        /// 3.  unlock the dtwrite mutex to allow parser thread to operate.
+        fd_out = dterm_squelch(dth->dt);
+        if (fd_out > 0) {
+            rc = -6;
+            goto cmd_loopx_TERM;
+        }
+        
+        
+        
         pthread_mutex_unlock(dth->dtwrite_mutex);
         
         /// --- Loopy command part
@@ -144,6 +156,7 @@ int cmd_loopx(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, siz
         /// Relock the dtwrite mutex to block the parser thread while this
         /// command finishes.
         pthread_mutex_lock(dth->dtwrite_mutex);
+        dterm_unsquelch(dth->dt);
         
         free(loopbytes);
         

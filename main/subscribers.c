@@ -19,6 +19,28 @@
 
 
 
-pthread_cond_t* subscriber_add(uint8_t alp_id, int* result, uint8_t* result_data, size_t data_max) {
-    return NULL;
+int subscriber_init(void** handle, size_t payload_max, size_t frame_max) {
+
+}
+
+void subscriber_deinit(void* handle) {
+
+}
+
+int subscriber_open(void* handle, int alp_id) {
+    return 0;
+}
+
+int subscriber_close(void* handle, int alp_id) {
+    return 0;
+}
+
+
+int subscriber_wait(void* handle, int alp_id) {
+    return 0;
+}
+
+
+void subscriber_post(void* handle, int alp_id, uint8_t* payload, size_t size) {
+
 }
