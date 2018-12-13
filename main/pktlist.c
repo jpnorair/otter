@@ -54,7 +54,7 @@ static void sub_readframe_modbus(user_endpoint_t* endpoint, pkt_t* newpkt, uint8
     // Qualify CRC.
     newpkt->crcqual = mbcrc_calc_block(data, datalen);
     if (newpkt->crcqual != 0) {
-        goto sub_readframe_modbus_ERR;
+        goto sub_readframe_modbus_LOAD;
     }
         
     // If the frame uses encryption, decrypt it.
@@ -76,7 +76,7 @@ static void sub_readframe_modbus(user_endpoint_t* endpoint, pkt_t* newpkt, uint8
         
         if (offset < 0) {
             newpkt->crcqual = -1;
-            goto sub_readframe_modbus_ERR;
+            goto sub_readframe_modbus_LOAD;
         }
         
         // Realign headers
@@ -95,13 +95,16 @@ static void sub_readframe_modbus(user_endpoint_t* endpoint, pkt_t* newpkt, uint8
     }
     
     sub_readframe_modbus_LOAD:
-    newpkt->size = datalen;
-    memcpy(newpkt->buffer, data, datalen);
-    return;
-    
-    sub_readframe_modbus_ERR:
-    // If newpkt->size == 0, this is considered error
-    newpkt->size = 0;
+    ///@todo add cliopt for reporting bad packets
+    //if (cliopt_isquiet() == false)
+    if (1) {
+        newpkt->size = datalen;
+        memcpy(newpkt->buffer, data, datalen);
+    }
+    else {
+        // If newpkt->size == 0, this is considered error
+        newpkt->size = 0;
+    }
 }
 
 

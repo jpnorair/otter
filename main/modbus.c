@@ -160,6 +160,7 @@ void* modbus_reader(void* args) {
     pthread_mutex_lock(rlist_mutex);
     list_size = pktlist_add_rx(endpoint, rlist, rbuf, (size_t)frame_length);
     pthread_mutex_unlock(rlist_mutex);
+    
     if (list_size <= 0) {
         errcode = 3;
     }
