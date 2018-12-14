@@ -321,20 +321,20 @@ void* modbus_parser(void* args) {
 
         // ===================LOOP CONDITION LOGIC==========================
         
-        // pktlist_getnew will validate the packet with CRC:
-        // - It returns 0 if all is well
-        // - It returns -1 if the list is empty
-        // - It returns a positive error code if there is some packet error
-        // - rlist->cursor points to the working packet
+        /// pktlist_getnew will validate the packet with CRC:
+        /// - It returns 0 if all is well
+        /// - It returns -1 if the list is empty
+        /// - It returns a positive error code if there is some packet error
+        /// - rlist->cursor points to the working packet
         pkt_condition = pktlist_getnew(rlist);
         if (pkt_condition < 0) {
             goto modbus_parser_END;
         }
         // =================================================================
             
-        // If packet has an error of some kind -- delete it and move-on.
-        // Else, print-out the packet.  This can get rich depending on the
-        // internal protocol, and it can result in responses being queued.
+        /// If packet has an error of some kind -- delete it and move-on.
+        /// Else, print-out the packet.  This can get rich depending on the
+        /// internal protocol, and it can result in responses being queued.
         if (pkt_condition > 0) {
             ///@todo some sort of error code
             fprintf(stderr, "A malformed packet was sent for parsing\n");
@@ -354,8 +354,8 @@ void* modbus_parser(void* args) {
             /// need to be intelligently managed.
             rpkt_is_resp = true;
             
-            // If Verbose, Print received header in real language
-            // If not Verbose, just print the encoded packet status
+            /// If Verbose, Print received header in real language
+            /// If not Verbose, just print the encoded packet status
             if (cliopt_isverbose()) {
                 sprintf(putsbuf, "\nRX'ed %zu bytes at %s, %s: (%s ...)\n",
                         rlist->cursor->size,
@@ -370,20 +370,23 @@ void* modbus_parser(void* args) {
                         putsbuf[0] = '0';
                         putsbuf[1] = '0' + (rlist->cursor->crcqual != 0);
                         putsbuf[2] = 0;
+                        ///@todo put this to the buffer without flushing it
                     } break;
-                        
                     case FORMAT_Json: ///@todo
                     case FORMAT_Bintex: ///@todo
                     default: {
-                        char crc_symbol = (rlist->cursor->crcqual == 0) ? 'v' : 'x';
-                        sprintf(putsbuf, "[%c][%03d] ", crc_symbol, rlist->cursor->sequence);
-                        
+                        const char* valid_sym = _E_GRN"v";
+                        const char* error_sym = _E_RED"x";
+                        const char* crc_sym   = (rlist->cursor->crcqual == 0) ? valid_sym : error_sym;
+                        sprintf(putsbuf, _E_WHT "[" "%s" _E_WHT "][%03d] " _E_NRM,
+                                crc_sym, rlist->cursor->sequence);
                     } break;
                 }
             }
             _PUTS(putsbuf);
             
             /// If CRC/Qual is bad, dump hex of buffer-size and discard packet now.
+            /// Else, CRC is good, so process the packet
             if (rlist->cursor->crcqual != 0) {
                 if (cliopt_isverbose()) {
                     fmt_printhex(_PUTS, &rlist->cursor->buffer[0], rlist->cursor->size, 16);
@@ -392,53 +395,49 @@ void* modbus_parser(void* args) {
                     sprintf(putsbuf, "(%s ...)\n", fmt_hexdump_header(rlist->cursor->buffer));
                     _PUTS(putsbuf);
                 }
-                pktlist_del(rlist, rlist->cursor);
-                goto modbus_parser_END;
-            }
-            
-            /// CRC is good, so send packet to Modbus processor.
-            ///@todo validate resp_proc for master.  Currently crashes, presumably on 
-            ///      filesystem lookup stage.
-            proc_result = smut_resp_proc(putsbuf, rlist->cursor->buffer, &output_bytes, rlist->cursor->size, true);
-            msg         = rlist->cursor->buffer;
-            msgbytes    = rlist->cursor->size;
-            msgtype     = smut_extract_payload((void**)&msg, (void*)msg, &msgbytes, msgbytes, true);
-            
-            if ((proc_result == 0) && (msgtype >= 0)) {
-                // ALP message
-                if (msgtype == 0) {
-                    fmt_fprintalp(_PUTS, msgcall, msg, msgbytes);
-                    if (output_bytes != 0) {
-                        //fprintf(stderr, "fmt_fprintalp(..., ..., %016llX, %d)\n", (uint64_t)putsbuf, output_bytes);
-                        fmt_fprintalp(_PUTS, msgcall, (uint8_t*)putsbuf, output_bytes);
-                    }
-                }
-                // Raw Message
-                else {
-                    sprintf(putsbuf, "Raw Modbus Message received\n");
-                    _PUTS(putsbuf);
-                    fmt_printhex(_PUTS, msg, msgbytes, 16);
-                }
             }
             else {
+                ///@todo validate resp_proc for master.  Currently crashes, presumably on
+                ///      filesystem lookup stage.
+                proc_result = smut_resp_proc(putsbuf, rlist->cursor->buffer, &output_bytes, rlist->cursor->size, true);
+
+                if (proc_result == 0) {
+                    msg         = rlist->cursor->buffer;
+                    msgbytes    = rlist->cursor->size;
+                    msgtype     = smut_extract_payload((void**)&msg, (void*)msg, &msgbytes, msgbytes, true);
+                    
+                    // ALP message
+                    if (msgtype == 0) {
+                        fmt_fprintalp(_PUTS, msgcall, msg, msgbytes);
+                        if (output_bytes != 0) {
+                            //fprintf(stderr, "fmt_fprintalp(..., ..., %016llX, %d)\n", (uint64_t)putsbuf, output_bytes);
+                            fmt_fprintalp(_PUTS, msgcall, (uint8_t*)putsbuf, output_bytes);
+                        }
+                        goto modbus_parser_PKTDONE;
+                    }
+                    // Raw Message
+                    else if (msgtype > 0){
+                        sprintf(putsbuf, "Raw Modbus Message received\n");
+                        _PUTS(putsbuf);
+                        fmt_printhex(_PUTS, msg, msgbytes, 16);
+                        goto modbus_parser_PKTDONE;
+                    }
+                }
+                
+                // Fall-through on erroneous messages
                 sprintf(putsbuf, "Unidentified Message received\n");
                 _PUTS(putsbuf);
                 fmt_printhex(_PUTS, rlist->cursor->buffer, rlist->cursor->size, 16);
             }
-
-
-            // clear_rpkt will always be true.  It means that the received 
-            // packet should be cleared from the packet list.
+            
+            modbus_parser_PKTDONE:
+            
+            /// clear_rpkt will always be true.  It means that the received
+            /// packet should be cleared from the packet list.
             if (clear_rpkt) {
                 pkt_t*  scratch = rlist->cursor;
                 pktlist_del(rlist, scratch);
             }
-            
-            ///@note this code was from copy paste.  I don't think it is needed.
-            // Clear the tpkt if it exists
-            //if (tpkt != NULL) {
-            //    pktlist_del(tlist, tpkt);
-            //}
         }
         
         modbus_parser_END:

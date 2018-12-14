@@ -413,7 +413,7 @@ void* mpipe_parser(void* args) {
             // If Verbose, Print received header in real language
             // If not Verbose, just print the encoded packet status
             if (cliopt_isverbose()) {
-                sprintf(putsbuf, "\n" _E_BBLK "RX'ed %zu bytes at %s, %s CRC: %s" _E_NRM "\n",
+                sprintf(putsbuf, "\n" _E_BBLK "RX'ed %zu bytes at %s, %s: (%s ...)" _E_NRM "\n",
                             rlist->cursor->size,
                             fmt_time(&rlist->cursor->tstamp),
                             fmt_crc(rlist->cursor->crcqual),
