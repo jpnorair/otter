@@ -426,11 +426,13 @@ uint16_t mbcrc_calc_block(uint8_t *src, size_t size) {
     int index;
 
 	while (size-- != 0) {
-        index   = (crclo ^ *src++) & 0xFF;
+        uint16_t dreg;
+        dreg    = (0xFF & *src++);
+        index   = (crclo ^ dreg) & 0xFF;
         crclo   = (uint16_t)(crchi ^ modbus_CRCHi[index]);
         crchi   = modbus_CRCLo[index];
     }
 
-    return (uint16_t)(crchi << 8 | crclo);
+    return (uint16_t)((crchi << 8) | crclo);
 }
 
