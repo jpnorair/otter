@@ -451,6 +451,9 @@ int pktlist_getnew(pktlist_t* plist) {
         crc_comp                = crc_calc_block(&plist->cursor->buffer[2], plist->cursor->size-2);
         plist->cursor->crcqual  = (crc_comp - crc_val);
     }
+    else if (intf == INTF_modbus) {
+        // do nothing
+    }
     else {
         plist->cursor->crcqual  = 0;
     }
