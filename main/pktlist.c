@@ -48,7 +48,7 @@ static void sub_frame_null(user_endpoint_t* endpoint, pkt_t* newpkt, uint8_t* da
 
 static void sub_readframe_modbus(user_endpoint_t* endpoint, pkt_t* newpkt, uint8_t* data, size_t datalen) {
 /// Modbus read process will remove the encrypted data
-    int         mbcmd       = data[1];
+    int         mbcmd       = (data[1] & 255);
     size_t      frame_size  = datalen-2;            // Strip 2 byte CRC
     
     // Qualify CRC.
@@ -71,7 +71,7 @@ static void sub_readframe_modbus(user_endpoint_t* endpoint, pkt_t* newpkt, uint8
         // For 68/69 packets, there's an encrypted subframe.
         // frame_size will become the size of the decrypted data, at returned offset
         // If encryption failed, do not copy packet and leave size == 0
-        mbcmd -= 68;
+        mbcmd  -= 68;
         offset  = user_decrypt(endpoint, src_addr, 0, data, &frame_size);
         
         if (offset < 0) {
@@ -96,8 +96,7 @@ static void sub_readframe_modbus(user_endpoint_t* endpoint, pkt_t* newpkt, uint8
     
     sub_readframe_modbus_LOAD:
     ///@todo add cliopt for reporting bad packets
-    //if (cliopt_isquiet() == false)
-    if (1) {
+    if (cliopt_isquiet() == false) {
         newpkt->size = datalen;
         memcpy(newpkt->buffer, data, datalen);
     }
