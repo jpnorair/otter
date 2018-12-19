@@ -16,6 +16,9 @@
 #include <pthread.h>
 #include <string.h>
 #include <time.h>
+#include <sys/time.h>
+
+
 
 ///@todo STRATEGY
 /// - each open/close operation opens a subscription that has a condwait or some such semaphore
@@ -101,8 +104,8 @@ void subscriber_deinit(void* handle) {
 }
 
 
-
-subscr_t subscriber_new(void* handle, int alp_id, int sigmask, size_t max_frames, size_t max_payload) {
+///@todo merge this with subscr_add()
+subscr_t subscriber_new(void* handle, int alp_id, size_t max_frames, size_t max_payload) {
     subscr_tab_t*   table = (subscr_tab_t*)handle;
     subscr_item_t*  item;
     subscr_node_t*  oldhead;
@@ -134,6 +137,9 @@ subscr_t subscriber_new(void* handle, int alp_id, int sigmask, size_t max_frames
     ///@todo buffers not presently used
     item->head->buffers = NULL;
     
+    // Set sigmask to zero (inactive)
+    item->head->sigmask = 0;
+    
     // Final Step: Link the list together
     // The Head node
     item->head->parent  = (void*)item;
@@ -158,28 +164,83 @@ void subscriber_del(void* handle, subscr_t subscriber) {
 
     if (table != NULL) {
         subscr_freenode(node);
-    
     }
 }
 
 
 
-int subscriber_open(subscr_t subscriber, int alp_id) {
-    return 0;
-}
-
-int subscriber_close(subscr_t subscriber, int alp_id) {
-    return 0;
-}
-
-
-int subscriber_wait(subscr_t subscriber, int alp_id) {
+int subscriber_open(subscr_t subscriber, int sigmask) {
+    subscr_node_t*  node    = (subscr_node_t*)subscriber;
+    if (node == NULL) {
+        return -1;
+    }
+    node->sigmask = sigmask;
     return 0;
 }
 
 
-void subscriber_post(void* handle, int alp_id, uint8_t* payload, size_t size) {
 
+int subscriber_close(subscr_t subscriber) {
+    subscr_node_t*  node    = (subscr_node_t*)subscriber;
+    if (node == NULL) {
+        return -1;
+    }
+    node->sigmask = 0;
+    return 0;
+}
+
+
+int subscriber_wait(subscr_t subscriber, int timeout_ms) {
+    int rc;
+    subscr_node_t*  node    = (subscr_node_t*)subscriber;
+    
+    if (node == NULL) {
+        return -1;
+    }
+    
+    if (timeout_ms <= 0) {
+        rc = pthread_cond_wait(&node->cond, &node->mutex);
+    }
+    else {
+        struct timespec abstime;
+        struct timeval  tv;
+        int timeout_s;
+        
+        timeout_s   = timeout_ms / 1000;
+        timeout_ms %= 1000;
+    
+        gettimeofday(&tv, NULL);
+        abstime.tv_sec  = tv.tv_sec + timeout_s;
+        abstime.tv_nsec = (tv.tv_usec * 1000) + (timeout_ms * 1000000);
+        if (abstime.tv_nsec >= 1000000000) {
+            abstime.tv_nsec-= 1000000000;
+            abstime.tv_sec += 1;
+        }
+    
+        rc = pthread_cond_timedwait(&node->cond, &node->mutex, (const struct timespec*)&abstime);
+    }
+    
+    return rc;
+}
+
+
+void subscriber_post(void* handle, int alp_id, int signal, uint8_t* payload, size_t size) {
+    subscr_tab_t*   table   = (subscr_tab_t*)handle;
+    subscr_item_t*  item;
+    subscr_node_t*  node;
+    
+    if (table != NULL) {
+        item = subscr_search_insert(table, alp_id, false);
+        if (item != NULL) {
+            node = item->head;
+            while (node != NULL) {
+                if (node->sigmask & signal) {
+                    pthread_cond_signal(&node->cond);
+                }
+                node = node->next;
+            }
+        }
+    }
 }
 
 
