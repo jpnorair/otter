@@ -18,9 +18,9 @@
 #include "cmds.h"
 #include "cmdutils.h"
 #include "cliopt.h"
-
 #include "dterm.h"
 #include "otter_cfg.h"
+#include "subscribers.h"
 
 // HBuilder Libraries
 #include <argtable3.h>
@@ -53,6 +53,7 @@ int cmd_loopx(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, siz
         rc = -256 + argc;
     }
     else {
+        subscr_t subscription;
         FILE* fp = NULL;
         bool fp_isbtx = true;
         int datbytes;
@@ -144,7 +145,16 @@ int cmd_loopx(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, siz
             goto cmd_loopx_TERM;
         }
         
-        
+        ///@todo check command for alp.  Right now it's hard coded to FDP
+        subscription = subscriber_new(dth->subscribers, 1, 0, 0);
+        if (subscription == NULL) {
+            rc = -7;
+            goto cmd_loopx_TERM;
+        }
+        if (subscriber_open(subscription, 1) != 0) {
+            rc = -8;
+            goto cmd_loopx_TERM2;
+        }
         
         pthread_mutex_unlock(dth->dtwrite_mutex);
         
@@ -159,6 +169,11 @@ int cmd_loopx(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, siz
         dterm_unsquelch(dth->dt);
         
         free(loopbytes);
+        
+        
+        ///@todo check loopbytes, may need to be freed above
+        cmd_loopx_TERM2:
+        
         
         cmd_loopx_TERM:
         arg_freetable(argtable, sizeof(argtable)/sizeof(argtable[0]));

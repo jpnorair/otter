@@ -6,6 +6,8 @@
 //  Copyright © 2017 JP Norair (Indigresso). All rights reserved.
 //
 
+#include "subscribers.h"
+
 #include "pktlist.h"
 
 #include "cliopt.h"
@@ -25,9 +27,6 @@
 /// - Top level binary search for id
 /// - id in search table is connected to a linked list of subscriptions for that ID
 /// - at first, just store signal information from post, not the packet data.
-
-
-typedef void* subscr_t;
 
 
 typedef struct subsnode {
@@ -61,7 +60,7 @@ static int subscr_init(subscr_tab_t* table);
 static void subscr_deinit(subscr_tab_t* table);
 static void subscr_freenode(subscr_node_t* node);
 static void subscr_freeitem(subscr_item_t* item);
-static int subscr_add(subscr_tab_t* table, int alpid, subscr_node_t* item);
+static subscr_item_t* subscr_add(subscr_tab_t* table, int alpid);
 static const subscr_item_t* subscr_search(subscr_tab_t* table, int alpid);
 static subscr_item_t* subscr_search_insert(subscr_tab_t* table, int alpid, bool do_insert);
 
@@ -71,7 +70,7 @@ static inline int local_cmp(int i1, int i2) {
 
 
 
-int subscriber_init(void** handle) {
+int subscriber_init(subscr_handle_t* handle) {
     int rc;
     subscr_tab_t* table;
     
@@ -94,7 +93,7 @@ int subscriber_init(void** handle) {
 
 
 
-void subscriber_deinit(void* handle) {
+void subscriber_deinit(subscr_handle_t handle) {
     subscr_tab_t* table = (subscr_tab_t*)handle;
     
     if (table != NULL) {
@@ -104,8 +103,8 @@ void subscriber_deinit(void* handle) {
 }
 
 
-///@todo merge this with subscr_add()
-subscr_t subscriber_new(void* handle, int alp_id, size_t max_frames, size_t max_payload) {
+
+subscr_t subscriber_new(subscr_handle_t handle, int alp_id, size_t max_frames, size_t max_payload) {
     subscr_tab_t*   table = (subscr_tab_t*)handle;
     subscr_item_t*  item;
     subscr_node_t*  oldhead;
@@ -114,7 +113,7 @@ subscr_t subscriber_new(void* handle, int alp_id, size_t max_frames, size_t max_
         goto subscriber_new_ERR;
     }
     
-    item = subscr_search_insert(table, alp_id, true);
+    item = subscr_add(table, alp_id);
     if (item == NULL) {
         goto subscriber_new_ERR;
     }
@@ -158,7 +157,7 @@ subscr_t subscriber_new(void* handle, int alp_id, size_t max_frames, size_t max_
 
 
 
-void subscriber_del(void* handle, subscr_t subscriber) {
+void subscriber_del(subscr_handle_t handle, subscr_t subscriber) {
     subscr_tab_t*   table   = (subscr_tab_t*)handle;
     subscr_node_t*  node    = (subscr_node_t*)subscriber;
 
@@ -170,7 +169,7 @@ void subscriber_del(void* handle, subscr_t subscriber) {
 
 
 int subscriber_open(subscr_t subscriber, int sigmask) {
-    subscr_node_t*  node    = (subscr_node_t*)subscriber;
+    subscr_node_t* node = (subscr_node_t*)subscriber;
     if (node == NULL) {
         return -1;
     }
@@ -181,7 +180,7 @@ int subscriber_open(subscr_t subscriber, int sigmask) {
 
 
 int subscriber_close(subscr_t subscriber) {
-    subscr_node_t*  node    = (subscr_node_t*)subscriber;
+    subscr_node_t* node = (subscr_node_t*)subscriber;
     if (node == NULL) {
         return -1;
     }
@@ -192,7 +191,7 @@ int subscriber_close(subscr_t subscriber) {
 
 int subscriber_wait(subscr_t subscriber, int timeout_ms) {
     int rc;
-    subscr_node_t*  node    = (subscr_node_t*)subscriber;
+    subscr_node_t* node = (subscr_node_t*)subscriber;
     
     if (node == NULL) {
         return -1;
@@ -224,7 +223,7 @@ int subscriber_wait(subscr_t subscriber, int timeout_ms) {
 }
 
 
-void subscriber_post(void* handle, int alp_id, int signal, uint8_t* payload, size_t size) {
+void subscriber_post(subscr_handle_t handle, int alp_id, int signal, uint8_t* payload, size_t size) {
     subscr_tab_t*   table   = (subscr_tab_t*)handle;
     subscr_item_t*  item;
     subscr_node_t*  node;
@@ -329,11 +328,9 @@ static void subscr_freeitem(subscr_item_t* item) {
 
 
 
-static int subscr_add(subscr_tab_t* table, int alpid, subscr_node_t* item) {
-    subscr_item_t* newsubscr;
-    
-    if ((table == NULL) || (item == NULL)) {
-        return -1;
+static subscr_item_t* subscr_add(subscr_tab_t* table, int alpid) {
+    if (table == NULL) {
+        return NULL;
     }
     
     ///1. Make sure there is room in the table
@@ -344,7 +341,7 @@ static int subscr_add(subscr_tab_t* table, int alpid, subscr_node_t* item) {
         newtable_alloc  = table->alloc + OTTER_SUBSCR_CHUNK;
         newtable        = realloc(table->item, newtable_alloc * sizeof(subscr_item_t*));
         if (newtable == NULL) {
-            return -2;
+            return NULL;
         }
         
         table->item     = newtable;
@@ -353,14 +350,7 @@ static int subscr_add(subscr_tab_t* table, int alpid, subscr_node_t* item) {
     
     ///2. Insert a new cmd item, then fill the leftover items.
     ///   cmd_search_insert allocates and loads the name field.
-    newsubscr = subscr_search_insert(table, alpid, true);
-    
-    if (newsubscr != NULL) {
-        ///@todo go to end of list and add new subscriber
-        return 0;
-    }
-    
-    return -2;
+    return subscr_search_insert(table, alpid, true);
 }
 
 
@@ -374,10 +364,6 @@ static const subscr_item_t* subscr_search(subscr_tab_t* table, int alpid) {
 static subscr_item_t* subscr_search_insert(subscr_tab_t* table, int alpid, bool do_insert) {
 /// An important condition of using this function with insert is that table->alloc must
 /// be greater than table->size.
-///
-/// Verify that cmdname is not a zero-length string, then search for it in the
-/// list of available commands.
-///
     subscr_item_t** head;
     subscr_item_t* output = NULL;
     int cci = 0;
