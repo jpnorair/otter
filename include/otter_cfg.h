@@ -97,6 +97,9 @@
 #ifndef OTTER_DEVTAB_CHUNK
 #   define OTTER_DEVTAB_CHUNK       1
 #endif
+#ifndef OTTER_SUBSCR_CHUNK
+#   define OTTER_SUBSCR_CHUNK       3
+#endif
 
 /// Automatic Checkss
 #if ((OTTER_FEATURE_MPIPE != ENABLED) && (OTTER_FEATURE_MODBUS != ENABLED))

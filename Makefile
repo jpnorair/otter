@@ -20,9 +20,9 @@ ifneq ($(findstring $(SYSDIR)/lib,$(LD_LIBRARY_PATH)),)
 endif
 
 ifeq ($(THISSYSTEM),Linux)
-LIBBSD := -lbsd
+	LIBBSD := -lbsd
 else
-LIBBSD :=
+	LIBBSD :=
 endif
 
 DEFAULT_DEF := -D__HBUILDER__
