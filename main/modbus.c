@@ -400,16 +400,19 @@ void* modbus_parser(void* args) {
                 // The formatter will give negative values on framing errors
                 // and also for protocol errors (i.e. NACKs).
                 if (msgtype == 0) {
+                    int subsig;
                     proc_result = fmt_fprintalp(&sub_dtputs, mparg->msgcall, msg, msgbytes);
                     
                     ///@todo figure out if this extra formatting step is necessary
                     ///      it is here to print a certain type of frame.
-                    if (output_bytes != 0) {
-                        //fprintf(stderr, "fmt_fprintalp(..., ..., %016llX, %d)\n", (uint64_t)putsbuf, output_bytes);
-                        fmt_fprintalp(&sub_dtputs, mparg->msgcall, (uint8_t*)putsbuf, output_bytes);
-                    }
+//                    if (output_bytes != 0) {
+//                        //fprintf(stderr, "fmt_fprintalp(..., ..., %016llX, %d)\n", (uint64_t)putsbuf, output_bytes);
+//                        fmt_fprintalp(&sub_dtputs, mparg->msgcall, (uint8_t*)putsbuf, output_bytes);
+//                    }
                     
                     // subscribers
+                    subsig = (proc_result >= 0) ? SUBSCR_SIG_OK : SUBSCR_SIG_ERR;
+                    subscriber_post(dth->subscriber, proc_result, subsig, NULL, NULL);
                 }
                 // Raw Message
                 else {

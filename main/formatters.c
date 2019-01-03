@@ -343,7 +343,7 @@ int fmt_fprintalp(mpipe_printer_t puts_fn, cJSON* msgcall, uint8_t* src, size_t 
         src        += length+4;
     } while (rem_bytes > 0);
     
-    return rc;
+    return (rc == 0) ? id : rc;
 }
 
 

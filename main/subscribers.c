@@ -23,7 +23,7 @@
 
 
 ///@todo STRATEGY
-/// - each open/close operation opens a subscription that has a condwait or some such semaphore
+/// - each open/close operation opens a subscription that has a cond
 /// - Top level binary search for id
 /// - id in search table is connected to a linked list of subscriptions for that ID
 /// - at first, just store signal information from post, not the packet data.
