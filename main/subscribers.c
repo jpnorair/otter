@@ -87,6 +87,9 @@ int subscriber_init(subscr_handle_t* handle) {
     if (rc != 0) {
         free(table);
     }
+    else {
+        *handle = (subscr_handle_t)table;
+    }
     
     return rc;
 }
@@ -112,18 +115,18 @@ subscr_t subscriber_new(subscr_handle_t handle, int alp_id, size_t max_frames, s
     if (table == NULL) {
         goto subscriber_new_ERR;
     }
-    
+
     item = subscr_add(table, alp_id);
     if (item == NULL) {
         goto subscriber_new_ERR;
     }
-    
+
     oldhead     = item->head;
     item->head  = malloc(sizeof(subscr_node_t));
     if (item->head == NULL) {
         goto subscriber_new_ERR1;
     }
-    
+
     // Initialize Cond & Mutex
     if (pthread_mutex_init(&item->head->mutex, NULL) != 0) {
         goto subscriber_new_ERR2;
@@ -131,21 +134,23 @@ subscr_t subscriber_new(subscr_handle_t handle, int alp_id, size_t max_frames, s
     if (pthread_cond_init(&item->head->cond, NULL) != 0) {
         goto subscriber_new_ERR3;
     }
-    
+
     // Initialize Buffers
     ///@todo buffers not presently used
     item->head->buffers = NULL;
-    
+
     // Set sigmask to zero (inactive)
     item->head->sigmask = 0;
-    
+
     // Final Step: Link the list together
     // The Head node
     item->head->parent  = (void*)item;
     item->head->next    = oldhead;
     item->head->prev    = NULL;
-    oldhead->prev       = item->head;
-    
+    if (oldhead != NULL) {
+        oldhead->prev   = item->head;
+    }
+
     return (subscr_t)item->head;
     
     // Error Handling

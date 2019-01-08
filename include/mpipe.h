@@ -20,6 +20,7 @@
 // Local Headers
 #include "formatters.h"
 #include "pktlist.h"
+#include "subscribers.h"
 #include "user.h"
 
 // HB Library Headers
@@ -47,6 +48,7 @@ typedef struct {
     pktlist_t*      tlist;           // should be used only by...
     pktlist_t*      rlist;           // should be used only by...
     user_endpoint_t* endpoint;
+    subscr_handle_t subscribers;
     void*           dtprint;
     
     ///@todo this msgcall feature is deprecated

@@ -16,7 +16,7 @@
 /// List of Subscriber Signals
 /// Currently, just one (SIG_OK)
 #define SUBSCR_SIG_OK       1
-
+#define SUBSCR_SIG_ERR      -1
 
 
 typedef void* subscr_t;

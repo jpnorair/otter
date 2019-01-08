@@ -164,7 +164,7 @@ int dterm_squelch(dterm_t* dt) {
         dt->fd_squelch  = dt->fd_out;
         dt->fd_out      = -1;
     }
-    
+
     return fd_out;
 }
 

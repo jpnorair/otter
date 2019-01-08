@@ -202,13 +202,14 @@ int cmdutils_parsestring(char*** pargv, const char* cmdname, char* dst, char* sr
             else {
                 i = 0;
             }
-        
+            
             // Bypass leading whitespace (now zeros)
             // Fill argv[i]
             // Bypass trailing non-whitespace
             cursor = dst;
             for (; i<argc; i++) {
                 for (; *cursor==0; cursor++);
+                //fprintf(stderr, "%s\n", cursor);
                 (*pargv)[i] = cursor;
                 for (; *cursor!=0; cursor++);
             }

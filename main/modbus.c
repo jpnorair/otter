@@ -368,8 +368,12 @@ void* modbus_parser(void* args) {
                         putsbuf[2] = 0;
                         ///@todo put this to the buffer without flushing it
                     } break;
+                    
                     case FORMAT_Json: ///@todo
+                            break;
+                        
                     case FORMAT_Bintex: ///@todo
+                    
                     default: {
                         const char* valid_sym = _E_GRN"v";
                         const char* error_sym = _E_RED"x";
@@ -412,7 +416,9 @@ void* modbus_parser(void* args) {
                     
                     // subscribers
                     subsig = (proc_result >= 0) ? SUBSCR_SIG_OK : SUBSCR_SIG_ERR;
-                    subscriber_post(dth->subscriber, proc_result, subsig, NULL, NULL);
+                    fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
+                    subscriber_post(mparg->subscribers, proc_result, subsig, NULL, 0);
+                    fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
                 }
                 // Raw Message
                 else {
