@@ -420,6 +420,7 @@ void* modbus_parser(void* args) {
                     subsig = (proc_result >= 0) ? SUBSCR_SIG_OK : SUBSCR_SIG_ERR;
                     subscriber_post(mparg->subscribers, proc_result, subsig, NULL, 0);
                 }
+                // Raw Message
                 else {
                     sprintf(putsbuf, "Raw Modbus Message received\n");
                     sub_dtputs(putsbuf);
@@ -427,34 +428,6 @@ void* modbus_parser(void* args) {
                 }
             }
             else {
-                ///@todo validate resp_proc for master.  Currently crashes, presumably on
-                ///      filesystem lookup stage.
-                proc_result = smut_resp_proc(putsbuf, rlist->cursor->buffer, &output_bytes, rlist->cursor->size, true);
-
-                if (proc_result == 0) {
-                    msg         = rlist->cursor->buffer;
-                    msgbytes    = rlist->cursor->size;
-                    msgtype     = smut_extract_payload((void**)&msg, (void*)msg, &msgbytes, msgbytes, true);
-                    
-                    // ALP message
-                    if (msgtype == 0) {
-                        fmt_fprintalp(_PUTS, msgcall, msg, msgbytes);
-                        if (output_bytes != 0) {
-                            //fprintf(stderr, "fmt_fprintalp(..., ..., %016llX, %d)\n", (uint64_t)putsbuf, output_bytes);
-                            fmt_fprintalp(_PUTS, msgcall, (uint8_t*)putsbuf, output_bytes);
-                        }
-                        goto modbus_parser_PKTDONE;
-                    }
-                    // Raw Message
-                    else if (msgtype > 0){
-                        sprintf(putsbuf, "Raw Modbus Message received\n");
-                        _PUTS(putsbuf);
-                        fmt_printhex(_PUTS, msg, msgbytes, 16);
-                        goto modbus_parser_PKTDONE;
-                    }
-                }
-                
-                // Fall-through on erroneous messages
                 sprintf(putsbuf, "Unidentified Message received\n");
                 sub_dtputs(putsbuf);
                 fmt_printhex(&sub_dtputs, mparg->rlist->cursor->buffer, mparg->rlist->cursor->size, 16);
