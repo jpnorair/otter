@@ -416,9 +416,7 @@ void* modbus_parser(void* args) {
                     
                     // subscribers
                     subsig = (proc_result >= 0) ? SUBSCR_SIG_OK : SUBSCR_SIG_ERR;
-                    fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
                     subscriber_post(mparg->subscribers, proc_result, subsig, NULL, 0);
-                    fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
                 }
                 // Raw Message
                 else {

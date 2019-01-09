@@ -75,33 +75,51 @@ static size_t sub_str_mark(char* str, size_t max) {
 }
 
 
-static const cmdtab_item_t* sub_cmdacquire(char** cmddata, dterm_handle_t* dth, char* cmdline) {
+static const cmdtab_item_t* sub_cmdproc(loop_input_t* loop, dterm_handle_t* dth) {
     /// Get each line from the pipe.
     const cmdtab_item_t* cmdptr;
     char cmdname[32];
     int cmdlen;
+    char* mark;
+    char* cmdhead;
 
-    cmdlen = (int)strlen(cmdline);
+    cmdlen  = (int)strlen(loop->cmdline);
+    cmdhead = loop->cmdline;
     
-    // Burn whitespace ahead of command
-    // Burn trailing whitespace
-    while (isspace(*cmdline)) {
-        cmdline++;
+    // Convert leading and trailing quotes into spaces
+    mark = strchr(cmdhead, '"');
+    if (mark == NULL) {
+        return NULL;
+    }
+    *mark = ' ';
+    mark = strrchr(cmdhead, '"');
+    if (mark == NULL) {
+        return NULL;
+    }
+    *mark = ' ';
+    
+    // Burn whitespace ahead of command, and burn trailing whitespace
+    while (isspace(cmdhead[0])) {
+        cmdhead++;
         --cmdlen;
     }
-    while (isspace(cmdline[cmdlen-1])) {
+    while (isspace(cmdhead[cmdlen-1])) {
+        cmdhead[cmdlen-1] = 0;
         --cmdlen;
     }
-
+    
     // Then determine length until newline, or null.
     // then search/get command in list.
-    cmdlen  = (int)sub_str_mark(cmdline, (size_t)cmdlen);
-    cmdlen  = cmd_getname(cmdname, cmdline, sizeof(cmdname));
+    cmdlen  = (int)sub_str_mark(cmdhead, (size_t)cmdlen);
+    cmdlen  = cmd_getname(cmdname, cmdhead, sizeof(cmdname));
     cmdptr  = cmd_search(dth->cmdtab, cmdname);
     
-    *cmddata = cmdline+cmdlen;
+    // Rewrite loop->cmdline to remove the wrapper parts
+    strcpy(loop->cmdline, cmdhead+cmdlen);
+
     return cmdptr;
 }
+
 
 static int sub_cmdrun(dterm_handle_t* dth, const cmdtab_item_t* cmdptr, char* cmddata, uint8_t* dst, size_t dstmax) {
     /// Get each line from the pipe.
@@ -122,8 +140,6 @@ static int sub_cmdrun(dterm_handle_t* dth, const cmdtab_item_t* cmdptr, char* cm
     return bytesout;
 }
 
-
-//dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax
 
 
 static int sub_getinput(loop_input_t* loop, const char* cmdname, int* inbytes, uint8_t* src) {
@@ -270,7 +286,7 @@ static int sub_getinput(loop_input_t* loop, const char* cmdname, int* inbytes, u
         /// Copy Command data into Command Line Buffer
         if (rc == 0) {
             size_t linealloc;
-            linealloc       = strlen(loopcmd->sval[0]) + 2 + (loop->bsize_val*2)+ 1;
+            linealloc       = strlen(loopcmd->sval[0]) + 1;
             loop->cmdline   = calloc(linealloc, sizeof(char));
             if (loop->cmdline == NULL) {
                 rc = -6;
@@ -302,18 +318,20 @@ static void sub_freeinput(loop_input_t* loop) {
 }
 
 
-static int sub_binaryblock(loop_input_t* loop, char* cmdblock, int dat_i) {
+static int sub_binaryblock(char* dst, loop_input_t* loop, int dat_i) {
     int blocksz;
-    blocksz = (loop->data_size-dat_i < loop->bsize_val) ? loop->data_size-dat_i : loop->bsize_val;
-    cmdutils_uint8_to_hexstr(&cmdblock[1], &loop->data[dat_i], blocksz);
-    cmdblock[0]         = '[';
-    cmdblock[1+blocksz] = ']';
-    cmdblock[2+blocksz] = 0;
+    blocksz         = (loop->data_size-dat_i < loop->bsize_val) ? loop->data_size-dat_i : loop->bsize_val;
+    dst             = stpcpy(dst, loop->cmdline);
+    dst[0]          = '[';
+    cmdutils_uint8_to_hexstr(&dst[1], &loop->data[dat_i], blocksz);
+    dst[1+blocksz]  = ']';
+    dst[2+blocksz]  = 0;
+
     return blocksz;
 }
 
 
-static int sub_textblock(loop_input_t* loop, char* cmdblock, int cursor) {
+static int sub_textblock(char* dst, loop_input_t* loop, int cursor) {
     int block_sz;
     int terminator_sz;
     char* newline;
@@ -333,10 +351,11 @@ static int sub_textblock(loop_input_t* loop, char* cmdblock, int cursor) {
             block_sz        = loop->bsize_val;
             terminator_sz   = 0;
         }
-        memcpy(&cmdblock[1], &loop->data[cursor], block_sz);
-        cmdblock[0]             = '"';
-        cmdblock[1+block_sz]    = '"';
-        cmdblock[2+block_sz]    = 0;
+        dst             = stpcpy(dst, loop->cmdline);
+        dst[0]          = '"';
+        memcpy(&dst[1], &loop->data[cursor], block_sz);
+        dst[1+block_sz] = '"';
+        dst[2+block_sz] = 0;
     }
     
     return block_sz + terminator_sz;
@@ -352,6 +371,8 @@ int cmd_xloop(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, siz
     const cmdtab_item_t* cmdptr;
     subscr_t subscription;
     loop_input_t loop;
+    char* xloop_cmd;
+    
     
     /// dt == NULL is the initialization case.
     /// There may not be an initialization for all command groups.
@@ -376,42 +397,46 @@ int cmd_xloop(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, siz
     /// 6. Relock the dtwrite mutex to block the parser thread while xloop runs.
     /// 7. Destroy resources on the heap
     if (rc == 0) {
-        char* cmdhead;
-        char* cmdblock;
+        char* cmd_insert;
         FILE* fp_out;
         int blocksize;
-        
-        // Acquire Command Pointer and command strings
-        cmdptr = sub_cmdacquire(&cmdhead, dth, loop.cmdline);
+
+        // Process Command Line and determine loop command
+        cmdptr = sub_cmdproc(&loop, dth);
         if (cmdptr == NULL) {
             rc = -7;
             goto cmd_xloop_TERM;
         }
-        cmdblock = cmdhead + strlen(cmdhead);
-    
-        // Squelch dterm output and get file pointer for dterm-out
-        fd_out = dterm_squelch(dth->dt);
-        if (fd_out < 0) {
+        
+        xloop_cmd = calloc(strlen(loop.cmdline) + 2*loop.bsize_val + 2 + 1, sizeof(char));
+        if (xloop_cmd == NULL) {
             rc = -8;
             goto cmd_xloop_TERM;
         }
+
+        // Squelch dterm output and get file pointer for dterm-out
+        fd_out = dterm_squelch(dth->dt);
+        if (fd_out < 0) {
+            rc = -9;
+            goto cmd_xloop_TERM1;
+        }
         fp_out = fdopen(fd_out, "w");   //don't close this!  Merely fd --> fp conversion
         if (fp_out == NULL) {
-            rc = -9;
-            goto cmd_xloop_TERM;
+            rc = -10;
+            goto cmd_xloop_TERM1;
         }
 
         // Set up subscriber, and open it
         ///@todo check command for alp.  Right now it's hard coded to FDP (1)
         subscription = subscriber_new(dth->subscribers, 1, 0, 0);
         if (subscription == NULL) {
-            rc = -10;
-            goto cmd_xloop_TERM1;
+            rc = -11;
+            goto cmd_xloop_TERM2;
         }
 
         if (subscriber_open(subscription, 1) != 0) {
-            rc = -11;
-            goto cmd_xloop_TERM2;
+            rc = -12;
+            goto cmd_xloop_TERM3;
         }
 
         // Unlock the dtwrite mutex so parser thread can operate
@@ -420,52 +445,58 @@ int cmd_xloop(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, siz
         // Loop the command until all data is gone
         blocksize = loop.bsize_val;
         for (dat_i=0; dat_i<loop.data_size; dat_i+=blocksize) {
+        
             switch (loop.data_type) {
                 default:
                 case DATA_binary:
                 case DATA_bintex:
-                    blocksize = sub_binaryblock(&loop, cmdblock, dat_i);
+                    blocksize = sub_binaryblock(xloop_cmd, &loop, dat_i);
                     break;
                 case DATA_text:
-                    blocksize = sub_textblock(&loop, cmdblock, dat_i);
+                    blocksize = sub_textblock(xloop_cmd, &loop, dat_i);
                     break;
             }
 
-            rc = sub_cmdrun(dth, cmdptr, cmdhead, dst, dstmax);
+//fprintf(stderr, "XLOOP RUN: %s\n", xloop_cmd);
+            rc = sub_cmdrun(dth, cmdptr, xloop_cmd, dst, dstmax);
             if (rc < 0) {
                 rc += -256;
                 fprintf(fp_out, "--> Command Runtime Error: (%i)\n", rc);
                 break;
             }
-fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
+            
             rc = subscriber_wait(subscription, loop.timeout_val);
             if (rc == 0) {
                 ///@todo check signal
-                fprintf(fp_out, "\rStatus: %i/%i ", dat_i, loop.data_size);
+                //fprintf(fp_out, "\rStatus: %i/%i ", dat_i, loop.data_size);
+                fprintf(fp_out, "Status: %i/%i\n", dat_i, loop.data_size);
                 loop.retries_cnt = loop.retries_val;
             }
             else if (rc == ETIMEDOUT) {
                 if (--loop.retries_cnt <= 0) {
                     fprintf(fp_out, "--> Command Timeout Error\n");
+                    rc = -13;
                     break;
                 }
-                dat_i -= loop.bsize_val;
+                dat_i -= blocksize;
             }
             else {
                 fprintf(fp_out, "--> Internal Error: (%i)\n", rc);
             }
         }
-fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
+
         // Relock dtwrite mutex to block parser
         pthread_mutex_lock(dth->dtwrite_mutex);
-fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
+
         // Delete Subscriber (also closes), unsquelch, free
+        cmd_xloop_TERM3:
+        subscriber_del(dth->subscribers, subscription);
         cmd_xloop_TERM2:
-        subscriber_del(dth->subscribers, subscription); fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
+        dterm_unsquelch(dth->dt);
         cmd_xloop_TERM1:
-        dterm_unsquelch(dth->dt); fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
+        free(xloop_cmd);
         cmd_xloop_TERM:
-        sub_freeinput(&loop); fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
+        sub_freeinput(&loop);
     }
     
     cmd_xloop_EXIT:
