@@ -562,7 +562,7 @@ int cmd_sendhex(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, s
 
     }
     
-    fprintf(stderr, "sendhex err=%i\n", rc);
+    //fprintf(stderr, "sendhex err=%i\n", rc);
     
     return rc;
 }
