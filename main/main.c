@@ -120,12 +120,12 @@ void _assign_signal(int sigcode, void (*sighandler)(int)) {
 }
 
 void sigint_handler(int sigcode) {
-    cli.exitcode = EXIT_FAILURE;
+    cli.exitcode = -1;
     pthread_cond_signal(&cli.kill_cond);
 }
 
 void sigquit_handler(int sigcode) {
-    cli.exitcode = EXIT_SUCCESS;
+    cli.exitcode = 0;
     pthread_cond_signal(&cli.kill_cond);
 }
 
@@ -158,40 +158,8 @@ void sub_json_loadargs(cJSON* json,
 void ppipelist_populate(cJSON* obj);
 
 
-// NOTE Change to transparent mutex usage or not?
-/*
-void _cli_block(bool set) {
-    pthread_mutex_lock(&cli.block_mutex);
-    cli.block_in = set;
-    pthread_mutex_unlock(&cli.block_mutex);
-}
-
-bool _cli_is_blocked(void) {
-    volatile bool retval;
-    pthread_mutex_lock(&cli.block_mutex);
-    retval = cli.block_in;
-    pthread_mutex_unlock(&cli.block_mutex);
-    
-    return retval;
-}
-*/
 
 
-
-
-
-
-
-// notes:
-// 0. ch_inc/ch_dec (w/ ?:) and history pointers can be replaced by integers and modulo
-// 1. command history is glitching when command takes whole history buf (not c string)
-// 2. delete and remove line do not work for multiline command
-
-static dterm_t* _dtputs_dterm;
-
-int _dtputs(char* str) {
-    return dterm_puts(_dtputs_dterm, str);
-}
 
 
 
@@ -506,7 +474,9 @@ int otter_main( const char* ttyfile,
     mpipe_ctl_t mpipe_ctl;
     pktlist_t   mpipe_tlist;
     pktlist_t   mpipe_rlist;
+#   if OTTER_FEATURE(MODBUS)
     void*       smut_handle = NULL;
+#   endif
     
     // DTerm Datastructs
     dterm_handle_t dterm_args;
@@ -547,12 +517,22 @@ int otter_main( const char* ttyfile,
     rc = devtab_init(&dterm_args.endpoint.devtab);
     if (rc != 0) {
         fprintf(stderr, "Device Table Initialization Failure (%i)\n", rc);
-        goto otter_main_TERM0;
+        cli.exitcode = 1;
+        goto otter_main_EXIT;
     }
     rc = devtab_insert(dterm_args.endpoint.devtab, 0, 0, NULL, NULL, NULL);
     if (rc != 0) {
         fprintf(stderr, "Device Table Insertion Failure (%i)\n", rc);
-        goto otter_main_TERM1;
+        cli.exitcode = 2;
+        goto otter_main_EXIT;
+    }
+    
+    /// Subscriber initialization.
+    rc = subscriber_init(&dterm_args.subscribers);
+    if (rc != 0) {
+        fprintf(stderr, "Device Table Insertion Failure (%i)\n", rc);
+        cli.exitcode = 2;
+        goto otter_main_EXIT;
     }
 
     /// Initialize the user manager.
@@ -560,7 +540,8 @@ int otter_main( const char* ttyfile,
     rc = user_init();
     if (rc != 0) {
         fprintf(stderr, "User Construct Initialization Failure (%i)\n", rc);
-        goto otter_main_TERM2;
+        cli.exitcode = 3;
+        goto otter_main_EXIT;
     }
 
     /// Initialize command search table.  
@@ -569,7 +550,8 @@ int otter_main( const char* ttyfile,
     rc = cmd_init(&cmdtab_handle, xpath);
     if (rc != 0) {
         fprintf(stderr, "Command Table Initialization Failure (%i)\n", rc);
-        goto otter_main_TERM3;
+        cli.exitcode = 4;
+        goto otter_main_EXIT;
     }
 
     /// Initialize packet lists for transmitted packets and received packets
@@ -619,7 +601,8 @@ int otter_main( const char* ttyfile,
     mpipe_args.mpctl            = &mpipe_ctl;
     mpipe_args.rlist            = &mpipe_rlist;
     mpipe_args.tlist            = &mpipe_tlist;
-    mpipe_args.puts_fn          = &_dtputs;
+    //mpipe_args.puts_fn          = &_dtputs;
+    mpipe_args.dtprint          = &dterm;
     mpipe_args.dtwrite_mutex    = &dtwrite_mutex;
     mpipe_args.rlist_mutex      = &rlist_mutex;
     mpipe_args.tlist_mutex      = &tlist_mutex;
@@ -630,11 +613,12 @@ int otter_main( const char* ttyfile,
     mpipe_args.kill_mutex       = &cli.kill_mutex;
     mpipe_args.kill_cond        = &cli.kill_cond;
     mpipe_args.endpoint         = &dterm_args.endpoint;
+    mpipe_args.subscribers      = dterm_args.subscribers;
 
     mpipe_fd = mpipe_open(&mpipe_ctl, ttyfile, baudrate, enc_bits, enc_parity, enc_stopbits, 0, 0, 0);
     if (mpipe_fd < 0) {
-        cli.exitcode = -1;
-        goto otter_main_TERM4;
+        cli.exitcode = 5;
+        goto otter_main_EXIT;
     }
     
     /// Open DTerm interface & Setup DTerm threads
@@ -642,7 +626,6 @@ int otter_main( const char* ttyfile,
     /// entry and history initialization.
     ///@todo "STDIN_FILENO" and "STDOUT_FILENO" could be made dynamic
     ///@todo it might be nice to put this routine into a dterm_init() function.
-    _dtputs_dterm               = &dterm;
     dterm.fd_in                 = STDIN_FILENO;
     dterm.fd_out                = STDOUT_FILENO;
     dterm_args.ch               = ch_init(&cmd_history);
@@ -659,8 +642,8 @@ int otter_main( const char* ttyfile,
     dterm_fn                    = (pipe == false) ? &dterm_prompter : &dterm_piper;
 
     if (dterm_open(&dterm, pipe) < 0) {
-        cli.exitcode = -2;
-        goto otter_main_TERM5;
+        cli.exitcode = 6;
+        goto otter_main_EXIT;
     }
 
     
@@ -668,7 +651,7 @@ int otter_main( const char* ttyfile,
     /// These are activated by Ctl+C (SIGINT) and Ctl+\ (SIGQUIT) as is
     /// typical in POSIX apps.  When activated, the threads are halted and
     /// Otter is shutdown.
-    cli.exitcode = EXIT_SUCCESS;
+    cli.exitcode = 0;
     _assign_signal(SIGINT, &sigint_handler);
     _assign_signal(SIGQUIT, &sigquit_handler);
     
@@ -699,7 +682,8 @@ int otter_main( const char* ttyfile,
 #       endif
         {
             DEBUG_PRINTF("No active interface is available\n");
-            goto otter_main_TERM5;
+            cli.exitcode = 7;
+            goto otter_main_EXIT;
         }
     }
     
@@ -752,30 +736,32 @@ int otter_main( const char* ttyfile,
         dterm_close(&dterm);
     }
     
-    otter_main_TERM5:
-    DEBUG_PRINTF("Closing MPipe\n");
-    mpipe_close(&mpipe_ctl);
-    DEBUG_PRINTF("Freeing DTerm and Command History\n");
-    dterm_free(&dterm);
-    ch_free(&cmd_history);
+    otter_main_EXIT:
+    switch (cli.exitcode) {
+       default:
+        case 7: DEBUG_PRINTF("Closing MPipe\n");
+                mpipe_close(&mpipe_ctl);
+                DEBUG_PRINTF("Freeing DTerm and Command History\n");
+                dterm_free(&dterm);
+                ch_free(&cmd_history);
+       
+        case 6: DEBUG_PRINTF("Freeing Mpipe Packet Lists\n");
+                mpipe_freelists(&mpipe_rlist, &mpipe_tlist);
+                DEBUG_PRINTF("Freeing PPipe lists\n");
+                ppipelist_deinit();
+        
+        case 5: cmd_free(cmdtab_handle);
+        
+        case 4: user_deinit();
+        
+        case 3: subscriber_deinit(dterm_args.subscribers);
+        
+        case 2: devtab_free(dterm_args.endpoint.devtab);
+        
+        case 1:
+        case 0: break;
+    }
     
-    otter_main_TERM4:
-    DEBUG_PRINTF("Freeing Mpipe Packet Lists\n");
-    mpipe_freelists(&mpipe_rlist, &mpipe_tlist);
-    DEBUG_PRINTF("Freeing PPipe lists\n");
-    ppipelist_deinit();
-    
-    otter_main_TERM3:
-    cmd_free(cmdtab_handle);
-    
-    otter_main_TERM2:
-    user_deinit();
-    
-    otter_main_TERM1:
-    devtab_free(dterm_args.endpoint.devtab);
-    
-    otter_main_TERM0:
-    // cli.exitcode is set to 0, unless sigint is raised.
     DEBUG_PRINTF("Exiting cleanly and flushing output buffers\n");
     fflush(stdout);
     fflush(stderr);

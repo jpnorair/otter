@@ -18,6 +18,8 @@
 #include "cliopt.h"
 #include "cmds.h"
 
+// HBuilder Libs
+#include <argtable3.h>
 
 // Standard C & POSIX Libraries
 #include <stdint.h>
@@ -46,6 +48,8 @@ int cmdutils_parsestring(char*** pargv, const char* cmdname, char* dst, char* sr
 
 void cmdutils_freeargv(char** argv);
 
+
+int cmdutils_argcheck(void* argtable, struct arg_end* end, int argc, char** argv);
 
 
 #define INPUT_SANITIZE() do { \

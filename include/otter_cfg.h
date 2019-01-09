@@ -52,7 +52,7 @@
 #   define OTTER_FEATURE_MPIPE      ENABLED
 #endif
 #ifndef OTTER_FEATURE_MODBUS
-#   define OTTER_FEATURE_MODBUS     DISABLED
+#   define OTTER_FEATURE_MODBUS     ENABLED
 #endif
 #ifndef OTTER_FEATURE_HBUILDER
 #   ifdef __HBUILDER__
@@ -96,6 +96,9 @@
 #endif
 #ifndef OTTER_DEVTAB_CHUNK
 #   define OTTER_DEVTAB_CHUNK       1
+#endif
+#ifndef OTTER_SUBSCR_CHUNK
+#   define OTTER_SUBSCR_CHUNK       3
 #endif
 
 /// Automatic Checkss

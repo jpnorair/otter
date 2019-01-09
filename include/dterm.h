@@ -20,6 +20,7 @@
 // Configuration Header
 #include "otter_cfg.h"
 #include "pktlist.h"
+#include "subscribers.h"
 #include "user.h"
 
 // Application Headers
@@ -89,6 +90,7 @@ typedef struct {
     
     int fd_in;                  // file descriptor for the terminal input
     int fd_out;                 // file descriptor for the terminal output
+    int fd_squelch;             // For squelch feature
     
     int linelen;                 // line length
     char *cline;                 // pointer to current position in linebuf
@@ -104,6 +106,7 @@ typedef struct {
     cmdtab_t*           cmdtab;
     pktlist_t*          tlist;
     user_endpoint_t     endpoint;
+    subscr_handle_t     subscribers;
     
     pthread_mutex_t*    dtwrite_mutex;
     pthread_mutex_t*    tlist_mutex;
@@ -139,6 +142,8 @@ int dterm_open(dterm_t* dt, bool use_pipe);
 int dterm_close(dterm_t* dt);
 void dterm_free(dterm_t* dt);
 
+int dterm_squelch(dterm_t* dt);
+void dterm_unsquelch(dterm_t* dt);
 
 // DTerm threads called in main.  
 // One one should be started.  
@@ -151,6 +156,9 @@ void* dterm_prompter(void* args);
 
 // resets command buffer
 void dterm_reset(dterm_t *dt);
+
+
+
 
 
 

@@ -20,7 +20,7 @@ typedef int (*mpipe_printer_t)(char*);
 
 
 void fmt_printhex(mpipe_printer_t puts_fn, uint8_t* src, size_t src_bytes, size_t cols);
-void fmt_fprintalp(mpipe_printer_t puts_fn, cJSON* msgcall, uint8_t* src, size_t src_bytes);
+int fmt_fprintalp(mpipe_printer_t puts_fn, cJSON* msgcall, uint8_t* src, size_t src_bytes);
 
 void fmt_hexdump_raw(char* dst, uint8_t* src, size_t src_bytes);
 char* fmt_hexdump_header(uint8_t* data);

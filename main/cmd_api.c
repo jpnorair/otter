@@ -67,10 +67,12 @@ static const cmd_t otter_commands[] = {
     { "quit",       &cmd_quit },
     { "raw",        &cmd_raw },
     { "rmnode",     &cmd_rmnode },
+    { "sendhex",    &cmd_sendhex }, 
     { "set",        &cmd_set },
     { "sethome",    &cmd_sethome },
     { "su",         &cmd_su },
     { "whoami",     &cmd_whoami },
+    { "xloop",      &cmd_xloop },
 };
 
 ///@todo hbuilder, and Judy handles (envdict) should get wrapped

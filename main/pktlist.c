@@ -73,7 +73,7 @@ static void sub_readframe_modbus(user_endpoint_t* endpoint, pkt_t* newpkt, uint8
         // If encryption failed, do not copy packet and leave size == 0
         mbcmd  -= 68;
         offset  = user_decrypt(endpoint, src_addr, 0, data, &frame_size);
-        
+
         if (offset < 0) {
             newpkt->crcqual = -1;
             goto sub_readframe_modbus_LOAD;

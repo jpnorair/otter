@@ -202,13 +202,14 @@ int cmdutils_parsestring(char*** pargv, const char* cmdname, char* dst, char* sr
             else {
                 i = 0;
             }
-        
+            
             // Bypass leading whitespace (now zeros)
             // Fill argv[i]
             // Bypass trailing non-whitespace
             cursor = dst;
             for (; i<argc; i++) {
                 for (; *cursor==0; cursor++);
+                //fprintf(stderr, "%s\n", cursor);
                 (*pargv)[i] = cursor;
                 for (; *cursor!=0; cursor++);
             }
@@ -223,3 +224,21 @@ void cmdutils_freeargv(char** argv) {
         free(argv);
     }
 }
+
+
+
+int cmdutils_argcheck(void* argtable, struct arg_end* end, int argc, char** argv) {
+    int rc = 0;
+    
+    if (arg_nullcheck(argtable) != 0) {
+        rc = -1;
+    }
+    if ((argc <= 1) || (arg_parse(argc, argv, argtable) > 0)) {
+        arg_print_errors(stderr, end, argv[0]);
+        ///@todo print help
+        rc = -2;
+    }
+
+    return rc;
+}
+
