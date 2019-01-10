@@ -381,12 +381,12 @@ int cmd_xloop(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, siz
     }
     
     INPUT_SANITIZE();
-    
+//fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
     /// Stage 1: Command Line Protocol Extraction
     loop.data = NULL;
     loop.cmdline = NULL;
     rc = sub_getinput(&loop, xloop_name, inbytes, src);
-
+//fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
     /// Command Running & Looping
     /// 1. Acquire Command pointer from input command.  Exit if bad command.
     /// 2. Squelch the dterm output so parser doesn't dump tons of command 
@@ -400,20 +400,20 @@ int cmd_xloop(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, siz
         char* cmd_insert;
         FILE* fp_out;
         int blocksize;
-
+//fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
         // Process Command Line and determine loop command
         cmdptr = sub_cmdproc(&loop, dth);
         if (cmdptr == NULL) {
             rc = -7;
             goto cmd_xloop_TERM;
         }
-        
+//fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
         xloop_cmd = calloc(strlen(loop.cmdline) + 2*loop.bsize_val + 2 + 1, sizeof(char));
         if (xloop_cmd == NULL) {
             rc = -8;
             goto cmd_xloop_TERM;
         }
-
+//fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
         // Squelch dterm output and get file pointer for dterm-out
         fd_out = dterm_squelch(dth->dt);
         if (fd_out < 0) {
@@ -425,7 +425,7 @@ int cmd_xloop(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, siz
             rc = -10;
             goto cmd_xloop_TERM1;
         }
-
+//fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
         // Set up subscriber, and open it
         ///@todo check command for alp.  Right now it's hard coded to FDP (1)
         subscription = subscriber_new(dth->subscribers, 1, 0, 0);
@@ -433,15 +433,15 @@ int cmd_xloop(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, siz
             rc = -11;
             goto cmd_xloop_TERM2;
         }
-
+//fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
         if (subscriber_open(subscription, 1) != 0) {
             rc = -12;
             goto cmd_xloop_TERM3;
         }
-
+//fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
         // Unlock the dtwrite mutex so parser thread can operate
         pthread_mutex_unlock(dth->dtwrite_mutex);
-
+//fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
         // Loop the command until all data is gone
         blocksize = loop.bsize_val;
         for (dat_i=0; dat_i<loop.data_size; dat_i+=blocksize) {
@@ -464,7 +464,7 @@ int cmd_xloop(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, siz
                 fprintf(fp_out, "--> Command Runtime Error: (%i)\n", rc);
                 break;
             }
-            
+//fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
             rc = subscriber_wait(subscription, loop.timeout_val);
             if (rc == 0) {
                 ///@todo check signal
@@ -484,10 +484,10 @@ int cmd_xloop(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, siz
                 fprintf(fp_out, "--> Internal Error: (%i)\n", rc);
             }
         }
-
+//fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
         // Relock dtwrite mutex to block parser
         pthread_mutex_lock(dth->dtwrite_mutex);
-
+//fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
         // Delete Subscriber (also closes), unsquelch, free
         cmd_xloop_TERM3:
         subscriber_del(dth->subscribers, subscription);
@@ -498,7 +498,7 @@ int cmd_xloop(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, siz
         cmd_xloop_TERM:
         sub_freeinput(&loop);
     }
-    
+//fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
     cmd_xloop_EXIT:
     return rc;
 }
@@ -507,7 +507,7 @@ int cmd_xloop(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, siz
 
 int cmd_sendhex(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
     static const char sendhex_name[] = "sendhex";
-    static const char xloop_fmt[] = "-f \"file wo 255 [A5A5]\" %s";
+    static const char xloop_fmt[] = "-f \"file wo 255 [5A5A]\" %s";
     int rc;
     int argc;
     char** argv;

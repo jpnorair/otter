@@ -76,6 +76,9 @@
 #ifndef OTTER_PARAM_VERSION 
 #   define OTTER_PARAM_VERSION      "0.9.0"
 #endif
+#ifndef OTTER_PARAM_GITHEAD
+#   define OTTER_PARAM_GITHEAD      "(unknown)"
+#endif
 #ifndef OTTER_PARAM_DATE
 #   define OTTER_PARAM_DATE         __DATE__
 #endif

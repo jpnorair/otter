@@ -115,26 +115,27 @@ subscr_t subscriber_new(subscr_handle_t handle, int alp_id, size_t max_frames, s
     if (table == NULL) {
         goto subscriber_new_ERR;
     }
-
+//fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
     item = subscr_add(table, alp_id);
     if (item == NULL) {
         goto subscriber_new_ERR;
     }
-
+//fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
     oldhead     = item->head;
     item->head  = malloc(sizeof(subscr_node_t));
     if (item->head == NULL) {
         goto subscriber_new_ERR1;
     }
-
+//fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
     // Initialize Cond & Mutex
     if (pthread_mutex_init(&item->head->mutex, NULL) != 0) {
         goto subscriber_new_ERR2;
     }
+//fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
     if (pthread_cond_init(&item->head->cond, NULL) != 0) {
         goto subscriber_new_ERR3;
     }
-
+//fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
     // Initialize Buffers
     ///@todo buffers not presently used
     item->head->buffers = NULL;
@@ -150,7 +151,7 @@ subscr_t subscriber_new(subscr_handle_t handle, int alp_id, size_t max_frames, s
     if (oldhead != NULL) {
         oldhead->prev   = item->head;
     }
-
+//fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
     return (subscr_t)item->head;
     
     // Error Handling
@@ -302,9 +303,13 @@ static void subscr_deinit(subscr_tab_t* table) {
 static void subscr_freenode(subscr_node_t* node) {
      if (node != NULL) {
         // Destroy threading objects
+//fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
         pthread_mutex_unlock(&node->mutex);
+//fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
         pthread_mutex_destroy(&node->mutex);
+//fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
         pthread_cond_destroy(&node->cond);
+//fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
         
         ///@todo kill buffers
         
@@ -344,13 +349,13 @@ static subscr_item_t* subscr_add(subscr_tab_t* table, int alpid) {
     if (table->alloc <= table->size) {
         subscr_item_t** newtable;
         size_t          newtable_alloc;
-        
+//fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
         newtable_alloc  = table->alloc + OTTER_SUBSCR_CHUNK;
         newtable        = realloc(table->item, newtable_alloc * sizeof(subscr_item_t*));
         if (newtable == NULL) {
             return NULL;
         }
-        
+//fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
         table->item     = newtable;
         table->alloc    = newtable_alloc;
     }
@@ -384,11 +389,10 @@ static subscr_item_t* subscr_search_insert(subscr_tab_t* table, int alpid, bool 
     l       = 0;
     r       = (int)table->size - 1;
     head    = table->item;
-    
+//fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
     while (r >= l) {
         cci = (l + r) >> 1;
         csc = local_cmp(head[cci]->alpid, alpid);
-        
         switch (csc) {
             case -1: r = cci - 1;
                      break;
@@ -397,10 +401,12 @@ static subscr_item_t* subscr_search_insert(subscr_tab_t* table, int alpid, bool 
                      break;
             
             default: output = head[cci];
-                     break;
+                     goto subscr_search_insert_ACTION;
         }
     }
-    
+//fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
+
+    subscr_search_insert_ACTION:
     if (do_insert) {
         // If the alpid is unique, then it will not be found in the search
         // above, and output == NULL.

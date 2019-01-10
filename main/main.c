@@ -282,6 +282,7 @@ int main(int argc, char* argv[]) {
     /// special case: '--version' takes precedence error reporting 
     if (version->count > 0) {
         printf("%s -- %s\n", OTTER_PARAM_VERSION, OTTER_PARAM_DATE);
+        printf("Commit-ID: %s\n", OTTER_PARAM_GITHEAD);
         printf("Designed by %s\n", OTTER_PARAM_BYLINE);
         printf("Based on otter by JP Norair (indigresso.com)\n");
         
