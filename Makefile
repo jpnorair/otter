@@ -12,7 +12,7 @@ EXT_DEF     ?=
 EXT_INC     ?= 
 EXT_LIBFLAGS ?= 
 EXT_LIBS    ?= 
-VERSION     ?= 0.6.0
+VERSION     ?= 0.9.0
 
 # Make sure the LD_LIBRARY_PATH includes the _hbsys directory
 ifneq ($(findstring $(SYSDIR)/lib,$(LD_LIBRARY_PATH)),)
@@ -25,7 +25,10 @@ else
 	LIBBSD :=
 endif
 
-DEFAULT_DEF := -D__HBUILDER__
+# Try to get git HEAD commit value
+GITHEAD := $(shell git rev-parse --short HEAD)
+
+DEFAULT_DEF := -D__HBUILDER__ -DOTTER_PARAM_GITHEAD=\"$(GITHEAD)\"
 LIBMODULES  := argtable cJSON cmdtab bintex m2def libjudy OTEAX libotfs hbuilder-lib $(EXT_LIBS)
 SUBMODULES  := cmds main test
 
