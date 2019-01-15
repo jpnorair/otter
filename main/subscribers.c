@@ -234,10 +234,8 @@ void subscriber_post(subscr_handle_t handle, int alp_id, int signal, uint8_t* pa
     subscr_item_t*  item;
     subscr_node_t*  node;
     
-//fprintf(stderr, "%s: id:%i, sig:%i, size:%zu\n", __FUNCTION__, alp_id, signal, size);
     if (table != NULL) {
         item = subscr_search_insert(table, alp_id, false);
-//fprintf(stderr, "%s: item=%016llX\n", __FUNCTION__, (uint64_t)item);
         if (item != NULL) {
             node = item->head;
             while (node != NULL) {

@@ -161,7 +161,6 @@ int user_decrypt(user_endpoint_t* endpoint, uint16_t vid, uint64_t uid, uint8_t*
     if (endpoint == NULL)   return -2;
     if (front == NULL)      return -3;
     if (frame_len == NULL)  return -4;
-    if (*frame_len < 11)    return -4;
     
     if (endpoint->devtab == NULL) {
         usertype = USER_guest;
@@ -170,38 +169,41 @@ int user_decrypt(user_endpoint_t* endpoint, uint16_t vid, uint64_t uid, uint8_t*
         usertype = endpoint->usertype;
     }
     
-    if (usertype <= USER_guest) {
-        bytes_added = 3;    // 24 bit header
-        *frame_len -= 3;    // 24 bit header
+    bytes_added = 3;    // 24 bit header
+    *frame_len -= 3;    // 24 bit header
+    
+    if (usertype == USER_guest) {
+        if (*frame_len < 4) return -4;
+    }
+    else if ((usertype == USER_root) || (usertype == USER_user)) {
+        void* ctx;
+        devtab_endpoint_t* devEP;
+        devtab_node_t node;
         
-        if (usertype < USER_guest) {
-            void* ctx;
-            devtab_endpoint_t* devEP;
-            devtab_node_t node;
-            
-            if (vid != 0) {
-                node = devtab_select_vid(endpoint->devtab, vid);
-            }
-            else {
-                node = devtab_select(endpoint->devtab, uid);
-            }
+        if (*frame_len < 8) return -4;
+        
+        if (vid != 0) {
+            node = devtab_select_vid(endpoint->devtab, vid);
+        }
+        else {
+            node = devtab_select(endpoint->devtab, uid);
+        }
 
-            devEP = devtab_resolve_endpoint(node);
+        devEP = devtab_resolve_endpoint(node);
+        
+        if (devEP == NULL) {
+            bytes_added = -1;   // error
+        }
+        else {
+            ctx = (usertype == USER_root) ? devEP->rootctx : devEP->userctx;
+            test = crypto_decrypt(front, front+7, *frame_len-(4+4), ctx);
             
-            if (devEP == NULL) {
-                bytes_added = -1;   // error
+            if (test != 0) {
+                bytes_added = -1;       // error
             }
             else {
-                ctx = (usertype == USER_root) ? devEP->rootctx : devEP->userctx;
-                test = crypto_decrypt(front, front+7, *frame_len-(4+4), ctx);
-                
-                if (test != 0) {
-                    bytes_added = -1;       // error
-                }
-                else {
-                    bytes_added += 4;       // nonce (4)
-                    *frame_len  -= (4 + 4); // nonce (4) and MAC tag (4)
-                }
+                bytes_added += 4;       // nonce (4)
+                *frame_len  -= (4 + 4); // nonce (4) and MAC tag (4)
             }
         }
     }

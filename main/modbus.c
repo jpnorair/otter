@@ -299,7 +299,7 @@ void* modbus_parser(void* args) {
 ///          print it out in a human-readable way. </LI>
 ///
     static char putsbuf[2048];
-    mpipe_arg_t* mparg              = ((mpipe_arg_t*)args);
+    mpipe_arg_t* mparg = ((mpipe_arg_t*)args);
 
     while (1) {
         int pkt_condition;  // tracks some error conditions
@@ -408,7 +408,6 @@ void* modbus_parser(void* args) {
                 if (msgtype == 0) {
                     int subsig;
                     proc_result = fmt_fprintalp(&sub_dtputs, mparg->msgcall, msg, msgbytes);
-                    
                     ///@todo figure out if this extra formatting step is necessary
                     ///      it is here to print a certain type of frame.
 //                    if (output_bytes != 0) {

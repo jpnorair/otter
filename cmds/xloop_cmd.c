@@ -381,12 +381,12 @@ int cmd_xloop(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, siz
     }
     
     INPUT_SANITIZE();
-//fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
+
     /// Stage 1: Command Line Protocol Extraction
     loop.data = NULL;
     loop.cmdline = NULL;
     rc = sub_getinput(&loop, xloop_name, inbytes, src);
-//fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
+
     /// Command Running & Looping
     /// 1. Acquire Command pointer from input command.  Exit if bad command.
     /// 2. Squelch the dterm output so parser doesn't dump tons of command 
@@ -400,20 +400,20 @@ int cmd_xloop(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, siz
         char* cmd_insert;
         FILE* fp_out;
         int blocksize;
-//fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
+
         // Process Command Line and determine loop command
         cmdptr = sub_cmdproc(&loop, dth);
         if (cmdptr == NULL) {
             rc = -7;
             goto cmd_xloop_TERM;
         }
-//fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
+
         xloop_cmd = calloc(strlen(loop.cmdline) + 2*loop.bsize_val + 2 + 1, sizeof(char));
         if (xloop_cmd == NULL) {
             rc = -8;
             goto cmd_xloop_TERM;
         }
-//fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
+
         // Squelch dterm output and get file pointer for dterm-out
         fd_out = dterm_squelch(dth->dt);
         if (fd_out < 0) {
@@ -425,7 +425,7 @@ int cmd_xloop(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, siz
             rc = -10;
             goto cmd_xloop_TERM1;
         }
-//fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
+
         // Set up subscriber, and open it
         ///@todo check command for alp.  Right now it's hard coded to FDP (1)
         subscription = subscriber_new(dth->subscribers, 1, 0, 0);
@@ -433,18 +433,17 @@ int cmd_xloop(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, siz
             rc = -11;
             goto cmd_xloop_TERM2;
         }
-//fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
         if (subscriber_open(subscription, 1) != 0) {
             rc = -12;
             goto cmd_xloop_TERM3;
         }
-//fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
+
         // Unlock the dtwrite mutex so parser thread can operate
         pthread_mutex_unlock(dth->dtwrite_mutex);
-//fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
+
         // Loop the command until all data is gone
         blocksize = loop.bsize_val;
-        for (dat_i=0; dat_i<loop.data_size; dat_i+=blocksize) {
+        for (dat_i=0; dat_i<loop.data_size; ) {
         
             switch (loop.data_type) {
                 default:
@@ -457,33 +456,45 @@ int cmd_xloop(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, siz
                     break;
             }
 
-//fprintf(stderr, "XLOOP RUN: %s\n", xloop_cmd);
             rc = sub_cmdrun(dth, cmdptr, xloop_cmd, dst, dstmax);
             if (rc < 0) {
                 rc += -256;
-                fprintf(fp_out, "--> Command Runtime Error: (%i)\n", rc);
+                fprintf(fp_out, "--> Command Runtime Error: (%i)", rc);
                 break;
             }
-//fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
+
             rc = subscriber_wait(subscription, loop.timeout_val);
             if (rc == 0) {
                 ///@todo check signal
-                //fprintf(fp_out, "\rStatus: %i/%i ", dat_i, loop.data_size);
-                fprintf(fp_out, "Status: %i/%i\n", dat_i, loop.data_size);
+                
+                dat_i += blocksize;
+                
+                if (cliopt_isverbose() || cliopt_isdebug()) {
+                    fprintf(fp_out, "Status: %i/%i (%i%%)\n", dat_i, loop.data_size, (int)((100*dat_i)/loop.data_size));
+                }
+                else {
+                    fputs(VT100_CLEAR_LN, fp_out);
+                    fflush(fp_out);
+                    fprintf(fp_out, "Status: %i/%i (%i%%)", dat_i, loop.data_size, (int)((100*dat_i)/loop.data_size));
+                    fflush(fp_out);
+                }
+                
                 loop.retries_cnt = loop.retries_val;
             }
             else if (rc == ETIMEDOUT) {
                 if (--loop.retries_cnt <= 0) {
-                    fprintf(fp_out, "--> Command Timeout Error\n");
+                    fputs("--> Command Timeout Error", fp_out);
                     rc = -13;
                     break;
                 }
-                dat_i -= blocksize;
             }
             else {
-                fprintf(fp_out, "--> Internal Error: (%i)\n", rc);
+                fprintf(fp_out, "--> Internal Error: (%i)", rc);
+                break;
             }
         }
+        fputs("\n", fp_out);
+        
 //fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
         // Relock dtwrite mutex to block parser
         pthread_mutex_lock(dth->dtwrite_mutex);
