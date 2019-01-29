@@ -39,6 +39,7 @@
 static int sub_editnode(dterm_handle_t* dth, int argc, char** argv, bool require_exists) {
     struct arg_str* uid     = arg_str1(NULL,NULL,"UID",             "64 bit UID as Bintex expression");
     struct arg_int* vid     = arg_int0("v","vid","VID",             "VID as integer, 0-65535.");
+    struct arg_lit* pre     = arg_lit0("p", NULL,                   "If UID pre-exists, edit the node.");
     struct arg_str* intf    = arg_str0("i", "intf", "ttyfile",      "TTY associated with node.");
     struct arg_str* rootkey = arg_str0("r", "root", "key",          "128 bit AES key as Bintex expression");
     struct arg_str* userkey = arg_str0("u", "user", "key",          "128 bit AES key as Bintex expression");
@@ -68,7 +69,9 @@ static int sub_editnode(dterm_handle_t* dth, int argc, char** argv, bool require
     /// UID is a required element
     bintex_ss(uid->sval[0], (uint8_t*)&uid_val, 8);
     node = devtab_select(dth->endpoint.devtab, uid_val);
-    if ((require_exists && (node == NULL)) || (!require_exists && (node != NULL))) {
+    if( (require_exists && (node == NULL))
+    || ((require_exists==false) && (pre->count==0) && (node != NULL))
+    ) {
         rc = -3;
         goto sub_editnode_TERM;
     }
@@ -76,7 +79,7 @@ static int sub_editnode(dterm_handle_t* dth, int argc, char** argv, bool require
     if (vid->count > 0) {
         vid_val = (uint16_t)vid->ival[0];
     }
-    else if (require_exists) {
+    else if (node != NULL) {
         vid_val = devtab_get_vid(dth->endpoint.devtab, node);
     }
     else {
@@ -87,7 +90,7 @@ static int sub_editnode(dterm_handle_t* dth, int argc, char** argv, bool require
         ///@todo search for interface pointer based on device
         intf_val = (void*)intf->sval[0];
     }
-    else if (require_exists) {
+    else if (node != NULL) {
         intf_val = devtab_get_intf(dth->endpoint.devtab, node);
     }
     else {
@@ -99,7 +102,7 @@ static int sub_editnode(dterm_handle_t* dth, int argc, char** argv, bool require
         memset(rootkey_dat, 0, 16);
         bintex_ss(rootkey->sval[0], rootkey_dat, 16);
     }
-    else if (require_exists) {
+    else if (node != NULL) {
         rootkey_val = devtab_get_rootctx(dth->endpoint.devtab, node);
     }
     else {
@@ -111,7 +114,7 @@ static int sub_editnode(dterm_handle_t* dth, int argc, char** argv, bool require
         memset(userkey_dat, 0, 16);
         bintex_ss(userkey->sval[0], userkey_dat, 16);
     }
-    else if (require_exists) {
+    else if (node != NULL) {
         userkey_val = devtab_get_userctx(dth->endpoint.devtab, node);
     }
     else {

@@ -66,6 +66,13 @@ void user_deinit(void);
 
 
 
+/** @brief gets usertype from descriptive string
+  * @param type_string  (const char*) user type string (root, user, guest)
+  * @retval int         Zero on success. Negative on error.
+  */
+USER_Type user_get_type(const char* type_string);
+
+
 
 /** @brief Put header and nonce to packet buffer, prior to encryption stage.
   * @param usertype     (USER_Type) Type value of user.

@@ -361,6 +361,29 @@ devtab_endpoint_t* devtab_resolve_endpoint(devtab_node_t node) {
 }
 
 
+int devtab_validate_usertype(devtab_node_t* node, int userindex) {
+    devtab_endpoint_t* endpoint;
+
+    endpoint = devtab_resolve_endpoint(node);
+    if (endpoint == NULL) {
+        return -1;
+    }
+
+    if ((USER_Type)userindex == USER_root) {
+        if (endpoint->rootctx == NULL) {
+            return -2;
+        }
+    }
+
+    if ((USER_Type)userindex == USER_user) {
+        if (endpoint->userctx == NULL) {
+            return -2;
+        }
+    }
+
+    return 0;
+}
+
 
 uint16_t devtab_get_vid(devtab_handle_t handle, devtab_node_t node) {
     devtab_t* table = handle;

@@ -20,6 +20,7 @@
 #include <stdio.h>
 #include <stdint.h>
 
+
 typedef void* devtab_handle_t;
 
 typedef void* devtab_node_t;
@@ -52,6 +53,8 @@ int devtab_remove(devtab_handle_t handle, uint64_t uid);
 int devtab_unlist(devtab_handle_t handle, uint16_t vid);
 
 devtab_endpoint_t* devtab_resolve_endpoint(devtab_node_t node);
+int devtab_validate_usertype(devtab_node_t* node, int userindex);
+
 uint16_t devtab_get_vid(devtab_handle_t handle, devtab_node_t node);
 void* devtab_get_intf(devtab_handle_t handle, devtab_node_t node);
 void* devtab_get_rootctx(devtab_handle_t handle, devtab_node_t node);
@@ -65,3 +68,5 @@ void* devtab_lookup_userctx(devtab_handle_t handle, uint64_t uid);
 
 
 #endif
+
+

@@ -78,8 +78,10 @@ void* modbus_reader(void* args) {
 /// <LI> Assembles the packet from TTY data. </LI>
 /// <LI> Adds packet into mpipe.rlist, sends cond-sig to modbus_parser. </LI>
 
-    struct pollfd fds[1];
+    struct pollfd* fds = NULL;
+    int num_fds;
     int pollcode;
+    int ready_fds;
     
     uint8_t rbuf[1024];
     uint8_t* rbuf_cursor;
@@ -90,7 +92,7 @@ void* modbus_reader(void* args) {
     
     // Local copy of MPipe Ctl data: it is used in multiple threads without
     // mutexes (it is read-only anyway)
-    mpipe_ctl_t mpctl               = *((mpipe_arg_t*)args)->mpctl;
+    mpipe_handle_t mph = ((mpipe_arg_t*)args)->handle;
     
     // The Packet lists are used between threads and thus are Mutexed references
     pktlist_t* rlist                = ((mpipe_arg_t*)args)->rlist;
@@ -102,102 +104,134 @@ void* modbus_reader(void* args) {
     //fnctl(dt->fd_in, F_SETFL, 0);  
     
     /// Setup for usage of the poll function to flush buffer on read timeouts.
-    fds[0].fd       = mpctl.tty_fd;
-    fds[0].events   = (POLLIN | POLLNVAL | POLLHUP);
-    
-    /// Beginning of read loop
-    modbus_reader_START:
-    mpipe_flush(&mpctl, 0, TCIFLUSH);
-    errcode = 0;
-    
-    /// Otter Modbus Spec 
-    /// SOF delay time              1750us
-    /// EOF delay time              1750us
-    /// Intraframe delay limit      1ms
-    
-    // Receive the first byte
-    // If returns an error, exit
-    pollcode = poll(fds, 1, -1);
-    if (pollcode <= 0) {
-        errcode = 5;
-        goto modbus_reader_ERR;
+    num_fds = mpipe_pollfd_alloc(mph, fds, (POLLIN | POLLNVAL | POLLHUP));
+    if (num_fds <= 0) {
+        goto modbus_reader_TERM;
     }
     
-    // Receive subsequent bytes
-    // abort when there's a long-enough break in reception
-    rbuf_cursor = rbuf;
-    read_limit  = 1024;
-    while (read_limit > 0) {
-        int new_bytes;
+    while (1) {
+        errcode = 0;
         
-        // 1. Read all bytes that have been received, but don't go beyond limit
-        new_bytes       = read(mpctl.tty_fd, rbuf_cursor, read_limit);
-        rbuf_cursor    += new_bytes;
-        read_limit     -= new_bytes;
+        // This will flush all fds, which we definitely don't want to do
+        //mpipe_flush(mph, -1, 0, TCIFLUSH);
         
-        // 2. Poll function will do a timeout waiting for next byte(s).  In Modbus, 
-        //    data timeout means end-of-frame.
-        pollcode = poll(fds, 1, OTTER_PARAM(MBTIMEOUT));
+        /// Otter Modbus Spec
+        /// SOF delay time              1750us
+        /// EOF delay time              1750us
+        /// Intraframe delay limit      1ms
         
-        if (pollcode == 0) {
-            // delay limit detected: frame is over
-            //errcode = 4;
-            break;
+        // Receive the first byte
+        // If returns an error, exit
+        ready_fds = poll(fds, num_fds, -1);
+        if (ready_fds <= 0) {
+            fprintf(stderr, "Polling failure: quitting now\n");
+            goto modbus_reader_TERM;
         }
-        else if (pollcode < 0) {
-            // some type of error, exit
-            errcode = 4;
-            goto modbus_reader_ERR;
-        }
-    }
     
-    /// In Modbus, frame length is determined implicitly based on the number
-    /// of bytes received prior to a idle-time violation.
-    frame_length  = rbuf_cursor - rbuf;
-    
-    /// Now do some checks to prevent malformed packets.
-    if (((unsigned int)frame_length < 4) \
-    ||  ((unsigned int)frame_length > 256)) {
-        errcode = 2;
-        goto modbus_reader_ERR;
-    }
+        for (int i=0; i<num_fds; i++) {
+            // Handle Errors
+            ///@todo change 100ms fixed wait on hangup to a configurable amount
+            if (fds[i].revents & (POLLNVAL|POLLHUP)) {
+                usleep(100 * 1000);
+                if (mpipe_reopen(mph, i) == 0) {
+                    mpipe_flush(mph, i, 0, TCIFLUSH);
+                    continue;
+                }
+                else {
+                    errcode = 5;
+                    goto modbus_reader_ERR;
+                }
+            }
+            
+            // Verify that POLLIN is high.  This should be implicit, but we check explicitly here
+            if ((fds[i].revents & POLLIN) == 0) {
+                mpipe_flush(mph, i, 0, TCIFLUSH);
+                continue;
+            }
+            
+            // Receive subsequent bytes
+            // abort when there's a long-enough break in reception
+            rbuf_cursor = rbuf;
+            read_limit  = 1024;
+            while (read_limit > 0) {
+                int new_bytes;
+                
+                // 1. Read all bytes that have been received, but don't go beyond limit
+                new_bytes       = read(fds[i].fd, rbuf_cursor, read_limit);
+                rbuf_cursor    += new_bytes;
+                read_limit     -= new_bytes;
+                
+                // 2. Poll function will do a timeout waiting for next byte(s).  In Modbus,
+                //    data timeout means end-of-frame.
+                pollcode = poll(&fds[i], 1, OTTER_PARAM(MBTIMEOUT));
+                if (pollcode == 0) {
+                    // delay limit detected: frame is over
+                    break;
+                }
+                else if (pollcode < 0) {
+                    // some type of error, exit
+                    errcode = 4;
+                    goto modbus_reader_ERR;
+                }
+            }
+        
+            /// In Modbus, frame length is determined implicitly based on the number
+            /// of bytes received prior to a idle-time violation.
+            frame_length  = rbuf_cursor - rbuf;
+            
+            /// Now do some checks to prevent malformed packets.
+            if (((unsigned int)frame_length < 4) \
+            ||  ((unsigned int)frame_length > 256)) {
+                errcode = 2;
+                goto modbus_reader_ERR;
+            }
 
-    /// Copy the packet to the rlist and signal modbus_parser()
-    pthread_mutex_lock(rlist_mutex);
-    list_size = pktlist_add_rx(endpoint, rlist, rbuf, (size_t)frame_length);
-    pthread_mutex_unlock(rlist_mutex);
-    
-    if (list_size <= 0) {
-        errcode = 3;
-    }
-    
-    /// Error Handler: wait a few milliseconds, then handle the error.
-    /// @todo supply estimated bytes remaining into modbus_flush()
-    modbus_reader_ERR:
-    switch (errcode) {
-        case 0: TTY_RX_PRINTF("Packet Received Successfully (%d bytes).\n", frame_length);
-                HEX_DUMP(rbuf, frame_length, "Reading %d Bytes on tty\n", frame_length);
-                pthread_cond_signal(pktrx_cond);
-                goto modbus_reader_START;
+            /// Copy the packet to the rlist and signal modbus_parser()
+            pthread_mutex_lock(rlist_mutex);
+            list_size = pktlist_add_rx(endpoint, rlist, rbuf, (size_t)frame_length);
+            pthread_mutex_unlock(rlist_mutex);
+            
+            if (list_size <= 0) {
+                errcode = 3;
+            }
         
-        case 2: TTY_RX_PRINTF("Modbus Packet Payload Length (%d bytes) is out of bounds.\n", frame_length);
-                goto modbus_reader_START;
+            /// Error Handler: wait a few milliseconds, then handle the error.
+            /// @todo supply estimated bytes remaining into modbus_flush()
+            modbus_reader_ERR:
+            switch (errcode) {
+                case 0: TTY_RX_PRINTF("Packet Received Successfully (%d bytes).\n", frame_length);
+                        HEX_DUMP(rbuf, frame_length, "Reading %d Bytes on tty\n", frame_length);
+                        pthread_cond_signal(pktrx_cond);
+                        break;
                 
-        case 3: TTY_RX_PRINTF("Modbus Packet frame has invalid data (bad crypto or CRC).\n");
-                goto modbus_reader_START;
-                
-        case 4: TTY_RX_PRINTF("Modbus Packet RX timed-out\n");
-                goto modbus_reader_START;
-                
-        case 5: fprintf(stderr, "Connection dropped, quitting now\n");
-                break;
-                
-       default: fprintf(stderr, "Unknown error, quitting now\n");
-                break;
+                case 2: TTY_RX_PRINTF("Modbus Packet Payload Length (%d bytes) is out of bounds.\n", frame_length);
+                        break;
+                    
+                case 3: TTY_RX_PRINTF("Modbus Packet frame has invalid data (bad crypto or CRC).\n");
+                        break;
+                    
+                case 4: TTY_RX_PRINTF("Modbus Packet RX timed-out\n");
+                        break;
+                    
+                case 5: fprintf(stderr, "Dropped %s: quitting now\n", mpipe_file_get(mph, i));
+                        goto modbus_reader_TERM;
+                    
+               default: fprintf(stderr, "Unknown Error during tty polling: quitting now\n");
+                        goto modbus_reader_TERM;
+            }
+        }
     }
     
-    /// This occurs on uncorrected errors, such as case 4 from above, or other 
-    /// unknown errors.
+    /// ---------------------------------------------------------------------
+    /// Code below this line occurs during fatal errors
+    
+    modbus_reader_TERM:
+    mpipe_flush(mph, -1, 0, TCIFLUSH);
+    
+    if (fds != NULL) {
+        free(fds);
+    }
+    
     raise(SIGINT);
     return NULL;
 }
@@ -211,7 +245,7 @@ void* modbus_writer(void* args) {
 ///          been added to mpipe.tlist, via a cond-signal. </LI>
 /// <LI> Sends the packet over the TTY. </LI>
 ///
-    mpipe_ctl_t mpctl                   = *((mpipe_arg_t*)args)->mpctl;
+    mpipe_handle_t mph                  = ((mpipe_arg_t*)args)->handle;
     pktlist_t* tlist                    = ((mpipe_arg_t*)args)->tlist;
     pthread_cond_t* tlist_cond          = ((mpipe_arg_t*)args)->tlist_cond;
     pthread_mutex_t* tlist_cond_mutex   = ((mpipe_arg_t*)args)->tlist_cond_mutex;
@@ -229,6 +263,7 @@ void* modbus_writer(void* args) {
         
         while (tlist->cursor != NULL) {
             pkt_t* txpkt;
+            mpipe_fd_t* intf_fd;
             
             /// Modbus 1.75ms idle SOF
             usleep(1750);
@@ -248,7 +283,10 @@ void* modbus_writer(void* args) {
                 tlist->cursor   = tlist->marker;
             }
             
-            {   int bytes_left;
+            intf_fd = mpipe_fds_get(mph, txpkt->intf_id);
+            
+            if (intf_fd != NULL) {
+                int bytes_left;
                 int bytes_sent;
                 uint8_t* cursor;
                 
@@ -260,7 +298,7 @@ void* modbus_writer(void* args) {
                 HEX_DUMP(cursor, bytes_left, "Writing %d bytes to tty\n", bytes_left);
 
                 while (bytes_left > 0) {
-                    bytes_sent  = (int)write(mpctl.tty_fd, cursor, bytes_left);
+                    bytes_sent  = (int)write(intf_fd->out, cursor, bytes_left);
                     cursor     += bytes_sent;
                     bytes_left -= bytes_sent;
                 }

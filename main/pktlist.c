@@ -25,18 +25,39 @@
 /// mpipe_del():    Deletes a packet from some place in the rlist or tlist
 
 int pktlist_init(pktlist_t* plist) {
-    plist->front    = NULL;
-    plist->last     = NULL;
-    plist->cursor   = NULL;
-    plist->marker   = NULL;
-    plist->size     = 0;
-    plist->txnonce  = 0;
-    
-    return 0;
+    if (plist != NULL) {
+        plist->front    = NULL;
+        plist->last     = NULL;
+        plist->cursor   = NULL;
+        plist->marker   = NULL;
+        plist->size     = 0;
+        plist->txnonce  = 0;
+        return 0;
+    }
+    return -1;
 }
 
 
+void pktlist_free(pktlist_t* plist) {
+    if (plist != NULL) {
+        pkt_t* pkt = plist->front;
+    
+        while (pkt != NULL) {
+            pkt_t* next_pkt = pkt->next;
+            if (pkt->buffer != NULL) {
+                free(pkt->buffer);
+            }
+            free(pkt);
+            pkt = next_pkt;
+        }
+    }
+}
 
+
+void pktlist_empty(pktlist_t* plist) {
+    pktlist_free(plist);
+    pktlist_init(plist);
+}
 
 
 
@@ -345,11 +366,11 @@ static int sub_pktlist_add(user_endpoint_t* endpoint, pktlist_t* plist, uint8_t*
 
 
 
-int pktlist_add_tx(user_endpoint_t* endpoint, pktlist_t* plist, uint8_t* data, size_t size) {
+int pktlist_add_tx(user_endpoint_t* endpoint, pktlist_t* plist, int intf_id, uint8_t* data, size_t size) {
     return sub_pktlist_add(endpoint, plist, data, size, true);
 }
 
-int pktlist_add_rx(user_endpoint_t* endpoint, pktlist_t* plist, uint8_t* data, size_t size) {
+int pktlist_add_rx(user_endpoint_t* endpoint, pktlist_t* plist, int intf_id, uint8_t* data, size_t size) {
     return sub_pktlist_add(endpoint, plist, data, size, false);
 }
 

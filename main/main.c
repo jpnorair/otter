@@ -73,11 +73,19 @@
 #include <assert.h>
 
 
+// tty specifier data type
+typedef struct {
+    char* ttyfile;
+    int baudrate;
+    int enc_bits;
+    int enc_parity;
+    int enc_stopbits;
+} ttyspec_t;
+
+
 
 // Client Data type
 ///@todo some of this should get merged into MPipe data type
-
-static cliopt_t cliopts;
 
 typedef struct {
     //FILE*           out;
@@ -93,10 +101,8 @@ typedef struct {
     
 } cli_struct;
 
+static cliopt_t cliopts;
 cli_struct cli;
-
-
-
 
 
 
@@ -130,9 +136,14 @@ void sigquit_handler(int sigcode) {
 }
 
 
-int otter_main( const char* ttyfile,
-                int baudrate,
-                int enc_bits, int enc_parity, int enc_stopbits,
+ttyspec_t* otter_ttylist_init(size_t size);
+
+char* otter_ttylist_add(ttyspec_t* ttylist_item, const char* path);
+
+void otter_ttylist_free(ttyspec_t* ttylist, size_t size);
+
+int otter_main( ttyspec_t* ttylist,
+                size_t num_tty,
                 bool pipe,
                 bool quiet,
                 const char* xpath,
@@ -142,12 +153,9 @@ int otter_main( const char* ttyfile,
 INTF_Type sub_intf_cmp(const char* s1);
 FORMAT_Type sub_fmt_cmp(const char* s1);
 
-void sub_json_loadargs(cJSON* json, 
-                       char* ttyfile, 
-                       int* baudrate_val, 
-                       int* enc_bits,
-                       int* enc_parity,
-                       int* enc_stop,
+void otter_json_loadargs(cJSON* json,
+                       ttyspec_t** ttylist,
+                       int* num_tty,
                        int* intf_val,
                        int* fmt_val,
                        bool* pipe_val,
@@ -241,19 +249,13 @@ int main(int argc, char* argv[]) {
     int nerrors;
     bool bailout        = true;
     int exitcode        = 0;
-    
-    char* ttyfile_val   = NULL;
+    int num_tty         = 0;
+    ttyspec_t* ttylist  = NULL;
     char* xpath_val     = NULL;
     cJSON* json         = NULL;
     char* buffer        = NULL;
-    
-    int  baudrate_val   = OTTER_PARAM_DEFBAUDRATE;
     INTF_Type intf_val  = OTTER_FEATURE(MPIPE) ? INTF_mpipe : INTF_modbus;
     FORMAT_Type fmt_val = FORMAT_Default;
-    int enc_bits        = 8;
-    int enc_parity      = (int)'N';
-    int enc_stopbits    = (intf_val == INTF_modbus) ? 2 : 1;
-    
     bool quiet_val      = false;
     bool pipe_val       = false;
     bool verbose_val    = false;
@@ -311,6 +313,8 @@ int main(int argc, char* argv[]) {
     /// Do some final checking of input values
     ///@todo Validate that we're looking at something like "/dev/tty.usb..."
     
+    
+    
     /// Get JSON config input.  Priority is direct input vs. file input
     /// 1. There is an "arguments" object that works the same as the command 
     ///    line arguments.  
@@ -356,12 +360,9 @@ int main(int argc, char* argv[]) {
         {   int tmp_intf = (int)intf_val;
             int tmp_fmt  = (int)fmt_val;
             
-            sub_json_loadargs(  json, 
-                                ttyfile_val, 
-                                &baudrate_val, 
-                                &enc_bits, 
-                                &enc_parity, 
-                                &enc_stopbits, 
+            otter_json_loadargs(  json,
+                                &ttylist,
+                                &num_tty,
                                 &tmp_intf,
                                 &tmp_fmt,
                                 &pipe_val, 
@@ -375,24 +376,24 @@ int main(int argc, char* argv[]) {
         }
     }
     
-    /// If no JSON file, then configuration should be through the arguments.
-    /// If both exist, then the arguments will override JSON.
-    /// Handle case with explicit host:port.  Explicit host/port will override
-    /// a supplied url.
+    /// Arguments through the command line take precedence over JSON
     if (ttyfile->count == 0) {
-        printf("Input error: no tty provided\n");
-        printf("Try '%s --help' for more information.\n", progname);
-        goto main_FINISH;
-    }
-    FILL_STRINGARG(ttyfile, ttyfile_val);
-
-    if (brate->count != 0) {
-        baudrate_val = brate->ival[0];
-    }
-    if (ttyenc->count != 0) {
-        enc_bits        = (int)ttyenc->sval[0][0];
-        enc_parity      = (int)ttyenc->sval[0][1];
-        enc_stopbits    = (int)ttyenc->sval[0][2];
+        otter_ttylist_free(ttylist, num_tty);
+        
+        num_tty = 1;
+        ttylist = otter_ttylist_init(1);
+        if (ttylist == NULL) {
+            goto main_FINISH;
+        }
+        
+        otter_ttylist_add(&ttylist[0], ttyfile->filename[0]);
+        ttylist[0].baudrate = brate->count ? brate->ival[0] : OTTER_PARAM_DEFBAUDRATE;
+        if (ttyenc->count != 0) {
+            int str_sz              = (int)strlen(ttyenc->sval[0]);
+            ttylist[0].enc_bits     = (str_sz > 0) ? (int)ttyenc->sval[0][0] : 8;
+            ttylist[0].enc_parity   = (str_sz > 1) ? (int)ttyenc->sval[0][1] : (int)'N';
+            ttylist[0].enc_stopbits = (str_sz > 2) ? (int)ttyenc->sval[0][2] : 1;
+        }
     }
     if (pipe->count != 0) {
         pipe_val = true;
@@ -414,6 +415,7 @@ int main(int argc, char* argv[]) {
         verbose_val = true;
     }
     
+    
     /// Client Options.  These are read-only from internal modules
     cliopts.intf        = intf_val;
     cliopts.format      = fmt_val;
@@ -426,25 +428,35 @@ int main(int argc, char* argv[]) {
     /// Send all configuration data to program main function.
     bailout = false;
     
+    /// Final value checks
     main_FINISH:
+    if (ttylist == NULL) {
+        printf("Input error: no tty provided\n");
+        printf("Try '%s --help' for more information.\n", progname);
+        bailout = true;
+    }
+    
+    /// Free un-necessary resources
     arg_freetable(argtable, sizeof(argtable)/sizeof(argtable[0]));
     
+    /// Run otter if no issues
     if (bailout == false) {
-        exitcode = otter_main(  (const char*)ttyfile_val, 
-                                baudrate_val, 
-                                enc_bits, enc_parity, enc_stopbits,
+        exitcode = otter_main(  ttylist,
+                                num_tty,
                                 pipe_val,
                                 quiet_val,
                                 (const char*)xpath_val,
                                 json    );
     }
-    if (ttyfile_val != NULL) {
-        free(ttyfile_val);
-    }
+
+    /// Free all data that was needed by the otter main program
+    otter_ttylist_free(ttylist, num_tty);
+
     if (xpath_val != NULL) {
         free(xpath_val);
     }
     if (buffer != NULL) {
+        ///@todo see if it's possible to free the json file buffer earlier
         free(buffer);
     }
     if (json != NULL) {
@@ -456,12 +468,40 @@ int main(int argc, char* argv[]) {
 
 
 
+ttyspec_t* otter_ttylist_init(size_t size) {
+    ttyspec_t* ttylist;
+    ttylist = calloc(size, sizeof(ttyspec_t));
+    return ttylist;
+}
+
+char* otter_ttylist_add(ttyspec_t* ttylist_item, const char* path) {
+    if (ttylist_item != NULL) {
+        ttylist_item->ttyfile = calloc(strlen(path)+1, sizeof(char));
+        if (ttylist_item->ttyfile != NULL) {
+            strcpy(ttylist_item->ttyfile, path);
+            return ttylist_item->ttyfile;
+        }
+    }
+    return NULL;
+}
+
+void otter_ttylist_free(ttyspec_t* ttylist, size_t size) {
+    if (ttylist != NULL) {
+        while (size != 0) {
+            size--;
+            if (ttylist[size].ttyfile != NULL) {
+                free(ttylist[size].ttyfile);
+            }
+        }
+    }
+}
+
+
 
 /// What this should do is start two threads, one for the character I/O on
 /// the dterm side, and one for the serial I/O.
-int otter_main( const char* ttyfile, 
-                int baudrate, 
-                int enc_bits, int enc_parity, int enc_stopbits,
+int otter_main( ttyspec_t* ttylist,
+                size_t num_tty,
                 bool pipe, 
                 bool quiet,
                 const char* xpath,
@@ -472,7 +512,7 @@ int otter_main( const char* ttyfile,
     // MPipe Datastructs
     int         mpipe_fd;
     mpipe_arg_t mpipe_args;
-    mpipe_ctl_t mpipe_ctl;
+    mpipe_handle_t mpipe_handle;
     pktlist_t   mpipe_tlist;
     pktlist_t   mpipe_rlist;
 #   if OTTER_FEATURE(MODBUS)
@@ -556,8 +596,12 @@ int otter_main( const char* ttyfile,
     }
 
     /// Initialize packet lists for transmitted packets and received packets
-    pktlist_init(&mpipe_rlist);
-    pktlist_init(&mpipe_tlist);
+    if ((pktlist_init(&mpipe_rlist) != 0)
+    ||  (pktlist_init(&mpipe_tlist) != 0)) {
+        fprintf(stderr, "Pktlist Initialization Failure (%i)\n", rc);
+        cli.exitcode = 5;
+        goto otter_main_EXIT;
+    }
     
     /// Initialize the ppipe system of named pipes, based on the input json
     /// configuration file.  We have input and output pipes of several types.
@@ -581,15 +625,21 @@ int otter_main( const char* ttyfile,
             break;
         }
     }
-
+    
+    /// Initialize mpipe memory
+    rc = mpipe_init(&mpipe_handle, num_tty);
+    if (rc != 0) {
+        fprintf(stderr, "MPipe Initialization Failure (%i)\n", rc);
+        cli.exitcode = 6;
+        goto otter_main_EXIT;
+    }
+    
     /// Initialize Thread Mutexes & Conds.  This is finnicky and it must be
     /// done before assignment into the argument containers, possibly due to 
     /// C-compiler foolishly optimizing.
-    
     assert( pthread_mutex_init(&dtwrite_mutex, NULL) == 0 );
     assert( pthread_mutex_init(&rlist_mutex, NULL) == 0 );
     assert( pthread_mutex_init(&tlist_mutex, NULL) == 0 );
-    
     assert( pthread_mutex_init(&cli.kill_mutex, NULL) == 0 );
     pthread_cond_init(&cli.kill_cond, NULL);
     assert( pthread_mutex_init(&tlist_cond_mutex, NULL) == 0 );
@@ -599,7 +649,7 @@ int otter_main( const char* ttyfile,
 
     /// Open the mpipe TTY & Setup MPipe threads
     /// The MPipe Filename (e.g. /dev/ttyACMx) is sent as the first argument
-    mpipe_args.mpctl            = &mpipe_ctl;
+    mpipe_args.handle           = mpipe_handle;
     mpipe_args.rlist            = &mpipe_rlist;
     mpipe_args.tlist            = &mpipe_tlist;
     //mpipe_args.puts_fn          = &_dtputs;
@@ -615,11 +665,19 @@ int otter_main( const char* ttyfile,
     mpipe_args.kill_cond        = &cli.kill_cond;
     mpipe_args.endpoint         = &dterm_args.endpoint;
     mpipe_args.subscribers      = dterm_args.subscribers;
-
-    mpipe_fd = mpipe_open(&mpipe_ctl, ttyfile, baudrate, enc_bits, enc_parity, enc_stopbits, 0, 0, 0);
-    if (mpipe_fd < 0) {
-        cli.exitcode = 5;
-        goto otter_main_EXIT;
+    for (int i=0; i<num_tty; i++) {
+        int open_rc;
+        open_rc = mpipe_opentty(mpipe_handle, i,
+                                ttylist[i].ttyfile,
+                                ttylist[i].baudrate,
+                                ttylist[i].enc_bits,
+                                ttylist[i].enc_parity,
+                                ttylist[i].enc_stopbits,
+                                0, 0, 0);
+        if (open_rc < 0) {
+            cli.exitcode = 7;
+            goto otter_main_EXIT;
+        }
     }
     
     /// Open DTerm interface & Setup DTerm threads
@@ -641,9 +699,8 @@ int otter_main( const char* ttyfile,
     dterm_args.kill_mutex       = &cli.kill_mutex;
     dterm_args.kill_cond        = &cli.kill_cond;
     dterm_fn                    = (pipe == false) ? &dterm_prompter : &dterm_piper;
-
     if (dterm_open(&dterm, pipe) < 0) {
-        cli.exitcode = 6;
+        cli.exitcode = 8;
         goto otter_main_EXIT;
     }
 
@@ -668,6 +725,8 @@ int otter_main( const char* ttyfile,
         if (cliopt_getintf() == INTF_modbus) {
             DEBUG_PRINTF("Opening Modbus Interface\n");
             smut_handle = smut_init();
+            ///@todo have a function here that returns a handle, and the handle
+            ///      is also what's deallocated.  Tie together with mpipe_open().
             pthread_create(&thr_mpreader, NULL, &modbus_reader, (void*)&mpipe_args);
             pthread_create(&thr_mpwriter, NULL, &modbus_writer, (void*)&mpipe_args);
             pthread_create(&thr_mpparser, NULL, &modbus_parser, (void*)&mpipe_args);
@@ -676,6 +735,8 @@ int otter_main( const char* ttyfile,
 #       if OTTER_FEATURE(MPIPE)
         if (cliopt_getintf() == INTF_mpipe) {
             DEBUG_PRINTF("Opening Mpipe Interface\n");
+            ///@todo have a function here that returns a handle, and the handle
+            ///      is also what's deallocated.  Tie together with mpipe_open().
             pthread_create(&thr_mpreader, NULL, &mpipe_reader, (void*)&mpipe_args);
             pthread_create(&thr_mpwriter, NULL, &mpipe_writer, (void*)&mpipe_args);
             pthread_create(&thr_mpparser, NULL, &mpipe_parser, (void*)&mpipe_args);
@@ -683,7 +744,7 @@ int otter_main( const char* ttyfile,
 #       endif
         {
             DEBUG_PRINTF("No active interface is available\n");
-            cli.exitcode = 7;
+            cli.exitcode = 9;
             goto otter_main_EXIT;
         }
     }
@@ -740,18 +801,21 @@ int otter_main( const char* ttyfile,
     otter_main_EXIT:
     switch (cli.exitcode) {
        default:
-        case 7: DEBUG_PRINTF("Closing MPipe\n");
-                mpipe_close(&mpipe_ctl);
-                DEBUG_PRINTF("Freeing DTerm and Command History\n");
+        case 8: DEBUG_PRINTF("Freeing DTerm and Command History\n");
                 dterm_free(&dterm);
                 ch_free(&cmd_history);
        
-        case 6: DEBUG_PRINTF("Freeing Mpipe Packet Lists\n");
-                mpipe_freelists(&mpipe_rlist, &mpipe_tlist);
-                DEBUG_PRINTF("Freeing PPipe lists\n");
+        case 7: DEBUG_PRINTF("Closing MPipe\n");
+                mpipe_deinit(mpipe_handle);
+            
+        case 6: DEBUG_PRINTF("Freeing PPipe lists\n");
                 ppipelist_deinit();
         
-        case 5: cmd_free(cmdtab_handle);
+        case 5: DEBUG_PRINTF("Freeing Packet Lists\n");
+                pktlist_free(&mpipe_rlist);
+                pktlist_free(&mpipe_tlist);
+                DEBUG_PRINTF("Freeing Command Table\n");
+                cmd_free(cmdtab_handle);
         
         case 4: user_deinit();
         
@@ -759,8 +823,7 @@ int otter_main( const char* ttyfile,
         
         case 2: devtab_free(dterm_args.endpoint.devtab);
         
-        case 1:
-        case 0: break;
+        case 1: break;
     }
     
     DEBUG_PRINTF("Exiting cleanly and flushing output buffers\n");
@@ -786,19 +849,16 @@ int otter_main( const char* ttyfile,
 
 
 
-void sub_json_loadargs(cJSON* json, 
-                       char* ttyfile, 
-                       int* baudrate_val, 
-                       int* enc_bits,
-                       int* enc_parity,
-                       int* enc_stop,
+void otter_json_loadargs(cJSON* json,
+                       ttyspec_t** ttylist,
+                       int* num_tty,
                        int* intf_val,
                        int* fmt_val,
                        bool* pipe_val,
                        bool* quiet_val,
                        char* xpath,
                        bool* verbose_val ) {
-
+    
 #   define GET_STRINGENUM_ARG(DST, FUNC, NAME) do { \
         arg = cJSON_GetObjectItem(json, NAME);  \
         if (arg != NULL) {  \
@@ -846,7 +906,9 @@ void sub_json_loadargs(cJSON* json,
         }   \
     } while(0)
     
+    cJSON* ttyargs;
     cJSON* arg;
+    ttyspec_t* ttys;
     
     ///1. Get "arguments" object, if it exists
     json = cJSON_GetObjectItem(json, "arguments");
@@ -854,12 +916,39 @@ void sub_json_loadargs(cJSON* json,
         return;
     }
     
-    /// 2. Systematically get all of the individual arguments
-    GET_STRING_ARG(ttyfile, "tty");
-    GET_INT_ARG(baudrate_val, "baudrate");
-    GET_INT_ARG(enc_bits, "tty_bits");
-    GET_CHAR_ARG(enc_parity, "tty_parity");
-    GET_INT_ARG(enc_stop, "tty_stopbits");
+    /// 2. Get the TTY arguments.  This is different than other arguments.
+    ttyargs = cJSON_GetObjectItem(json, "ttylist");
+    if (cJSON_IsArray(ttyargs)) {
+        *num_tty    = cJSON_GetArraySize(ttyargs);
+        ttys        = otter_ttylist_init(*num_tty);
+        *ttylist    = ttys;
+        if (ttys != NULL) {
+            for (int i=0; i<*num_tty; i++) {
+                cJSON* obj;
+                obj = cJSON_GetArrayItem(ttyargs, i);
+                if (cJSON_IsObject(obj)) {
+                    arg = cJSON_GetObjectItem(obj, "tty");
+                    ttys[i].ttyfile = cJSON_IsString(arg) ? \
+                        otter_ttylist_add(&ttys[i], cJSON_GetStringValue(arg)) : NULL;
+                    
+                    ///@todo Defaults can be handled better
+                    arg = cJSON_GetObjectItem(obj, "baudrate");
+                    ttys[i].baudrate = cJSON_IsNumber(arg) ? (int)arg->valueint : OTTER_PARAM_DEFBAUDRATE;
+
+                    arg = cJSON_GetObjectItem(obj, "bits");
+                    ttys[i].enc_bits = cJSON_IsNumber(arg) ? (int)arg->valueint : 8;
+                    
+                    arg = cJSON_GetObjectItem(obj, "parity");
+                    ttys[i].enc_parity = cJSON_IsString(arg) ? arg->valuestring[0] : 'N';
+                    
+                    arg = cJSON_GetObjectItem(obj, "stopbits");
+                    ttys[i].enc_stopbits = cJSON_IsNumber(arg) ? (int)arg->valueint : 1;
+                }
+            }
+        }
+    }
+    
+    /// 3. Systematically get all of the Normal arguments
     GET_STRINGENUM_ARG(intf_val, sub_intf_cmp, "intf");
     GET_STRINGENUM_ARG(fmt_val, sub_fmt_cmp, "fmt");
     

@@ -107,32 +107,12 @@ int cmd_chuser(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, si
         }
 
         /// Make sure node has the necessary keys
-        endpoint = devtab_resolve_endpoint(node);
-        if (endpoint == NULL) {
+        ///@todo this code block is used in multiple places
+        usertype = user_get_type(utype->sval[0]);
+        if (devtab_validate_usertype(node, usertype) != 0) {
             rc = -4;
             goto cmd_chuser_TERM;
         }
-
-        /// User Type is a Mandatory Field.
-        if ((strcmp("admin", utype->sval[0]) == 0)
-        || (strcmp("user", utype->sval[0]) == 0)) {
-            usertype = USER_user;
-            if (endpoint->userctx == NULL) {
-                rc = -5;
-                goto cmd_chuser_TERM;
-            }
-        }
-        else if (strcmp("root", utype->sval[0]) == 0) {
-            usertype = USER_root;
-            if (endpoint->rootctx == NULL) {
-                rc = -6;
-                goto cmd_chuser_TERM;
-            }
-        }
-        else {
-            usertype = USER_guest;
-        }
-
         rc = 0;
         dth->endpoint.usertype  = usertype;
         dth->endpoint.node      = node;

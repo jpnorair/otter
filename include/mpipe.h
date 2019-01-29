@@ -37,14 +37,18 @@
 // MPipe Data Type(s)
 ///@todo bury these in a code module
 
-typedef struct {
-    int     tty_fd;
-    int     baudrate;
-} mpipe_ctl_t;
-
+typedef void* mpipe_handle_t;
 
 typedef struct {
-    mpipe_ctl_t*    mpctl;
+    int in;
+    int out;
+} mpipe_fd_t;
+
+
+
+typedef struct {
+    mpipe_handle_t  handle;
+    
     pktlist_t*      tlist;           // should be used only by...
     pktlist_t*      rlist;           // should be used only by...
     user_endpoint_t* endpoint;
@@ -66,20 +70,26 @@ typedef struct {
 } mpipe_arg_t;
 
 
+int mpipe_init(mpipe_handle_t* handle, size_t num_intf);
 
+void mpipe_deinit(mpipe_handle_t handle);
 
+int mpipe_pollfd_alloc(mpipe_handle_t handle, struct pollfd* pollitems, short pollevents);
 
+mpipe_fd_t* mpipe_fds_get(mpipe_handle_t handle, int id);
 
-// MPipe exposed Functions (move to mpipe.h & mpipe.c)
-void mpipe_freelists(pktlist_t* rlist, pktlist_t* tlist);
-int mpipe_close(mpipe_ctl_t* mpctl);
-int mpipe_open( mpipe_ctl_t* mpctl, 
+const char* mpipe_file_get(mpipe_handle_t handle, int id);
+
+int mpipe_close(mpipe_handle_t handle, int id);
+
+int mpipe_opentty( mpipe_handle_t handle, int id,
                 const char *dev, int baud, 
                 int data_bits, char parity, int stop_bits, 
                 int flowctrl, int dtr, int rts    );
 
-void mpipe_flush(mpipe_ctl_t* mpctl, size_t est_rembytes, int queue_selector);
-int mpipe_get_baudrate(int native_baud);
+int mpipe_reopen( mpipe_handle_t handle, int id);
+
+void mpipe_flush(mpipe_handle_t handle, int id, size_t est_rembytes, int queue_selector);
 
 
 

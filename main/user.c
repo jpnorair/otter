@@ -77,6 +77,24 @@ const char* user_typestring_get(void) {
 
 
 
+USER_Type user_get_type(const char* type_string) {
+    USER_Type usertype;
+
+    if ((strcmp("admin", type_string) == 0)
+    || (strcmp("user", type_string) == 0)) {
+        usertype = USER_user;
+    }
+    else if (strcmp("root", type_string) == 0) {
+        usertype = USER_root;
+    }
+    else {
+        usertype = USER_guest;
+    }
+    
+    return usertype;
+}
+
+
 
 
 
