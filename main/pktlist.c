@@ -48,37 +48,34 @@ static void sub_frame_null(user_endpoint_t* endpoint, pkt_t* newpkt, uint8_t* da
 
 static void sub_readframe_modbus(user_endpoint_t* endpoint, pkt_t* newpkt, uint8_t* data, size_t datalen) {
 /// Modbus read process will remove the encrypted data
-    int         mbcmd       = data[1];
+    int         mbcmd       = (data[1] & 255);
     size_t      frame_size  = datalen-2;            // Strip 2 byte CRC
     
     // Qualify CRC.
     newpkt->crcqual = mbcrc_calc_block(data, datalen);
     if (newpkt->crcqual != 0) {
-        if (cliopt_isverbose()) goto sub_readframe_modbus_LOAD;
-        else                    goto sub_readframe_modbus_ERR;
+        goto sub_readframe_modbus_LOAD;
     }
         
     // If the frame uses encryption, decrypt it.
     // Else, pass it through with CRC removed.
     if ((mbcmd >= 68) && (mbcmd <= 70)) {
-        uint64_t    src_addr;
+        uint16_t    src_addr;
         uint8_t     hdr24[3];
         int         offset;
         
         // Copy the source address to packet.  This is in all 68-70 packets
         newpkt->buffer[2]   = data[2];
-        src_addr            = (uint64_t)data[2];
+        src_addr            = (uint16_t)data[2];
         
         // For 68/69 packets, there's an encrypted subframe.
         // frame_size will become the size of the decrypted data, at returned offset
         // If encryption failed, do not copy packet and leave size == 0
-        mbcmd -= 68;
+        mbcmd  -= 68;
         offset  = user_decrypt(endpoint, src_addr, 0, data, &frame_size);
-
         if (offset < 0) {
             newpkt->crcqual = -1;
-            if (cliopt_isverbose()) goto sub_readframe_modbus_LOAD;
-            else                    goto sub_readframe_modbus_ERR;
+            goto sub_readframe_modbus_LOAD;
         }
         
         // Realign headers
@@ -97,13 +94,15 @@ static void sub_readframe_modbus(user_endpoint_t* endpoint, pkt_t* newpkt, uint8
     }
     
     sub_readframe_modbus_LOAD:
-    newpkt->size = datalen;
-    memcpy(newpkt->buffer, data, datalen);
-    return;
-    
-    sub_readframe_modbus_ERR:
-    // If newpkt->size == 0, this is considered error
-    newpkt->size = 0;
+    ///@todo add cliopt for reporting bad packets
+    if (cliopt_isquiet() == false) {
+        newpkt->size = datalen;
+        memcpy(newpkt->buffer, data, datalen);
+    }
+    else {
+        // If newpkt->size == 0, this is considered error
+        newpkt->size = 0;
+    }
 }
 
 
@@ -450,6 +449,9 @@ int pktlist_getnew(pktlist_t* plist) {
         crc_val                 = (plist->cursor->buffer[0] << 8) + plist->cursor->buffer[1];
         crc_comp                = crc_calc_block(&plist->cursor->buffer[2], plist->cursor->size-2);
         plist->cursor->crcqual  = (crc_comp - crc_val);
+    }
+    else if (intf == INTF_modbus) {
+        // do nothing
     }
     else {
         plist->cursor->crcqual  = 0;

@@ -381,7 +381,7 @@ int cmd_xloop(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, siz
     }
     
     INPUT_SANITIZE();
-    
+
     /// Stage 1: Command Line Protocol Extraction
     loop.data = NULL;
     loop.cmdline = NULL;
@@ -407,7 +407,7 @@ int cmd_xloop(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, siz
             rc = -7;
             goto cmd_xloop_TERM;
         }
-        
+
         xloop_cmd = calloc(strlen(loop.cmdline) + 2*loop.bsize_val + 2 + 1, sizeof(char));
         if (xloop_cmd == NULL) {
             rc = -8;
@@ -433,7 +433,6 @@ int cmd_xloop(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, siz
             rc = -11;
             goto cmd_xloop_TERM2;
         }
-
         if (subscriber_open(subscription, 1) != 0) {
             rc = -12;
             goto cmd_xloop_TERM3;
@@ -444,7 +443,7 @@ int cmd_xloop(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, siz
 
         // Loop the command until all data is gone
         blocksize = loop.bsize_val;
-        for (dat_i=0; dat_i<loop.data_size; dat_i+=blocksize) {
+        for (dat_i=0; dat_i<loop.data_size; ) {
         
             switch (loop.data_type) {
                 default:
@@ -457,37 +456,49 @@ int cmd_xloop(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, siz
                     break;
             }
 
-//fprintf(stderr, "XLOOP RUN: %s\n", xloop_cmd);
             rc = sub_cmdrun(dth, cmdptr, xloop_cmd, dst, dstmax);
             if (rc < 0) {
                 rc += -256;
-                fprintf(fp_out, "--> Command Runtime Error: (%i)\n", rc);
+                fprintf(fp_out, "--> Command Runtime Error: (%i)", rc);
                 break;
             }
-            
+
             rc = subscriber_wait(subscription, loop.timeout_val);
             if (rc == 0) {
                 ///@todo check signal
-                //fprintf(fp_out, "\rStatus: %i/%i ", dat_i, loop.data_size);
-                fprintf(fp_out, "Status: %i/%i\n", dat_i, loop.data_size);
+                
+                dat_i += blocksize;
+                
+                if (cliopt_isverbose() || cliopt_isdebug()) {
+                    fprintf(fp_out, "Status: %i/%i (%i%%)\n", dat_i, loop.data_size, (int)((100*dat_i)/loop.data_size));
+                }
+                else {
+                    fputs(VT100_CLEAR_LN, fp_out);
+                    fflush(fp_out);
+                    fprintf(fp_out, "Status: %i/%i (%i%%)", dat_i, loop.data_size, (int)((100*dat_i)/loop.data_size));
+                    fflush(fp_out);
+                }
+                
                 loop.retries_cnt = loop.retries_val;
             }
             else if (rc == ETIMEDOUT) {
                 if (--loop.retries_cnt <= 0) {
-                    fprintf(fp_out, "--> Command Timeout Error\n");
+                    fputs("--> Command Timeout Error", fp_out);
                     rc = -13;
                     break;
                 }
-                dat_i -= blocksize;
             }
             else {
-                fprintf(fp_out, "--> Internal Error: (%i)\n", rc);
+                fprintf(fp_out, "--> Internal Error: (%i)", rc);
+                break;
             }
         }
-
+        fputs("\n", fp_out);
+        
+//fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
         // Relock dtwrite mutex to block parser
         pthread_mutex_lock(dth->dtwrite_mutex);
-
+//fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
         // Delete Subscriber (also closes), unsquelch, free
         cmd_xloop_TERM3:
         subscriber_del(dth->subscribers, subscription);
@@ -498,7 +509,7 @@ int cmd_xloop(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, siz
         cmd_xloop_TERM:
         sub_freeinput(&loop);
     }
-    
+//fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
     cmd_xloop_EXIT:
     return rc;
 }
@@ -507,7 +518,7 @@ int cmd_xloop(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, siz
 
 int cmd_sendhex(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
     static const char sendhex_name[] = "sendhex";
-    static const char xloop_fmt[] = "-f \"file wo 255 [A5A5]\" %s";
+    static const char xloop_fmt[] = "-f \"file wo 255 [5A5A]\" %s";
     int rc;
     int argc;
     char** argv;

@@ -166,6 +166,7 @@ void* modbus_reader(void* args) {
     pthread_mutex_lock(rlist_mutex);
     list_size = pktlist_add_rx(endpoint, rlist, rbuf, (size_t)frame_length);
     pthread_mutex_unlock(rlist_mutex);
+    
     if (list_size <= 0) {
         errcode = 3;
     }
@@ -298,7 +299,7 @@ void* modbus_parser(void* args) {
 ///          print it out in a human-readable way. </LI>
 ///
     static char putsbuf[2048];
-    mpipe_arg_t* mparg              = ((mpipe_arg_t*)args);
+    mpipe_arg_t* mparg = ((mpipe_arg_t*)args);
 
     while (1) {
         int pkt_condition;  // tracks some error conditions
@@ -318,20 +319,20 @@ void* modbus_parser(void* args) {
 
         // ===================LOOP CONDITION LOGIC==========================
         
-        // pktlist_getnew will validate the packet with CRC:
-        // - It returns 0 if all is well
-        // - It returns -1 if the list is empty
-        // - It returns a positive error code if there is some packet error
-        // - rlist->cursor points to the working packet
+        /// pktlist_getnew will validate the packet with CRC:
+        /// - It returns 0 if all is well
+        /// - It returns -1 if the list is empty
+        /// - It returns a positive error code if there is some packet error
+        /// - rlist->cursor points to the working packet
         pkt_condition = pktlist_getnew(mparg->rlist);
         if (pkt_condition < 0) {
             goto modbus_parser_END;
         }
         // =================================================================
             
-        // If packet has an error of some kind -- delete it and move-on.
-        // Else, print-out the packet.  This can get rich depending on the
-        // internal protocol, and it can result in responses being queued.
+        /// If packet has an error of some kind -- delete it and move-on.
+        /// Else, print-out the packet.  This can get rich depending on the
+        /// internal protocol, and it can result in responses being queued.
         if (pkt_condition > 0) {
             ///@todo some sort of error code
             fprintf(stderr, "A malformed packet was sent for parsing\n");
@@ -350,8 +351,9 @@ void* modbus_parser(void* args) {
             /// responses.  In some type of peer-peer modbus system, this would
             /// need to be intelligently managed.
             rpkt_is_resp = true;
-            // If Verbose, Print received header in real language
-            // If not Verbose, just print the encoded packet status
+
+            /// If Verbose, Print received header in real language
+            /// If not Verbose, just print the encoded packet status
             if (cliopt_isverbose()) {
                 sprintf(putsbuf, "\n" _E_BBLK "RX'ed %zu bytes at %s, %s CRC: %s" _E_NRM "\n",
                             mparg->rlist->cursor->size,
@@ -368,7 +370,7 @@ void* modbus_parser(void* args) {
                         putsbuf[2] = 0;
                         ///@todo put this to the buffer without flushing it
                     } break;
-                    
+
                     case FORMAT_Json: ///@todo
                             break;
                         
@@ -406,7 +408,6 @@ void* modbus_parser(void* args) {
                 if (msgtype == 0) {
                     int subsig;
                     proc_result = fmt_fprintalp(&sub_dtputs, mparg->msgcall, msg, msgbytes);
-                    
                     ///@todo figure out if this extra formatting step is necessary
                     ///      it is here to print a certain type of frame.
 //                    if (output_bytes != 0) {

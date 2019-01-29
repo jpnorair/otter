@@ -23,6 +23,8 @@
 #   include <oteax.h>
 #endif
 
+#include "../test/test.h"
+
 ///@todo bring some of these utils out of cmds dir
 #include "../cmds/cmdutils.h"
 
@@ -330,6 +332,7 @@ devtab_node_t devtab_select(devtab_handle_t handle, uint64_t uid) {
 
 devtab_node_t devtab_select_vid(devtab_handle_t handle, uint16_t vid) {
     devtab_t* table = handle;
+    devtab_vid_t* viditem;
     devtab_node_t node;
     if (table == NULL) {
         return NULL;
@@ -339,7 +342,14 @@ devtab_node_t devtab_select_vid(devtab_handle_t handle, uint16_t vid) {
         return NULL;
     }
     
-    node = (devtab_node_t)sub_searchop_vid((devtab_t*)handle, vid, 0);
+    viditem = sub_searchop_vid((devtab_t*)handle, vid, 0);
+    if (viditem != NULL) {
+        node = (devtab_node_t)viditem->cell;
+    }
+    else {
+        node = NULL;
+    }
+
     pthread_mutex_unlock(&table->access_mutex);
     
     return node;
@@ -617,15 +627,24 @@ static int sub_editop(devtab_t* table, uint64_t uid, uint16_t vid, void* intf_ha
 
 static int sub_setkey(void** ctx, void* key) {
 #if OTTER_FEATURE(SECURITY)
+    int rc = 0;
+    
     if (key != NULL) {
         if (*ctx == NULL) {
-            *ctx = malloc(sizeof(eax_ctx));
+            *ctx = calloc(1, sizeof(eax_ctx));
         }
         if (*ctx != NULL) {
-            eax_init_and_key((io_t*)key, (eax_ctx*)*ctx);
+            rc = (int)eax_init_and_key((io_t*)key, (eax_ctx*)*ctx);
+//test_dumpbytes((const uint8_t*)key, 16, "New Key");
+//fprintf(stderr, "test=%i, *ctx=%016llx\n", rc, (uint64_t)*ctx);
+//test_dumpbytes((const uint8_t*)*ctx, sizeof(eax_ctx), "New CTX");
+            if (rc != 0) {
+                free(*ctx);
+                rc = -2;
+            }
         }
         else {
-            return -1;
+            rc = -1;
         }
     }
     else {
@@ -635,7 +654,7 @@ static int sub_setkey(void** ctx, void* key) {
         *ctx = NULL;
     }
     
-    return 0;
+    return rc;
     
 #else
     *ctx = NULL;

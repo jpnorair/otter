@@ -134,7 +134,7 @@ int otter_main( const char* ttyfile,
                 int baudrate,
                 int enc_bits, int enc_parity, int enc_stopbits,
                 bool pipe,
-                bool multi,
+                bool quiet,
                 const char* xpath,
                 cJSON* params
                 ); 
@@ -151,7 +151,7 @@ void sub_json_loadargs(cJSON* json,
                        int* intf_val,
                        int* fmt_val,
                        bool* pipe_val,
-                       bool* multi_val,
+                       bool* quiet_val,
                        char* xpath,
                        bool* verbose_val );
 
@@ -224,7 +224,6 @@ int main(int argc, char* argv[]) {
     struct arg_str  *intf    = arg_str0("i", "intf", "mpipe|modbus",    "Select \"mpipe\" or \"modbus\" interface (default=mpipe)");
     struct arg_str  *fmt     = arg_str0("f", "fmt", "format",           "\"default\", \"json\", \"bintex\", \"hex\"");
     struct arg_lit  *pipe    = arg_lit0("p","pipe",                     "Use pipe I/O instead of terminal console");
-    struct arg_lit  *multi   = arg_lit0("m","multi",                    "Support multiple target addressing");
     struct arg_file *xpath   = arg_file0("x", "xpath", "path",          "Path to directory of external data processor programs");
     //struct arg_str  *parsers = arg_str1("p", "parsers", "<msg:parser>", "parser call string with comma-separated msg:parser pairs");
     //struct arg_str  *fparse  = arg_str1("P", "parsefile", "<file>",     "file containing comma-separated msg:parser pairs");
@@ -232,11 +231,12 @@ int main(int argc, char* argv[]) {
     struct arg_file *config  = arg_file0("c","config","file.json",      "JSON based configuration file.");
     struct arg_lit  *verbose = arg_lit0("v","verbose",                  "Use verbose mode");
     struct arg_lit  *debug   = arg_lit0("d","debug",                    "Set debug mode on: requires compiling for debug");
+    struct arg_lit  *quiet   = arg_lit0("q","quiet",                    "Supress reporting of errors");
     struct arg_lit  *help    = arg_lit0(NULL,"help",                    "Print this help and exit");
     struct arg_lit  *version = arg_lit0(NULL,"version",                 "Print version information and exit");
     struct arg_end  *end     = arg_end(20);
     
-    void* argtable[] = { ttyfile, brate, ttyenc, intf, fmt, pipe, multi, xpath, config, verbose, debug, help, version, end };
+    void* argtable[] = { ttyfile, brate, ttyenc, intf, fmt, pipe, xpath, config, verbose, debug, quiet, help, version, end };
     const char* progname = OTTER_PARAM(NAME);
     int nerrors;
     bool bailout        = true;
@@ -254,7 +254,7 @@ int main(int argc, char* argv[]) {
     int enc_parity      = (int)'N';
     int enc_stopbits    = (intf_val == INTF_modbus) ? 2 : 1;
     
-    bool multi_val      = false;
+    bool quiet_val      = false;
     bool pipe_val       = false;
     bool verbose_val    = false;
 
@@ -282,6 +282,7 @@ int main(int argc, char* argv[]) {
     /// special case: '--version' takes precedence error reporting 
     if (version->count > 0) {
         printf("%s -- %s\n", OTTER_PARAM_VERSION, OTTER_PARAM_DATE);
+        printf("Commit-ID: %s\n", OTTER_PARAM_GITHEAD);
         printf("Designed by %s\n", OTTER_PARAM_BYLINE);
         printf("Based on otter by JP Norair (indigresso.com)\n");
         
@@ -364,7 +365,7 @@ int main(int argc, char* argv[]) {
                                 &tmp_intf,
                                 &tmp_fmt,
                                 &pipe_val, 
-                                &multi_val,
+                                &quiet_val,
                                 xpath_val,
                                 &verbose_val
                             );
@@ -403,8 +404,8 @@ int main(int argc, char* argv[]) {
     if (fmt->count != 0) {
         fmt_val = sub_fmt_cmp(fmt->sval[0]);
     }
-    if (multi->count != 0) {
-        multi_val = true;
+    if (quiet->count != 0) {
+        quiet_val = true;
     }
     if (xpath->count != 0) {
         FILL_STRINGARG(xpath, xpath_val);
@@ -416,14 +417,9 @@ int main(int argc, char* argv[]) {
     /// Client Options.  These are read-only from internal modules
     cliopts.intf        = intf_val;
     cliopts.format      = fmt_val;
-    if (debug->count != 0) {
-        cliopts.debug_on    = true;
-        cliopts.verbose_on  = true;
-    }
-    else {
-        cliopts.debug_on    = false;
-        cliopts.verbose_on  = verbose_val;
-    }
+    cliopts.verbose_on  = verbose_val;
+    cliopts.debug_on    = (debug->count != 0) ? true : false;
+    cliopts.quiet_on    = quiet_val;
     cliopt_init(&cliopts);
     
     /// All configuration is done.
@@ -438,7 +434,7 @@ int main(int argc, char* argv[]) {
                                 baudrate_val, 
                                 enc_bits, enc_parity, enc_stopbits,
                                 pipe_val,
-                                multi_val,
+                                quiet_val,
                                 (const char*)xpath_val,
                                 json    );
     }
@@ -467,7 +463,7 @@ int otter_main( const char* ttyfile,
                 int baudrate, 
                 int enc_bits, int enc_parity, int enc_stopbits,
                 bool pipe, 
-                bool multi,
+                bool quiet,
                 const char* xpath,
                 cJSON* params) {    
     
@@ -799,7 +795,7 @@ void sub_json_loadargs(cJSON* json,
                        int* intf_val,
                        int* fmt_val,
                        bool* pipe_val,
-                       bool* multi_val,
+                       bool* quiet_val,
                        char* xpath,
                        bool* verbose_val ) {
 
@@ -867,7 +863,7 @@ void sub_json_loadargs(cJSON* json,
     GET_STRINGENUM_ARG(intf_val, sub_intf_cmp, "intf");
     GET_STRINGENUM_ARG(fmt_val, sub_fmt_cmp, "fmt");
     
-    GET_BOOL_ARG(multi_val, "multi");
+    GET_BOOL_ARG(quiet_val, "quiet");
     GET_STRING_ARG(xpath, "xpath");
     
     GET_BOOL_ARG(pipe_val, "pipe");

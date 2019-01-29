@@ -40,6 +40,10 @@ bool cliopt_isdebug(void) {
     return master->debug_on;
 }
 
+bool cliopt_isquiet(void) {
+    return master->quiet_on;
+}
+
 bool cliopt_isdummy(void) {
     return master->dummy_tty;
 }
@@ -50,6 +54,10 @@ void cliopt_setverbose(bool val) {
 
 void cliopt_setdebug(bool val) {
     master->debug_on = val;
+}
+
+void cliopt_setquiet(bool val) {
+    master->quiet_on = val;
 }
 
 void cliopt_setdummy(bool val) {
