@@ -1,0 +1,10 @@
+{
+    "arguments": {
+        "verbose": 1,
+        "ttylist": [ 
+        	{ "tty":"/dev/ttyACM0", "baudrate":115200, "bits":8, "parity":"N", "stopbits":1 },
+        	{ "tty":"/dev/ttyACM1", "baudrate":200000, "bits":8, "parity":"N", "stopbits":1 },
+        	{ "tty":"/dev/ttyACM2", "baudrate":57600, "bits":8, "parity":"N", "stopbits":1 }
+        ]
+    }
+}
