@@ -104,8 +104,11 @@ void dterm_remln(dterm_t *dt);
   * ========================================================================<BR>
   */
 
+int dterm_init(dterm_handle_t* handle) {
+    return 0;
+}
 
-void dterm_free(dterm_t* dt) {
+void dterm_deinit(dterm_handle_t handle) {
 /// So far, nothing to free
 }
 
@@ -302,7 +305,7 @@ void* dterm_piper(void* args) {
                 else {
                     int list_size;
                     pthread_mutex_lock(dth->tlist_mutex);
-                    list_size = pktlist_add_tx(&dth->endpoint, dth->tlist, protocol_buf, bytesout);
+                    list_size = pktlist_add_tx(&dth->endpoint, NULL, dth->tlist, protocol_buf, bytesout);
                     pthread_mutex_unlock(dth->tlist_mutex);
                     if (list_size > 0) {
                         pthread_cond_signal(dth->tlist_cond);
@@ -554,7 +557,7 @@ void* dterm_prompter(void* args) {
                                                 int list_size;
                                                 //fprintf(stderr, "packet added to tlist, size = %d bytes\n", outbytes);
                                                 pthread_mutex_lock(dth->tlist_mutex);
-                                                list_size = pktlist_add_tx(&dth->endpoint, dth->tlist, protocol_buf, outbytes);
+                                                list_size = pktlist_add_tx(&dth->endpoint, NULL, dth->tlist, protocol_buf, outbytes);
                                                 pthread_mutex_unlock(dth->tlist_mutex);
                                                 if (list_size > 0) {
                                                     pthread_cond_signal(dth->tlist_cond);

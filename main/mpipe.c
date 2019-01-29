@@ -163,13 +163,12 @@ static void sub_freeparams(mpipe_intf_t* mpintf) {
 
 static int sub_check_handle(mpipe_handle_t handle, int id) {
     mpipe_tab_t* table = (mpipe_tab_t*)handle;
-    int rc;
+    int rc = -1;
     
     if (table != NULL) {
-        rc = 0 - ((id < 0) || (id >= table->size));
-    }
-    else {
-        rc = -1;
+        if ((id >= 0) && (id < table->size)) {
+            rc = id;
+        }
     }
     
     return rc;
@@ -264,7 +263,7 @@ mpipe_fd_t* mpipe_fds_get(mpipe_handle_t handle, int id) {
     mpipe_tab_t* table;
     mpipe_fd_t* fds = NULL;
     
-    if (sub_check_handle(handle, id) == 0) {
+    if (sub_check_handle(handle, id) >= 0) {
         table = (mpipe_tab_t*)handle;
         if (table->intf[id].fd.in >= 0) {
             fds = &table->intf[id].fd;
@@ -279,17 +278,95 @@ const char* mpipe_file_get(mpipe_handle_t handle, int id) {
     mpipe_tab_t* table;
     const char* output = NULL;
     
-    if (sub_check_handle(handle, id) == 0) {
+    if (sub_check_handle(handle, id) >= 0) {
         table = (mpipe_tab_t*)handle;
-        switch (table[id].intf->type) {
-            case MPINTF_tty: output = ((mpipe_tty_t*)table[id].intf->params)->path;
-                break;
-            default:
-                break;
-        }
+        output = mpipe_file_resolve(&table[id].intf);
     }
     
     return output;
+}
+
+
+void* mpipe_intf_get(mpipe_handle_t handle, int id) {
+    mpipe_tab_t* table = handle;
+    void* intf = NULL;
+    
+    if (sub_check_handle(handle, id) >= 0) {
+        intf = &table->intf[id];
+    }
+    return intf;
+}
+
+
+void* mpipe_intf_fromfile(mpipe_handle_t handle, const char* file) {
+///@note there's no indexing here, because it's not expected for otter to
+/// handle more than 4 or 5 interfaces at most.
+    mpipe_tab_t* table = handle;
+    void* intf = NULL;
+
+    if (handle != NULL) {
+        for (int i=0; i<table->size; i++) {
+            const char* stored_file;
+            switch (table->intf[i].type) {
+                case MPINTF_tty: stored_file = ((mpipe_tty_t*)table->intf[i].params)->path;
+                    break;
+                default: stored_file = NULL;
+                    break;
+            }
+            if (strcmp(stored_file, file) == 0) {
+                intf = (void*)&table->intf[i];
+                break;
+            }
+        }
+    }
+    
+    return intf;
+}
+
+
+mpipe_fd_t* mpipe_fds_resolve(void* intfp) {
+    mpipe_intf_t* intf = (mpipe_intf_t*)intfp;
+    if (intf != NULL) {
+        return &intf->fd;
+    }
+    return NULL;
+}
+
+
+const char* mpipe_file_resolve(void* intfp) {
+    mpipe_intf_t* intf = (mpipe_intf_t*)intfp;
+    const char* output = NULL;
+    
+    if (intf != NULL) {
+        switch (intf->type) {
+        case MPINTF_tty: output = ((mpipe_tty_t*)intf->params)->path;
+            break;
+        default:
+            break;
+        }
+    }
+    return output;
+}
+
+
+int mpipe_id_resolve(mpipe_handle_t handle, void* intfp) {
+    return sub_check_handle(handle, (int)intfp - 1);
+}
+
+
+
+
+
+void* mpipe_intfp_resolve(mpipe_handle_t handle, int id) {
+    mpipe_tab_t* table;
+    void* intfp = NULL;
+    
+    if (sub_check_handle(handle, id) >= 0) {
+        table = (mpipe_tab_t*)handle;
+        intfp = (void*)(id+1);
+    }
+    
+    return intfp;
 }
 
 
@@ -368,7 +445,7 @@ int mpipe_opentty( mpipe_handle_t handle, int id,
     int rc = 0;
     
     // Input Check: null values
-    if (sub_check_handle(handle, id) != 0) {
+    if (sub_check_handle(handle, id) < 0) {
         return -1;
     }
     
@@ -478,7 +555,7 @@ int mpipe_reopen(mpipe_handle_t handle, int id) {
     mpipe_tab_t* table = (mpipe_tab_t*)handle;
     int rc = -1;
     
-    if (sub_check_handle(handle, id) == 0) {
+    if (sub_check_handle(handle, id) >= 0) {
         mpipe_close(handle, id);
         
         switch (table->intf[id].type) {

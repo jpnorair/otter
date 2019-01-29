@@ -77,8 +77,13 @@ void mpipe_deinit(mpipe_handle_t handle);
 int mpipe_pollfd_alloc(mpipe_handle_t handle, struct pollfd* pollitems, short pollevents);
 
 mpipe_fd_t* mpipe_fds_get(mpipe_handle_t handle, int id);
-
 const char* mpipe_file_get(mpipe_handle_t handle, int id);
+void* mpipe_intf_get(mpipe_handle_t handle, int id);
+void* mpipe_intf_fromfile(mpipe_handle_t handle, const char* file);
+
+mpipe_fd_t* mpipe_fds_resolve(void* intfp);
+const char* mpipe_file_resolve(void* intfp);
+
 
 int mpipe_close(mpipe_handle_t handle, int id);
 

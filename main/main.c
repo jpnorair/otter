@@ -693,6 +693,7 @@ int otter_main( ttyspec_t* ttylist,
     dterm_args.cmdtab           = cmdtab_handle;
     dterm_args.endpoint.node    = devtab_select(dterm_args.endpoint.devtab, 0);
     dterm_args.endpoint.usertype= USER_guest;
+    dterm_args.mpipe            = mpipe_handle;
     dterm_args.dtwrite_mutex    = &dtwrite_mutex;
     dterm_args.tlist_mutex      = &tlist_mutex;
     dterm_args.tlist_cond       = &tlist_cond;
@@ -802,7 +803,7 @@ int otter_main( ttyspec_t* ttylist,
     switch (cli.exitcode) {
        default:
         case 8: DEBUG_PRINTF("Freeing DTerm and Command History\n");
-                dterm_free(&dterm);
+                //dterm_deinit(dterm_args)  ///@todo when dterm is re-architected
                 ch_free(&cmd_history);
        
         case 7: DEBUG_PRINTF("Closing MPipe\n");

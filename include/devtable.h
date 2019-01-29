@@ -40,14 +40,14 @@ int devtab_init(devtab_handle_t* new_handle);
 void devtab_free(devtab_handle_t handle);
 int devtab_list(devtab_handle_t handle, char* dst, size_t dstmax);
 
-int devtab_insert(devtab_handle_t handle, uint64_t uid, uint16_t vid, void* intf_handle, void* rootkey, void* userkey);
+int devtab_insert(devtab_handle_t handle, uint64_t uid, uint16_t vid, void* intfp, void* rootkey, void* userkey);
 devtab_node_t devtab_select(devtab_handle_t handle, uint64_t uid);
 devtab_node_t devtab_select_vid(devtab_handle_t handle, uint16_t vid);
 
 
 
-int devtab_edit(devtab_handle_t handle, uint64_t uid, uint16_t vid, void* intf_handle, void* rootkey, void* userkey);
-int devtab_edit_item(devtab_handle_t handle, devtab_node_t node, uint64_t uid, uint16_t vid, void* intf_handle, void* rootkey, void* userkey);
+int devtab_edit(devtab_handle_t handle, uint64_t uid, uint16_t vid, void* intfp, void* rootkey, void* userkey);
+int devtab_edit_item(devtab_handle_t handle, devtab_node_t node, uint64_t uid, uint16_t vid, void* intfp, void* rootkey, void* userkey);
 
 int devtab_remove(devtab_handle_t handle, uint64_t uid);
 int devtab_unlist(devtab_handle_t handle, uint16_t vid);

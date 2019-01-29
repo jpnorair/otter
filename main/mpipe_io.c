@@ -73,8 +73,10 @@ void* mpipe_reader(void* args) {
 /// <LI> Assembles the packet from TTY data. </LI>
 /// <LI> Adds packet into mpipe.rlist, sends cond-sig to mpipe_parser. </LI>
 ///
-    struct pollfd fds[1];
+    struct pollfd* fds = NULL;
+    int num_fds;
     int pollcode;
+    int ready_fds;
     
     uint8_t rbuf[1024];
     uint8_t* rbuf_cursor;
@@ -85,172 +87,201 @@ void* mpipe_reader(void* args) {
     int new_bytes;
     uint8_t syncinput;
     
-    // Local copy of MPipe Ctl data: it is used in multiple threads without
-    // mutexes (it is read-only anyway)
-    mpipe_ctl_t mpctl               = *((mpipe_arg_t*)args)->mpctl;
     
     // The Packet lists are used between threads and thus are Mutexed references
     mpipe_arg_t* mparg = (mpipe_arg_t*)args;
-
+    mpipe_handle_t mph = mparg->handle;
+    
     // blocking should be in initialization... Here just as a reminder
     //fnctl(dt->fd_in, F_SETFL, 0);  
     
     /// Setup for usage of the poll function to flush buffer on read timeouts.
-    fds[0].fd       = mpctl.tty_fd;
-    fds[0].events   = (POLLIN | POLLNVAL | POLLHUP);
+    num_fds = mpipe_pollfd_alloc(mph, fds, (POLLIN | POLLNVAL | POLLHUP));
+    if (num_fds <= 0) {
+        goto mpipe_reader_TERM;
+    }
+    
+    mpipe_flush(mph, -1, 0, TCIFLUSH);
     
     /// Beginning of read loop
-    mpipe_reader_START:
-    mpipe_flush(&mpctl, 0, TCIFLUSH);
-    errcode = 0;
-    
-    /// Wait until an FF comes
-    mpipe_reader_SYNC0:
-    pollcode = poll(fds, 1, 0);
-    if (fds[0].revents & (POLLERR | POLLHUP | POLLNVAL)) {
-        errcode = 4;
-        goto mpipe_reader_ERR;
-    }
-
-    new_bytes = (int)read(mpctl.tty_fd, &syncinput, 1);
-    if (new_bytes < 1) {
-        errcode = 1;
-        goto mpipe_reader_ERR;
-    }
-    if (syncinput != 0xFF) {
-        goto mpipe_reader_SYNC0;
-    }
-    TTY_PRINTF("TTY: Sync FF Received\n");
-    
-    /// Now wait for a 55, ignoring FFs
-    mpipe_reader_SYNC1:
-    pollcode = poll(fds, 1, 50);
-    if (pollcode <= 0) {
-        errcode = 3;
-        goto mpipe_reader_ERR;
-    }
-    else if (fds[0].revents & (POLLERR | POLLHUP | POLLNVAL)) {
-        errcode = 4;
-        goto mpipe_reader_ERR;
-    }
-    
-    new_bytes = (int)read(mpctl.tty_fd, &syncinput, 1);
-    if (new_bytes < 1) {
-        errcode = 1;
-        goto mpipe_reader_ERR;
-    }
-    if (syncinput == 0xFF) {
-        goto mpipe_reader_SYNC1;
-    }
-    if (syncinput != 0x55) {
-        goto mpipe_reader_SYNC0;
-    }
-    TTY_PRINTF("TTY: Sync 55 Received\n");
-
-    
-    /// At this point, FF55 was detected.  We get the next 6 bytes of the 
-    /// header, which is the rest of the header.  
-    /// @todo Make header length dynamic based on control field (last byte).
-    ///           However, control field is not yet defined.
-    new_bytes       = 0;
-    payload_left    = 6;
-    rbuf_cursor     = rbuf;
-    do {
-        pollcode = poll(fds, 1, 50);
-        if (pollcode <= 0) {
-            errcode = 3;
-            goto mpipe_reader_ERR;
-        }
-        else if (fds[0].revents & (POLLERR | POLLHUP | POLLNVAL)) {
-            errcode = 4;
-            goto mpipe_reader_ERR;
-        }
-    
-        new_bytes       = (int)read(mpctl.tty_fd, rbuf_cursor, payload_left);
-        rbuf_cursor    += new_bytes;
-        payload_left   -= new_bytes;
-        TTY_PRINTF("header new_bytes = %d\n", new_bytes);
-    } while (payload_left > 0);
-    
-    if (payload_left != 0) {
-        goto mpipe_reader_START;
-    }
-    
-    /// Bytes 0:1 are the CRC16 checksum.  The controlling app can decide what
-    /// to do about those.  They are in the buffer.
-    
-    /// Bytes 2:3 are the Length of the Payload, in big endian.  It can be up
-    /// to 65535 bytes, but CRC16 won't be great help for more than 250 bytes.
-    payload_length  = rbuf[2] * 256;
-    payload_length += rbuf[3];
-    
-    /// Byte 4 is a sequence number, which the controlling app can decide what
-    /// to do with.  Byte 5 is RFU, but in the future it can be used to 
-    /// expand the header.  That logic would go below (currently trivial).
-    header_length = 6 + 0;
-    
-    /// Now do some checks to prevent malformed packets.
-    if (((unsigned int)payload_length == 0) \
-    || ((unsigned int)payload_length > (1024-header_length))) {
-        errcode = 2;
-        goto mpipe_reader_ERR;
-    }
-    
-    /// Receive the remaining payload bytes
-    ///@note Commented-out parts are buffer printouts for data alignment 
-    ///      validation.    
-    payload_left    = payload_length;
-    rbuf_cursor     = &rbuf[6];
-    while (payload_left > 0) { 
-        pollcode = poll(fds, 1, 50);
-        if (pollcode <= 0) {
-            errcode = 3;
-            goto mpipe_reader_ERR;
-        }
-        else if (fds[0].revents & (POLLERR | POLLHUP | POLLNVAL)) {
-            errcode = 4;
-            goto mpipe_reader_ERR;
-        }
-    
-        new_bytes       = (int)read(mpctl.tty_fd, rbuf_cursor, payload_left);
-        // Debugging output
-        TTY_PRINTF(stderr, "payload new_bytes = %d\n", new_bytes);
-        HEX_DUMP(rbuf_cursor, new_bytes, "read(): ");
+    while (1) {
+        errcode = 0;
         
-        rbuf_cursor    += new_bytes;
-        payload_left   -= new_bytes;
-    };
+        /// Wait until an FF comes
+        ready_fds = poll(fds, num_fds, -1);
+        if (ready_fds <= 0) {
+            fprintf(stderr, "Polling failure: quitting now\n");
+            goto mpipe_reader_TERM;
+        }
+        
+        for (int i=0; i<num_fds; i++) {
+            // Handle Errors
+            ///@todo change 100ms fixed wait on hangup to a configurable amount
+            if (fds[i].revents & (POLLNVAL|POLLHUP)) {
+                usleep(100 * 1000);
+                errcode = 4;
+                goto mpipe_reader_ERR;
+            }
+        
+            // Verify that POLLIN is high.  This should be implicit, but we check explicitly here
+            if ((fds[i].revents & POLLIN) == 0) {
+                mpipe_flush(mph, i, 0, TCIFLUSH);
+                continue;
+            }
+            
+            // Find FF, the first sync byte
+            mpipe_reader_SYNC0:
+            new_bytes = (int)read(fds[i].fd, &syncinput, 1);
+            if (new_bytes < 1) {
+                errcode = 1;        // flushable
+                goto mpipe_reader_ERR;
+            }
+            if (syncinput != 0xFF) {
+                goto mpipe_reader_SYNC0;
+            }
+            TTY_PRINTF("TTY: Sync FF Received\n");
+            
+            // Now wait for a 55, ignoring FFs
+            mpipe_reader_SYNC1:
+            pollcode = poll(&fds[i], 1, 50);
+            if (pollcode <= 0) {
+                errcode = 3;        // flushable
+                goto mpipe_reader_ERR;
+            }
+            else if (fds[0].revents & (POLLERR | POLLHUP | POLLNVAL)) {
+                errcode = 4;        // flushable
+                goto mpipe_reader_ERR;
+            }
+            
+            new_bytes = (int)read(fds[i].fd, &syncinput, 1);
+            if (new_bytes < 1) {
+                errcode = 1;        // flushable
+                goto mpipe_reader_ERR;
+            }
+            if (syncinput == 0xFF) {
+                goto mpipe_reader_SYNC1;
+            }
+            if (syncinput != 0x55) {
+                goto mpipe_reader_SYNC0;
+            }
+            TTY_PRINTF("TTY: Sync 55 Received\n");
+            
+            // At this point, FF55 was detected.  We get the next 6 bytes of the
+            // header, which is the rest of the header.
+            /// @todo Make header length dynamic based on control field (last byte).
+            ///           However, control field is not yet defined.
+            new_bytes       = 0;
+            payload_left    = 6;
+            rbuf_cursor     = rbuf;
+            do {
+                pollcode = poll(fds, 1, 50);
+                if (pollcode <= 0) {
+                    errcode = 3;
+                    goto mpipe_reader_ERR;
+                }
+                else if (fds[0].revents & (POLLERR | POLLHUP | POLLNVAL)) {
+                    errcode = 4;
+                    goto mpipe_reader_ERR;
+                }
+            
+                new_bytes       = (int)read(fds[i].fd, rbuf_cursor, payload_left);
+                rbuf_cursor    += new_bytes;
+                payload_left   -= new_bytes;
+                TTY_PRINTF("header new_bytes = %d\n", new_bytes);
+            } while (payload_left > 0);
+            
+            if (payload_left != 0) {
+                continue;
+            }
+            
+            // Bytes 0:1 are the CRC16 checksum.  The controlling app can decide what
+            // to do about those.  They are in the buffer.
+            // Bytes 2:3 are the Length of the Payload, in big endian.  It can be up
+            // to 65535 bytes, but CRC16 won't be great help for more than 250 bytes.
+            payload_length  = rbuf[2] * 256;
+            payload_length += rbuf[3];
+            
+            // Byte 4 is a sequence number, which the controlling app can decide what
+            // to do with.  Byte 5 is RFU, but in the future it can be used to
+            // expand the header.  That logic would go below (currently trivial).
+            header_length = 6 + 0;
+            
+            // Now do some checks to prevent malformed packets.
+            if (((unsigned int)payload_length == 0) \
+            || ((unsigned int)payload_length > (1024-header_length))) {
+                errcode = 2;
+                goto mpipe_reader_ERR;
+            }
+            
+            // Receive the remaining payload bytes
+            payload_left    = payload_length;
+            rbuf_cursor     = &rbuf[6];
+            while (payload_left > 0) {
+                pollcode = poll(fds, 1, 50);
+                if (pollcode <= 0) {
+                    errcode = 3;
+                    goto mpipe_reader_ERR;
+                }
+                else if (fds[0].revents & (POLLERR | POLLHUP | POLLNVAL)) {
+                    errcode = 4;
+                    goto mpipe_reader_ERR;
+                }
+            
+                new_bytes       = (int)read(fds[i].fd, rbuf_cursor, payload_left);
+                // Debugging output
+                TTY_PRINTF(stderr, "payload new_bytes = %d\n", new_bytes);
+                HEX_DUMP(rbuf_cursor, new_bytes, "read(): ");
+                
+                rbuf_cursor    += new_bytes;
+                payload_left   -= new_bytes;
+            };
 
-    // Debugging output
-    HEX_DUMP(&rbuf[6], payload_length, "pkt   : ");
+            // Debugging output
+            HEX_DUMP(&rbuf[6], payload_length, "pkt   : ");
 
-    /// Copy the packet to the rlist and signal mpipe_parser()
-    pthread_mutex_lock(mparg->rlist_mutex);
-    pktlist_add_rx(mparg->endpoint, mparg->rlist, rbuf, (size_t)(header_length + payload_length));
-    pthread_mutex_unlock(mparg->rlist_mutex);
+            // Copy the packet to the rlist and signal mpipe_parser()
+            pthread_mutex_lock(mparg->rlist_mutex);
+            pktlist_add_rx(mparg->endpoint, mpipe_intf_get(mph, i), mparg->rlist, rbuf, (size_t)(header_length + payload_length));
+            pthread_mutex_unlock(mparg->rlist_mutex);
+            
+            // Error Handler: wait a few milliseconds, then handle the error.
+            /// @todo supply estimated bytes remaining into mpipe_flush()
+            mpipe_reader_ERR:
+            switch (errcode) {
+                case 0: TTY_PRINTF(stderr, "Sending packet rx signal\n");
+                        pthread_cond_signal(mparg->pktrx_cond);
+                        break;
+                
+                case 1: TTY_PRINTF(stderr, "MPipe Packet Sync could not be retrieved.\n");
+                        mpipe_flush(mph, i, 0, TCIFLUSH);
+                        break;
+                
+                case 2: TTY_PRINTF(stderr, "Mpipe Packet Payload Length is out of bounds.\n");
+                        mpipe_flush(mph, i, 0, TCIFLUSH);
+                        break;
+                    
+                case 3: TTY_PRINTF(stderr, "Mpipe Packet RX timed-out\n");
+                        mpipe_flush(mph, i, 0, TCIFLUSH);
+                        break;
+                    
+                case 4: if (mpipe_reopen(mph, i) == 0) {
+                            mpipe_flush(mph, i, 0, TCIFLUSH);
+                            break;
+                        }
+                        fprintf(stderr, "Connection dropped, quitting now\n");
+                        goto mpipe_reader_TERM;
+                    
+               default: fprintf(stderr, "Unknown error, quitting now\n");
+                        goto mpipe_reader_TERM;
+            }
+        }
+    }
     
-    /// Error Handler: wait a few milliseconds, then handle the error.
-    /// @todo supply estimated bytes remaining into mpipe_flush()
-    mpipe_reader_ERR:
-    switch (errcode) {
-        case 0: TTY_PRINTF(stderr, "Sending packet rx signal\n");
-                pthread_cond_signal(mparg->pktrx_cond);
-                goto mpipe_reader_START;
-        
-        case 1: TTY_PRINTF(stderr, "MPipe Packet Sync could not be retrieved.\n");
-                goto mpipe_reader_START;
-        
-        case 2: TTY_PRINTF(stderr, "Mpipe Packet Payload Length is out of bounds.\n");
-                goto mpipe_reader_START;
-                
-        case 3: TTY_PRINTF(stderr, "Mpipe Packet RX timed-out\n");
-                goto mpipe_reader_START;
-                
-        case 4: fprintf(stderr, "Connection dropped, quitting now\n");
-                break;
-                
-       default: fprintf(stderr, "Unknown error, quitting now\n");
-                break;
+    mpipe_reader_TERM:
+    mpipe_flush(mph, -1, 0, TCIFLUSH);
+    
+    if (fds != NULL) {
+        free(fds);
     }
     
     /// This occurs on uncorrected errors, such as case 4 from above, or other 
@@ -278,6 +309,7 @@ void* mpipe_writer(void* args) {
         
         while (mparg->tlist->cursor != NULL) {
             pkt_t* txpkt;
+            mpipe_fd_t* intf_fd;
             
             ///@todo wait also for RX to be off
             
@@ -296,7 +328,9 @@ void* mpipe_writer(void* args) {
                 mparg->tlist->cursor    = mparg->tlist->marker;
             }
             
-            {   int bytes_left;
+            intf_fd = mpipe_fds_resolve(txpkt->intf);
+            if (intf_fd != NULL) {
+                int bytes_left;
                 int bytes_sent;
                 uint8_t* cursor;
                 
@@ -308,7 +342,7 @@ void* mpipe_writer(void* args) {
                 HEX_DUMP(cursor, bytes_left, "Writing %d bytes to tty\n", bytes_left);
                 
                 while (bytes_left > 0) {
-                    bytes_sent  = (int)write(mparg->mpctl->tty_fd, cursor, bytes_left);
+                    bytes_sent  = (int)write(intf_fd->out, cursor, bytes_left);
                     cursor     += bytes_sent;
                     bytes_left -= bytes_sent;
                 }

@@ -58,7 +58,6 @@ static int sub_dtputs(char* str) {
 
 
 
-
 /** Modbus Threads <BR>
   * ========================================================================<BR>
   * <LI> modbus_reader() : manages TTY RX, pushes to rlist.  Depends on no other
@@ -188,7 +187,7 @@ void* modbus_reader(void* args) {
 
             /// Copy the packet to the rlist and signal modbus_parser()
             pthread_mutex_lock(rlist_mutex);
-            list_size = pktlist_add_rx(endpoint, rlist, rbuf, (size_t)frame_length);
+            list_size = pktlist_add_rx(endpoint, mpipe_intf_get(mph, i), rlist, rbuf, (size_t)frame_length);
             pthread_mutex_unlock(rlist_mutex);
             
             if (list_size <= 0) {
@@ -283,7 +282,7 @@ void* modbus_writer(void* args) {
                 tlist->cursor   = tlist->marker;
             }
             
-            intf_fd = mpipe_fds_get(mph, txpkt->intf_id);
+            intf_fd = mpipe_fds_resolve(txpkt->intf);
             
             if (intf_fd != NULL) {
                 int bytes_left;

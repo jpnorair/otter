@@ -17,7 +17,7 @@
 #include <time.h>
 
 typedef struct pkt {
-    //devtab_node_t   devnode;
+    void*           intf;       //devtab_node_t   devnode;
     uint8_t*        buffer;
     size_t          size;
     int             crcqual;
@@ -46,8 +46,8 @@ void pktlist_empty(pktlist_t* plist);
 int pktlist_del(pktlist_t* plist, pkt_t* pkt);
 int pktlist_getnew(pktlist_t* plist);
 
-int pktlist_add_tx(user_endpoint_t* endpoint, pktlist_t* plist, uint8_t* data, size_t size);
-int pktlist_add_rx(user_endpoint_t* endpoint, pktlist_t* plist, uint8_t* data, size_t size);
+int pktlist_add_tx(user_endpoint_t* endpoint, void* intf, pktlist_t* plist, uint8_t* data, size_t size);
+int pktlist_add_rx(user_endpoint_t* endpoint, void* intf, pktlist_t* plist,uint8_t* data, size_t size);
 
 
 #endif /* pktlist_h */

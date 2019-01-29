@@ -87,14 +87,14 @@ static int sub_editnode(dterm_handle_t* dth, int argc, char** argv, bool require
     }
     
     if (intf->count > 0) {
-        ///@todo search for interface pointer based on device
-        intf_val = (void*)intf->sval[0];
+        ///@todo Must be able to do mpipe_intf_get(mph, ttyname)
+        intf_val = mpipe_intf_fromfile(dth->mpipe, intf->sval[0]);
     }
     else if (node != NULL) {
         intf_val = devtab_get_intf(dth->endpoint.devtab, node);
     }
     else {
-        intf_val = NULL;
+        intf_val = mpipe_intf_get(dth->mpipe, 0);
     }
     
     if (rootkey->count > 0) {

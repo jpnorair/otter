@@ -106,6 +106,7 @@ typedef struct {
     cmdtab_t*           cmdtab;
     pktlist_t*          tlist;
     user_endpoint_t     endpoint;
+    mpipe_handle_t      mpipe;
     subscr_handle_t     subscribers;
     
     pthread_mutex_t*    dtwrite_mutex;
@@ -137,10 +138,14 @@ typedef enum {
 } cmdtype;
 
 
+///@todo rework the dterm module into a more normal object.
+/// Presently the handle isn't a real handle, it's a struct.
+int dterm_init(dterm_handle_t* handle);
+void dterm_deinit(dterm_handle_t handle);
+
 
 int dterm_open(dterm_t* dt, bool use_pipe);
 int dterm_close(dterm_t* dt);
-void dterm_free(dterm_t* dt);
 
 int dterm_squelch(dterm_t* dt);
 void dterm_unsquelch(dterm_t* dt);

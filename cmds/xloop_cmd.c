@@ -130,7 +130,7 @@ static int sub_cmdrun(dterm_handle_t* dth, const cmdtab_item_t* cmdptr, char* cm
     if (bytesout > 0) {
         int list_size;
         pthread_mutex_lock(dth->tlist_mutex);
-        list_size = pktlist_add_tx(&dth->endpoint, dth->tlist, dst, bytesout);
+        list_size = pktlist_add_tx(&dth->endpoint, NULL, dth->tlist, dst, bytesout);
         pthread_mutex_unlock(dth->tlist_mutex);
         if (list_size > 0) {
             pthread_cond_signal(dth->tlist_cond);

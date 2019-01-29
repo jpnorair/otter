@@ -241,7 +241,7 @@ static void sub_writefooter_modbus(pkt_t* newpkt) {
 }
 
 
-static int sub_pktlist_add(user_endpoint_t* endpoint, pktlist_t* plist, uint8_t* data, size_t size, bool iswrite) {
+static int sub_pktlist_add(user_endpoint_t* endpoint, void* intf, pktlist_t* plist, uint8_t* data, size_t size, bool iswrite) {
     pkt_t* newpkt;
     size_t max_overhead;
     void (*put_frame)(user_endpoint_t*, pkt_t*, uint8_t*, size_t);
@@ -249,6 +249,16 @@ static int sub_pktlist_add(user_endpoint_t* endpoint, pktlist_t* plist, uint8_t*
     
     if ((endpoint == NULL) || (plist == NULL)) {
         return -1;
+    }
+    
+    ///@note If no explicit interface, use the interface attached to dterm's
+    /// (dterm is the controlling terminal) active endpoint.  "Active endpoint"
+    /// stipulates a device on the network and its access level, typically
+    /// specified by mknode and/or chuser commands.  In normal usage, packets
+    /// for transmission are implicitly routed and packets that are received
+    /// are explicitly routed.
+    if (intf == NULL) {
+        intf = ((devtab_endpoint_t*)endpoint->node)->intf;
     }
     
     newpkt = malloc(sizeof(pkt_t));
@@ -366,12 +376,14 @@ static int sub_pktlist_add(user_endpoint_t* endpoint, pktlist_t* plist, uint8_t*
 
 
 
-int pktlist_add_tx(user_endpoint_t* endpoint, pktlist_t* plist, int intf_id, uint8_t* data, size_t size) {
-    return sub_pktlist_add(endpoint, plist, data, size, true);
+int pktlist_add_tx(user_endpoint_t* endpoint, void* intf, pktlist_t* plist, uint8_t* data, size_t size) {
+    ///@todo endpoint vs. intf NULL check
+    return sub_pktlist_add(endpoint, intf, plist, data, size, true);
 }
 
-int pktlist_add_rx(user_endpoint_t* endpoint, pktlist_t* plist, int intf_id, uint8_t* data, size_t size) {
-    return sub_pktlist_add(endpoint, plist, data, size, false);
+int pktlist_add_rx(user_endpoint_t* endpoint, void* intf,  pktlist_t* plist, uint8_t* data, size_t size) {
+    ///@todo endpoint vs. intf NULL check
+    return sub_pktlist_add(endpoint, intf, plist, data, size, false);
 }
 
 

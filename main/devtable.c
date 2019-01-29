@@ -17,6 +17,7 @@
 // Local Headers
 #include "otter_cfg.h"
 #include "devtable.h"
+#include "mpipe.h"
 
 // HB libraries
 #if OTTER_FEATURE(SECURITY)
@@ -70,8 +71,8 @@ static int sub_cmp64(uint64_t a, uint64_t b);
 static int sub_cmp16(uint16_t a, uint16_t b);
 static devtab_item_t* sub_searchop_uid(devtab_t* table, uint64_t uid, int operation);
 static devtab_vid_t* sub_searchop_vid(devtab_t* table, uint16_t vid, int operation);
-static int sub_editop(devtab_t* table, uint64_t uid, uint16_t vid, void* intf_handle, void* rootkey, void* userkey, int operation);
-static int sub_edit_item(devtab_item_t* item, uint64_t uid, uint16_t vid, void* intf_handle, void* rootkey, void* userkey);
+static int sub_editop(devtab_t* table, uint64_t uid, uint16_t vid, void* intfp, void* rootkey, void* userkey, int operation);
+static int sub_edit_item(devtab_item_t* item, uint64_t uid, uint16_t vid, void* intfp, void* rootkey, void* userkey);
 
 
 
@@ -159,14 +160,16 @@ int devtab_list(devtab_handle_t handle, char* dst, size_t dstmax) {
         chars_out  += (16+1+4+1);
         if (chars_out < dstmax) {
             char uidstr[17];
+            
             cmdutils_uint8_to_hexstr(uidstr, (uint8_t*)&table->cell[i]->uid, 8);
-        
-            dst += sprintf(dst, "%i. %s [vid:%i] [root:%s] [user:%s]\n",
+
+            dst += sprintf(dst, "%i. %s [vid:%i] [root:%s] [user:%s] [intf:%s]\n",
                         i+1,
                         uidstr,
                         table->cell[i]->vid,
                         (table->cell[i]->root == NULL) ? no : yes,
-                        (table->cell[i]->user == NULL) ? no : yes
+                        (table->cell[i]->user == NULL) ? no : yes,
+                        mpipe_file_resolve(table->cell[i]->intf)
                     );
         }
         else {
@@ -182,7 +185,7 @@ int devtab_list(devtab_handle_t handle, char* dst, size_t dstmax) {
 
 
 
-int devtab_insert(devtab_handle_t handle, uint64_t uid, uint16_t vid, void* intf_handle, void* rootkey, void* userkey) {
+int devtab_insert(devtab_handle_t handle, uint64_t uid, uint16_t vid, void* intfp, void* rootkey, void* userkey) {
     devtab_t* table = handle;
     int rc = 0;
     
@@ -220,7 +223,7 @@ int devtab_insert(devtab_handle_t handle, uint64_t uid, uint16_t vid, void* intf
     }
 
     ///2. Insert a new cmd item,
-    rc = sub_editop(handle, uid, vid, intf_handle, rootkey, userkey, 1);
+    rc = sub_editop(handle, uid, vid, intfp, rootkey, userkey, 1);
     
     pthread_mutex_unlock(&table->access_mutex);
     return rc;
@@ -228,7 +231,7 @@ int devtab_insert(devtab_handle_t handle, uint64_t uid, uint16_t vid, void* intf
 
 
 
-int devtab_edit(devtab_handle_t handle, uint64_t uid, uint16_t vid, void* intf_handle, void* rootkey, void* userkey) {
+int devtab_edit(devtab_handle_t handle, uint64_t uid, uint16_t vid, void* intfp, void* rootkey, void* userkey) {
     devtab_t* table = handle;
     int rc;
     if (table == NULL) {
@@ -236,7 +239,7 @@ int devtab_edit(devtab_handle_t handle, uint64_t uid, uint16_t vid, void* intf_h
     }
     
     pthread_mutex_lock(&table->access_mutex);
-    rc = sub_editop(handle, uid, vid, intf_handle, rootkey, userkey, 0);
+    rc = sub_editop(handle, uid, vid, intfp, rootkey, userkey, 0);
     pthread_mutex_unlock(&table->access_mutex);
     
     return rc;
@@ -244,7 +247,7 @@ int devtab_edit(devtab_handle_t handle, uint64_t uid, uint16_t vid, void* intf_h
 
 
 
-int devtab_edit_item(devtab_handle_t handle, devtab_node_t node, uint64_t uid, uint16_t vid, void* intf_handle, void* rootkey, void* userkey) {
+int devtab_edit_item(devtab_handle_t handle, devtab_node_t node, uint64_t uid, uint16_t vid, void* intfp, void* rootkey, void* userkey) {
     devtab_t* table = handle;
     int rc;
     if ((table == NULL) || (node == NULL)) {
@@ -255,7 +258,7 @@ int devtab_edit_item(devtab_handle_t handle, devtab_node_t node, uint64_t uid, u
         return -2;
     }
     
-    rc = sub_edit_item(node, uid, vid, intf_handle, rootkey, userkey);
+    rc = sub_edit_item(node, uid, vid, intfp, rootkey, userkey);
     pthread_mutex_unlock(&table->access_mutex);
     
     return rc;
@@ -625,7 +628,7 @@ static devtab_vid_t* sub_searchop_vid(devtab_t* table, uint16_t vid, int operati
 }
 
 
-static int sub_editop(devtab_t* table, uint64_t uid, uint16_t vid, void* intf_handle, void* rootkey, void* userkey, int operation) {
+static int sub_editop(devtab_t* table, uint64_t uid, uint16_t vid, void* intfp, void* rootkey, void* userkey, int operation) {
     devtab_item_t* item;
     devtab_vid_t* viditem;
 
@@ -644,7 +647,7 @@ static int sub_editop(devtab_t* table, uint64_t uid, uint16_t vid, void* intf_ha
         viditem->cell = item;
     }
 
-    return sub_edit_item(item, uid, vid, intf_handle, rootkey, userkey);
+    return sub_edit_item(item, uid, vid, intfp, rootkey, userkey);
 }
 
 
@@ -687,12 +690,12 @@ static int sub_setkey(void** ctx, void* key) {
 }
 
 
-static int sub_edit_item(devtab_item_t* item, uint64_t uid, uint16_t vid, void* intf_handle, void* rootkey, void* userkey) {
+static int sub_edit_item(devtab_item_t* item, uint64_t uid, uint16_t vid, void* intfp, void* rootkey, void* userkey) {
     int rc;
 
     /// 4. Fill-up cell values.
     item->vid   = vid;
-    item->intf  = intf_handle;
+    item->intf  = intfp;
     
     rc = sub_setkey(&item->root, rootkey);
     if (rc != 0) {
