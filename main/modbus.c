@@ -383,27 +383,29 @@ void* modbus_parser(void* args) {
             uint16_t    msgbytes;
             bool        clear_rpkt      = true;
             bool        rpkt_is_resp;
+            pkt_t*      rpkt;
 
             /// For a Modbus master (like this), all received packets are 
             /// responses.  In some type of peer-peer modbus system, this would
             /// need to be intelligently managed.
-            rpkt_is_resp = true;
+            rpkt_is_resp    = true;
+            rpkt            = mparg->rlist->cursor;
 
             /// If Verbose, Print received header in real language
             /// If not Verbose, just print the encoded packet status
             if (cliopt_isverbose()) {
                 sprintf(putsbuf, "\n" _E_BBLK "RX'ed %zu bytes at %s, %s CRC: %s" _E_NRM "\n",
-                            mparg->rlist->cursor->size,
-                            fmt_time(&mparg->rlist->cursor->tstamp),
-                            fmt_crc(mparg->rlist->cursor->crcqual),
-                            fmt_hexdump_header(mparg->rlist->cursor->buffer)
+                            rpkt->size,
+                            fmt_time(&rpkt->tstamp),
+                            fmt_crc(rpkt->crcqual),
+                            fmt_hexdump_header(rpkt->buffer)
                         );
             }
             else {
                 switch (cliopt_getformat()) {
                     case FORMAT_Hex: {
                         putsbuf[0] = '0';
-                        putsbuf[1] = '0' + (mparg->rlist->cursor->crcqual != 0);
+                        putsbuf[1] = '0' + (rpkt->crcqual != 0);
                         putsbuf[2] = 0;
                         ///@todo put this to the buffer without flushing it
                     } break;
@@ -416,9 +418,9 @@ void* modbus_parser(void* args) {
                     default: {
                         const char* valid_sym = _E_GRN"v";
                         const char* error_sym = _E_RED"x";
-                        const char* crc_sym   = (mparg->rlist->cursor->crcqual == 0) ? valid_sym : error_sym;
+                        const char* crc_sym   = (rpkt->crcqual == 0) ? valid_sym : error_sym;
                         sprintf(putsbuf, _E_WHT "[" "%s" _E_WHT "][%03d] " _E_NRM,
-                                crc_sym, mparg->rlist->cursor->sequence);
+                                crc_sym, rpkt->sequence);
                     } break;
                 }
             }
@@ -426,15 +428,15 @@ void* modbus_parser(void* args) {
 
             /// If CRC is bad, dump hex of buffer-size and discard packet now.
             if (mparg->rlist->cursor->crcqual != 0) {
-                fmt_printhex(&sub_dtputs, &mparg->rlist->cursor->buffer[0], mparg->rlist->cursor->size, 16);
-                pktlist_del(mparg->rlist, mparg->rlist->cursor);
+                fmt_printhex(&sub_dtputs, &rpkt->buffer[0], rpkt->size, 16);
+                pktlist_del(mparg->rlist, rpkt);
                 goto modbus_parser_END;
             }
             
             /// CRC is good, so send packet to Modbus processor.
-            proc_result = smut_resp_proc(putsbuf, mparg->rlist->cursor->buffer, &output_bytes, mparg->rlist->cursor->size, true);
-            msg         = mparg->rlist->cursor->buffer;
-            msgbytes    = mparg->rlist->cursor->size;
+            proc_result = smut_resp_proc(putsbuf, rpkt->buffer, &output_bytes, rpkt->size, true);
+            msg         = rpkt->buffer;
+            msgbytes    = rpkt->size;
             msgtype     = smut_extract_payload((void**)&msg, (void*)msg, &msgbytes, msgbytes, true);
             
             if ((proc_result == 0) && (msgtype >= 0)) {

@@ -32,6 +32,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <time.h>
+#include <poll.h>
 
 
 // MPipe Data Type(s)
@@ -81,6 +82,7 @@ const char* mpipe_file_get(mpipe_handle_t handle, int id);
 void* mpipe_intf_get(mpipe_handle_t handle, int id);
 void* mpipe_intf_fromfile(mpipe_handle_t handle, const char* file);
 
+int mpipe_id_resolve(mpipe_handle_t handle, void* intfp);
 mpipe_fd_t* mpipe_fds_resolve(void* intfp);
 const char* mpipe_file_resolve(void* intfp);
 

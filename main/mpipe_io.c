@@ -388,6 +388,8 @@ void* mpipe_parser(void* args) {
     // are none remaining.
     while (1) {
         int pkt_condition;  // tracks some error conditions
+        pkt_t*  rpkt;
+        pkt_t*  tpkt;
     
         //pthread_mutex_lock(pktrx_mutex);
         pthread_cond_wait(mparg->pktrx_cond, mparg->pktrx_mutex);
@@ -396,6 +398,7 @@ void* mpipe_parser(void* args) {
         pthread_mutex_lock(mparg->tlist_mutex);
         
         mpipe_active_dterm = (dterm_t*)mparg->dtprint;
+        rpkt = mparg->rlist->cursor;
         
         // pktlist_getnew will validate and decrypt the packet:
         // - It returns 0 if all is well
@@ -413,10 +416,9 @@ void* mpipe_parser(void* args) {
         if (pkt_condition > 0) {
             ///@todo some sort of error code
             fprintf(stderr, "A malformed packet was sent for parsing\n");
-            pktlist_del(mparg->rlist, mparg->rlist->cursor);
+            pktlist_del(mparg->rlist, rpkt);
         }
         else {
-            pkt_t*      tpkt;
             uint8_t*    payload_front;
             size_t      payload_bytes;
             bool        clear_rpkt      = true;
@@ -428,7 +430,7 @@ void* mpipe_parser(void* args) {
             // print the damn packet.
             tpkt = mparg->tlist->front;
             while (tpkt != NULL) {
-                if (tpkt->sequence == mparg->rlist->cursor->sequence) {
+                if (tpkt->sequence == rpkt->sequence) {
                     // matching transmitted packet: it IS a response
                     rpkt_is_resp = true;
                     break;
@@ -440,17 +442,17 @@ void* mpipe_parser(void* args) {
             // If not Verbose, just print the encoded packet status
             if (cliopt_isverbose()) {
                 sprintf(putsbuf, "\n" _E_BBLK "RX'ed %zu bytes at %s, %s CRC: %s" _E_NRM "\n",
-                            mparg->rlist->cursor->size,
-                            fmt_time(&mparg->rlist->cursor->tstamp),
-                            fmt_crc(mparg->rlist->cursor->crcqual),
-                            fmt_hexdump_header(mparg->rlist->cursor->buffer)
+                            rpkt->size,
+                            fmt_time(&rpkt->tstamp),
+                            fmt_crc(rpkt->crcqual),
+                            fmt_hexdump_header(rpkt->buffer)
                         );
             }
             else {
                 switch (cliopt_getformat()) {
                     case FORMAT_Hex: {
                         putsbuf[0] = '0';
-                        putsbuf[1] = '0' + (mparg->rlist->cursor->crcqual != 0);
+                        putsbuf[1] = '0' + (rpkt->crcqual != 0);
                         putsbuf[2] = 0;
                         ///@todo put this to the buffer without flushing it
                     } break;
@@ -459,9 +461,9 @@ void* mpipe_parser(void* args) {
                     default: {
                         const char* valid_sym = _E_GRN"v";
                         const char* error_sym = _E_RED"x"; 
-                        const char* crc_sym   = (mparg->rlist->cursor->crcqual == 0) ? valid_sym : error_sym;
+                        const char* crc_sym   = (rpkt->crcqual == 0) ? valid_sym : error_sym;
                         sprintf(putsbuf, _E_WHT "[" "%s" _E_WHT "][%03d] " _E_NRM, 
-                                crc_sym, mparg->rlist->cursor->sequence);
+                                crc_sym, rpkt->sequence);
                     } break;
                 }
             }
@@ -473,27 +475,27 @@ void* mpipe_parser(void* args) {
             ///      CRC: possibly data alignment or something, or might be
             ///      a problem on the test sender.
             if (mparg->rlist->cursor->crcqual != 0) {
-                fmt_printhex(&sub_dtputs, &mparg->rlist->cursor->buffer[6], mparg->rlist->cursor->size-6, 16);
-                pktlist_del(mparg->rlist, mparg->rlist->cursor);
+                fmt_printhex(&sub_dtputs, &rpkt->buffer[6], rpkt->size-6, 16);
+                pktlist_del(mparg->rlist, rpkt);
                 goto mpipe_parser_END;
             }
             
             // Here is where decryption would go
-            if (mparg->rlist->cursor->buffer[5] & (3<<5)) {
+            if (rpkt->buffer[5] & (3<<5)) {
                 ///@todo Deal with encryption here.  When implemented, there
                 /// should be an encryption header at this offset (6), 
                 /// followed by the payload, and then the real data payload.
                 /// The real data payload is followed by a 4 byte Message
                 /// Authentication Check (Crypto-MAC) value.  AES128 EAX
                 /// is the cryptography and cipher used.
-                payload_front = &mparg->rlist->cursor->buffer[6];
+                payload_front = &rpkt->buffer[6];
             }
             else {
-                payload_front = &mparg->rlist->cursor->buffer[6];
+                payload_front = &rpkt->buffer[6];
             }
             
             // Inspect header to see if M2DEF
-            if ((mparg->rlist->cursor->buffer[5] & (1<<7)) == 0) {
+            if ((rpkt->buffer[5] & (1<<7)) == 0) {
                 rpkt_is_valid = true;
                 //parse some shit
                 //clear_rpkt = false when there is non-atomic input
@@ -502,37 +504,35 @@ void* mpipe_parser(void* args) {
             // Get Payload Bytes, found in buffer[2:3]
             // Then print-out the payload.
             // If it is a M2DEF payload, the print-out can be formatted in different ways
-            payload_bytes   = mparg->rlist->cursor->buffer[2] * 256;
-            payload_bytes  += mparg->rlist->cursor->buffer[3];
+            payload_bytes   = rpkt->buffer[2] * 256;
+            payload_bytes  += rpkt->buffer[3];
 
-            // Send an error if payload bytes is too big
-            if (payload_bytes > mparg->rlist->cursor->size) {
+            /// 1. If payload is too big, send an error
+            /// 2a. If packet is valid, punt it to the ALP output formatter.
+            /// 2b. If ALP formatting is correct, send data to the subscriber
+            /// 3. If packet is not valid, dump its hex
+            ///@note: ALP formatters should deal internally with protocol variations
+            if (payload_bytes > rpkt->size) {
                 ///@todo handle format variations
                 sprintf(putsbuf, "... Reported Payload Length (%zu) is larger than buffer (%zu).\n" \
                                  "... Possible transmission error.\n",
-                                payload_bytes, mparg->rlist->cursor->size
+                                payload_bytes, rpkt->size
                         );
                 sub_dtputs(putsbuf);
             }
-            
-            ///@note: ALP handlers should deal internally with format variations
             else if (rpkt_is_valid)  {
-                //m2def_sprintf(putsbuf, &rlist->cursor->buffer[6], 2048, "");
-                //sub_dtputs(putsbuf)
-                fmt_fprintalp(&sub_dtputs, mparg->msgcall, payload_front, payload_bytes);
+                int subsig, fmt_result;
+                fmt_result  = fmt_fprintalp(&sub_dtputs, mparg->msgcall, payload_front, payload_bytes);
+                subsig      = (fmt_result >= 0) ? SUBSCR_SIG_OK : SUBSCR_SIG_ERR;
+                subscriber_post(mparg->subscribers, fmt_result, subsig, NULL, 0);
             }
-            
-            /// Dump hex if not using ALP
-            ///@todo handle format variations
             else {
                 fmt_printhex(&sub_dtputs, payload_front, payload_bytes, 16);
             }
 
-            // Clear the rpkt if required, and move the cursor to the next
+            // Clear the rpkt if required
             if (clear_rpkt) {
-                pkt_t*  scratch = mparg->rlist->cursor;
-                //rlist->cursor   = rlist->cursor->next;
-                pktlist_del(mparg->rlist, scratch);
+                pktlist_del(mparg->rlist, rpkt);
             }
             
             // Clear the tpkt if it is matched with an rpkt

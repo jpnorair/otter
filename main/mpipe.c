@@ -350,24 +350,22 @@ const char* mpipe_file_resolve(void* intfp) {
 
 
 int mpipe_id_resolve(mpipe_handle_t handle, void* intfp) {
-    return sub_check_handle(handle, (int)intfp - 1);
-}
+    int id;
 
-
-
-
-
-void* mpipe_intfp_resolve(mpipe_handle_t handle, int id) {
-    mpipe_tab_t* table;
-    void* intfp = NULL;
-    
-    if (sub_check_handle(handle, id) >= 0) {
-        table = (mpipe_tab_t*)handle;
-        intfp = (void*)(id+1);
+    if (handle != NULL) {
+        int max     = (int)((mpipe_tab_t*)handle)->size;
+        int delta   = (int)(intfp - (void*)((mpipe_tab_t*)handle)->intf);
+        
+        if ((delta % sizeof(mpipe_intf_t)) == 0) {
+            id = delta / sizeof(mpipe_intf_t);
+            if (id < max) {
+                return id;
+            }
+        }
     }
-    
-    return intfp;
+    return -1;
 }
+
 
 
 
