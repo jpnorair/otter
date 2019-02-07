@@ -144,18 +144,20 @@ static int sub_ttybaudrate(int native_baud) {
 
 static void sub_freeparams(mpipe_intf_t* mpintf) {
     if (mpintf != NULL) {
-        switch (mpintf->type) {
-            case MPINTF_tty: {
-                mpipe_tty_t* ttyparams = mpintf->params;
-                if (ttyparams->path != NULL) {
-                    free(ttyparams->path);
+        if (mpintf->params != NULL)
+            switch (mpintf->type) {
+            case MPINTF_tty:
+                if ( ((mpipe_tty_t*)mpintf->params)->path != NULL) {
+                    free(((mpipe_tty_t*)mpintf->params)->path);
                 }
-            } break;
+                break;
                 
             default: break;
+            }
+            
+            free(mpintf->params);
         }
         
-        free(mpintf->params);
         mpintf->type = MPINTF_null;
     }
 }
@@ -448,14 +450,14 @@ int mpipe_opentty( mpipe_handle_t handle, int id,
     }
     
     table = (mpipe_tab_t*)handle;
-    
+
     // Input Check: TTY has a valid name resembling a serial line filename
     ///@todo This routine could be made more thorough and cross platform
     if (strncmp(dev, "/dev/", 5) < 0) {
         fprintf( stderr, "File %s is not a suitable device file\n", dev );
         return -1;
     }
-    
+
     /// Free parameters for old interface.  New ones will be allocated for TTY.
     /// Parameters can be different for different interface types.
     sub_freeparams(&table->intf[id]);
@@ -473,16 +475,16 @@ int mpipe_opentty( mpipe_handle_t handle, int id,
         rc = -3;
         goto mpipe_opentty_EXIT;
     }
-    
+
     strcpy(ttyparams->path, dev);
-    
+fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
     ttyparams->baud = sub_ttybaudrate(ttyparams->baud);
     if (ttyparams->baud < 0) {
         fprintf(stderr, "Error: baudrate %d is not permitted.  Default baudrate is 115200\n", baud);
         rc = -4;
         goto mpipe_opentty_EXIT;
     }
-
+fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
     switch (data_bits) {
         case 5: ttyparams->data_bits = CS5; break;
         case 6: ttyparams->data_bits = CS6; break;
@@ -492,7 +494,7 @@ int mpipe_opentty( mpipe_handle_t handle, int id,
                 rc = -5;
                 break;
     }
-    
+fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
     ttyparams->parity       = (parity == (int)'N') ? 0 : PARENB;
     ttyparams->stop_bits    = (stop_bits == 2) ? CSTOPB : 0;
     
@@ -500,7 +502,7 @@ int mpipe_opentty( mpipe_handle_t handle, int id,
     ttyparams->flowctl      = flowctrl;
     ttyparams->dtr          = dtr;
     ttyparams->rts          = rts;
-    
+fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
     // Make sure all flow control is compatible with MPipe spec (i.e. disabled)
     if ((ttyparams->flowctl != 0) || (ttyparams->dtr != 0) || (ttyparams->rts != 0)) {
         fprintf(stderr, "In current MPipe implementation there is no flow control.  You specifed:\n");
@@ -516,7 +518,7 @@ int mpipe_opentty( mpipe_handle_t handle, int id,
         rc = -6;
         goto mpipe_opentty_EXIT;
     }
-    
+fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
     rc = sub_opentty(&table->intf[id]);
     if (rc < 0) {
         switch (rc) {
@@ -530,7 +532,7 @@ int mpipe_opentty( mpipe_handle_t handle, int id,
         }
         rc = -7;
     }
-    
+fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
     mpipe_opentty_EXIT:
     switch (rc) {
         case 0: rc = table->intf[id].fd.in;

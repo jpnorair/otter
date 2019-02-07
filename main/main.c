@@ -274,7 +274,6 @@ int main(int argc, char* argv[]) {
     if (help->count > 0) {
         printf("Usage: %s", progname);
         arg_print_syntax(stdout, argtable, "\n");
-        
         arg_print_glossary(stdout, argtable, "  %-25s %s\n");
         
         exitcode = 0;
@@ -377,15 +376,16 @@ int main(int argc, char* argv[]) {
     }
     
     /// Arguments through the command line take precedence over JSON
-    if (ttyfile->count == 0) {
+    if (ttyfile->count != 0) {
         otter_ttylist_free(ttylist, num_tty);
         
         num_tty = 1;
         ttylist = otter_ttylist_init(1);
         if (ttylist == NULL) {
+            printf("Initialization error: ttylist not created.\n");
+            bailout = true;
             goto main_FINISH;
         }
-        
         otter_ttylist_add(&ttylist[0], ttyfile->filename[0]);
         ttylist[0].baudrate = brate->count ? brate->ival[0] : OTTER_PARAM_DEFBAUDRATE;
         if (ttyenc->count != 0) {
@@ -395,6 +395,12 @@ int main(int argc, char* argv[]) {
             ttylist[0].enc_stopbits = (str_sz > 2) ? (int)ttyenc->sval[0][2] : 1;
         }
     }
+    if (ttylist == NULL) {
+        printf("Input error: no tty provided\n");
+        printf("Try '%s --help' for more information.\n", progname);
+        bailout = true;
+    }
+    
     if (pipe->count != 0) {
         pipe_val = true;
         verbose_val = false;
@@ -414,8 +420,7 @@ int main(int argc, char* argv[]) {
     if (verbose->count != 0) {
         verbose_val = true;
     }
-    
-    
+
     /// Client Options.  These are read-only from internal modules
     cliopts.intf        = intf_val;
     cliopts.format      = fmt_val;
@@ -423,19 +428,14 @@ int main(int argc, char* argv[]) {
     cliopts.debug_on    = (debug->count != 0) ? true : false;
     cliopts.quiet_on    = quiet_val;
     cliopt_init(&cliopts);
-    
+
     /// All configuration is done.
     /// Send all configuration data to program main function.
     bailout = false;
     
     /// Final value checks
     main_FINISH:
-    if (ttylist == NULL) {
-        printf("Input error: no tty provided\n");
-        printf("Try '%s --help' for more information.\n", progname);
-        bailout = true;
-    }
-    
+
     /// Free un-necessary resources
     arg_freetable(argtable, sizeof(argtable)/sizeof(argtable[0]));
     
@@ -602,7 +602,7 @@ int otter_main( ttyspec_t* ttylist,
         cli.exitcode = 5;
         goto otter_main_EXIT;
     }
-    
+
     /// Initialize the ppipe system of named pipes, based on the input json
     /// configuration file.  We have input and output pipes of several types.
     /// @todo determine what all these types are.  They must work with the 
@@ -625,7 +625,7 @@ int otter_main( ttyspec_t* ttylist,
             break;
         }
     }
-    
+
     /// Initialize mpipe memory
     rc = mpipe_init(&mpipe_handle, num_tty);
     if (rc != 0) {
@@ -633,7 +633,7 @@ int otter_main( ttyspec_t* ttylist,
         cli.exitcode = 6;
         goto otter_main_EXIT;
     }
-    
+
     /// Initialize Thread Mutexes & Conds.  This is finnicky and it must be
     /// done before assignment into the argument containers, possibly due to 
     /// C-compiler foolishly optimizing.
@@ -667,6 +667,7 @@ int otter_main( ttyspec_t* ttylist,
     mpipe_args.subscribers      = dterm_args.subscribers;
     for (int i=0; i<num_tty; i++) {
         int open_rc;
+
         open_rc = mpipe_opentty(mpipe_handle, i,
                                 ttylist[i].ttyfile,
                                 ttylist[i].baudrate,
@@ -674,12 +675,14 @@ int otter_main( ttyspec_t* ttylist,
                                 ttylist[i].enc_parity,
                                 ttylist[i].enc_stopbits,
                                 0, 0, 0);
+fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
         if (open_rc < 0) {
+fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
             cli.exitcode = 7;
             goto otter_main_EXIT;
         }
     }
-    
+fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
     /// Open DTerm interface & Setup DTerm threads
     /// The dterm thread will deal with all other aspects, such as command
     /// entry and history initialization.
@@ -704,7 +707,7 @@ int otter_main( ttyspec_t* ttylist,
         cli.exitcode = 8;
         goto otter_main_EXIT;
     }
-
+fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
     
     /// Initialize the signal handlers for this process.
     /// These are activated by Ctl+C (SIGINT) and Ctl+\ (SIGQUIT) as is
