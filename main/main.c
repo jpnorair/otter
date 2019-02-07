@@ -510,11 +510,10 @@ int otter_main( ttyspec_t* ttylist,
     int rc;
     
     // MPipe Datastructs
-    int         mpipe_fd;
     mpipe_arg_t mpipe_args;
-    mpipe_handle_t mpipe_handle;
     pktlist_t   mpipe_tlist;
     pktlist_t   mpipe_rlist;
+    mpipe_handle_t mpipe_handle = NULL;
 #   if OTTER_FEATURE(MODBUS)
     void*       smut_handle = NULL;
 #   endif
@@ -542,11 +541,6 @@ int otter_main( ttyspec_t* ttylist,
     pthread_mutex_t tlist_cond_mutex;
     pthread_cond_t  pktrx_cond;
     pthread_mutex_t pktrx_mutex;
-    
-    /// JSON params construct should contain the following objects
-    /// - "msgcall": { "msgname1":"call string 1", "msgname2":"call string 2" }
-    /// - TODO "msgpipe": (same as msg call, but call is open at startup and piped-to)
-    //mpipe_args.msgcall = cJSON_GetObjectItem(params, "msgcall");
     
     /// Initialize Otter Environment Variables.
     /// This must be the first module to be initialized.
@@ -612,7 +606,6 @@ int otter_main( ttyspec_t* ttylist,
     ppipelist_init("./pipes/");
     if (params != NULL) {
         cJSON* obj;
-        
         for (obj=params->child; obj!=NULL; obj=obj->next) {
             if (strcmp(obj->string, "pipes") != 0) {
                 continue;
@@ -667,7 +660,6 @@ int otter_main( ttyspec_t* ttylist,
     mpipe_args.subscribers      = dterm_args.subscribers;
     for (int i=0; i<num_tty; i++) {
         int open_rc;
-
         open_rc = mpipe_opentty(mpipe_handle, i,
                                 ttylist[i].ttyfile,
                                 ttylist[i].baudrate,
@@ -675,14 +667,12 @@ int otter_main( ttyspec_t* ttylist,
                                 ttylist[i].enc_parity,
                                 ttylist[i].enc_stopbits,
                                 0, 0, 0);
-fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
         if (open_rc < 0) {
-fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
             cli.exitcode = 7;
             goto otter_main_EXIT;
         }
     }
-fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
+
     /// Open DTerm interface & Setup DTerm threads
     /// The dterm thread will deal with all other aspects, such as command
     /// entry and history initialization.
@@ -707,7 +697,6 @@ fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
         cli.exitcode = 8;
         goto otter_main_EXIT;
     }
-fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
     
     /// Initialize the signal handlers for this process.
     /// These are activated by Ctl+C (SIGINT) and Ctl+\ (SIGQUIT) as is
@@ -717,14 +706,13 @@ fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
     _assign_signal(SIGINT, &sigint_handler);
     _assign_signal(SIGQUIT, &sigquit_handler);
     
-    
     /// Invoke the child threads below.  All of the child threads run
     /// indefinitely until an error occurs or until the user quits.  Quit can 
     /// be via Ctl+C or Ctl+\, or potentially also through a dterm command.  
     /// Each thread must be be implemented to raise SIGQUIT or SIGINT on exit
     /// i.e. raise(SIGINT).
     DEBUG_PRINTF("Creating theads\n");
-    if (mpipe_fd != 0) {
+    if (mpipe_handle != NULL) {
 #       if OTTER_FEATURE(MODBUS)
         if (cliopt_getintf() == INTF_modbus) {
             DEBUG_PRINTF("Opening Modbus Interface\n");
@@ -763,7 +751,7 @@ fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
     pthread_cond_wait(&cli.kill_cond, &cli.kill_mutex);
     
     DEBUG_PRINTF("Cancelling Theads\n");
-    if (mpipe_fd != 0) {
+    if (mpipe_handle != NULL) {
         pthread_cancel(thr_mpreader);
         pthread_cancel(thr_mpwriter);
         pthread_cancel(thr_mpparser);
