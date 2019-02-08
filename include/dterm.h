@@ -112,8 +112,8 @@ typedef struct {
     pthread_mutex_t*    dtwrite_mutex;
     pthread_mutex_t*    tlist_mutex;
     pthread_cond_t*     tlist_cond;
-    pthread_mutex_t*    kill_mutex;
-    pthread_cond_t*     kill_cond;
+//    pthread_mutex_t*    kill_mutex;
+//    pthread_cond_t*     kill_cond;
 } dterm_handle_t;
 
 ///@todo deprecated to use dterm_arg_t

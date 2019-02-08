@@ -64,8 +64,8 @@ typedef struct {
     pthread_mutex_t*    tlist_mutex;
     pthread_mutex_t*    tlist_cond_mutex;
     pthread_cond_t*     tlist_cond;
-    pthread_mutex_t*    kill_mutex;
-    pthread_cond_t*     kill_cond;
+//    pthread_mutex_t*    kill_mutex;
+//    pthread_cond_t*     kill_cond;
     pthread_mutex_t*    pktrx_mutex;
     pthread_cond_t*     pktrx_cond;
 } mpipe_arg_t;
@@ -75,8 +75,9 @@ int mpipe_init(mpipe_handle_t* handle, size_t num_intf);
 
 void mpipe_deinit(mpipe_handle_t handle);
 
-int mpipe_pollfd_alloc(mpipe_handle_t handle, struct pollfd* pollitems, short pollevents);
+int mpipe_pollfd_alloc(mpipe_handle_t handle, struct pollfd** pollitems, short pollevents);
 
+size_t mpipe_numintf_get(mpipe_handle_t handle);
 mpipe_fd_t* mpipe_fds_get(mpipe_handle_t handle, int id);
 const char* mpipe_file_get(mpipe_handle_t handle, int id);
 void* mpipe_intf_get(mpipe_handle_t handle, int id);

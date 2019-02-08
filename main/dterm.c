@@ -207,6 +207,8 @@ static void sub_str_sanitize(char* str, size_t max) {
     }
 }
 
+
+///@todo make this into a utils header (utils_str_mark())
 static size_t sub_str_mark(char* str, size_t max) {
     char* s1 = str;
     while ((*str!=0) && (*str!='\n') && (max!=0)) {
@@ -475,6 +477,7 @@ void* dterm_prompter(void* args) {
             
             dterm_reset(dth->dt);
             dterm_puts(dth->dt, (char*)killstring);
+
             raise(sigcode);
             return NULL;
         }

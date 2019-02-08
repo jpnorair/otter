@@ -37,14 +37,16 @@
 #include <stdbool.h>
 #include <ctype.h>
 
-typedef struct {
-    uint16_t    flags;
-    uint16_t    vid;
-    uint64_t    uid;
-    void*       intf;
-    void*       root;
-    void*       user;
-} devtab_item_t;
+///@note devtab_item_t is the same as devtab_endpoint_t, for the time being.
+//typedef struct {
+//    uint16_t    flags;
+//    uint16_t    vid;
+//    uint64_t    uid;
+//    void*       intf;
+//    void*       root;
+//    void*       user;
+//} devtab_item_t;
+typedef devtab_endpoint_t devtab_item_t;
 
 typedef struct {
     uint16_t        vid;
@@ -120,8 +122,8 @@ void devtab_free(devtab_handle_t handle) {
                 devtab_item_t* item;
                 item = table->cell[i];
                 if (item != NULL) {
-                    if (item->root != NULL) free(item->root);
-                    if (item->user != NULL) free(item->user);
+                    if (item->rootctx != NULL) free(item->rootctx);
+                    if (item->userctx != NULL) free(item->userctx);
                     free(item);
                 }
             }
@@ -167,8 +169,8 @@ int devtab_list(devtab_handle_t handle, char* dst, size_t dstmax) {
                         i+1,
                         uidstr,
                         table->cell[i]->vid,
-                        (table->cell[i]->root == NULL) ? no : yes,
-                        (table->cell[i]->user == NULL) ? no : yes,
+                        (table->cell[i]->rootctx == NULL) ? no : yes,
+                        (table->cell[i]->userctx == NULL) ? no : yes,
                         mpipe_file_resolve(table->cell[i]->intf)
                     );
         }
@@ -282,8 +284,8 @@ int devtab_remove(devtab_handle_t handle, uint64_t uid) {
     item = sub_searchop_uid(table, uid, -1);
     if (item != NULL) {
         vid = item->vid;
-        if (item->root != NULL) free(item->root);
-        if (item->user != NULL) free(item->user);
+        if (item->rootctx != NULL) free(item->rootctx);
+        if (item->userctx != NULL) free(item->userctx);
         free(item);
         sub_searchop_vid(table, vid, -1);
     }
@@ -326,7 +328,7 @@ devtab_node_t devtab_select(devtab_handle_t handle, uint64_t uid) {
         return NULL;
     }
     
-    node = (devtab_node_t)sub_searchop_uid((devtab_t*)handle, uid, 0);
+    node = (devtab_node_t)sub_searchop_uid(table, uid, 0);
     pthread_mutex_unlock(&table->access_mutex);
     
     return node;
@@ -433,7 +435,7 @@ void* devtab_get_rootctx(devtab_handle_t handle, devtab_node_t node) {
             if (pthread_mutex_lock(&table->access_mutex) != 0) {
                 return NULL;
             }
-            rootkey = ((devtab_item_t*)node)->root;
+            rootkey = ((devtab_item_t*)node)->rootctx;
             pthread_mutex_unlock(&table->access_mutex);
         }
     }
@@ -454,7 +456,7 @@ void* devtab_get_userctx(devtab_handle_t handle, devtab_node_t node) {
             if (pthread_mutex_lock(&table->access_mutex) != 0) {
                 return NULL;
             }
-            userkey = ((devtab_item_t*)node)->user;
+            userkey = ((devtab_item_t*)node)->userctx;
             pthread_mutex_unlock(&table->access_mutex);
         }
     }
@@ -551,8 +553,8 @@ static devtab_item_t* sub_searchop_uid(devtab_t* table, uint64_t uid, int operat
             output->flags   = 0;
             output->uid     = uid;
             output->intf    = NULL;
-            output->root    = NULL;
-            output->user    = NULL;
+            output->rootctx = NULL;
+            output->userctx = NULL;
             head[cci]       = output;
             table->size++;
         }
@@ -697,12 +699,12 @@ static int sub_edit_item(devtab_item_t* item, uint64_t uid, uint16_t vid, void* 
     item->vid   = vid;
     item->intf  = intfp;
     
-    rc = sub_setkey(&item->root, rootkey);
+    rc = sub_setkey(&item->rootctx, rootkey);
     if (rc != 0) {
         return -1;
     }
     
-    rc = sub_setkey(&item->user, userkey);
+    rc = sub_setkey(&item->userctx, userkey);
     if (rc != 0) {
         return -2;
     }

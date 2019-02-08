@@ -40,72 +40,6 @@
 
 
 
-///@todo command line processing should be a function used in all cases of
-/// command line processing (mainly, in dterm.c as well as here).  These three
-/// subroutines should be consolidated into some helper function lib.
-static size_t sub_str_mark(char* str, size_t max) {
-    char* s1 = str;
-    while ((*str!=0) && (*str!='\n') && (max!=0)) {
-        max--;
-        str++;
-    }
-    if (*str=='\n') *str = 0;
-    
-    return (str - s1);
-}
-
-static const cmdtab_item_t* sub_cmdproc(char* cmdline, dterm_handle_t* dth) {
-    /// Get each line from the pipe.
-    const cmdtab_item_t* cmdptr;
-    char cmdname[32];
-    int cmdlen;
-    char* mark;
-    char* cmdhead;
-
-    cmdlen  = (int)strlen(cmdline);
-    cmdhead = cmdline;
-    
-    // Convert leading and trailing quotes into spaces
-    mark = strchr(cmdhead, '"');
-    if (mark == NULL) {
-        return NULL;
-    }
-    *mark = ' ';
-    mark = strrchr(cmdhead, '"');
-    if (mark == NULL) {
-        return NULL;
-    }
-    *mark = ' ';
-    
-    // Burn whitespace ahead of command, and burn trailing whitespace
-    while (isspace(cmdhead[0])) {
-        cmdhead++;
-        --cmdlen;
-    }
-    while (isspace(cmdhead[cmdlen-1])) {
-        cmdhead[cmdlen-1] = 0;
-        --cmdlen;
-    }
-    
-    // Then determine length until newline, or null.
-    // then search/get command in list.
-    cmdlen  = (int)sub_str_mark(cmdhead, (size_t)cmdlen);
-    cmdlen  = cmd_getname(cmdname, cmdhead, sizeof(cmdname));
-    cmdptr  = cmd_search(dth->cmdtab, cmdname);
-    
-    // Rewrite loop->cmdline to remove the wrapper parts
-    strcpy(cmdline, cmdhead+cmdlen);
-
-    return cmdptr;
-}
-
-
-
-
-
-
-
-
 
 
 int cmd_xnode(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
@@ -114,15 +48,14 @@ int cmd_xnode(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, siz
     struct arg_str* nodeuid = arg_str1(NULL,NULL,"uid",         "UID of device in bintex");
     struct arg_str* nodecmd = arg_str1(NULL,NULL,"node cmd",    "Command put in quotes (\"\") to run");
     struct arg_end* end     = arg_end(5);
-    void* argtable[]        = { nodeuid, nodecmd, end };
+    void* argtable[]        = { nodeuser, nodeuid, nodecmd, end };
     int argc;
     char** argv;
     const cmdtab_item_t* cmdptr;
     int bytesin = 0;
-    char* xnode_cmd;
     int rc;
     USER_Type usertype;
-    uint64_t uid_val;
+    uint64_t uid_val = 0;
     devtab_node_t node = NULL;
     
     /// dt == NULL is the initialization case.
@@ -160,17 +93,16 @@ int cmd_xnode(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, siz
     dth->endpoint.usertype  = usertype;
     dth->endpoint.node      = node;
     
-    rc = cmd_run(cmdptr, dth, dst, &bytesin, (uint8_t*)xnode_cmd, dstmax);
+    cmdptr  = cmd_quoteline_resolve((char*)nodecmd->sval[0], dth);
+    rc      = cmd_run(cmdptr, dth, dst, &bytesin, (uint8_t*)nodecmd->sval[0], dstmax);
 
-    /// Free argtable & argv now that they are not necessary
-    
     cmd_xnode_FREEALL:
-    free(xnode_cmd);
-    
+    /// Free argtable & argv now that they are not necessary
+    //free(xnode_cmd);
+
     cmd_xnode_FREEARGS:
     arg_freetable(argtable, sizeof(argtable)/sizeof(argtable[0]));
     cmdutils_freeargv(argv);
-    
 
     return rc;
 }

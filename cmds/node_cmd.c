@@ -67,7 +67,7 @@ static int sub_editnode(dterm_handle_t* dth, int argc, char** argv, bool require
     }
     
     /// UID is a required element
-    bintex_ss(uid->sval[0], (uint8_t*)&uid_val, 8);
+    bintex_ss(uid->sval[0], (uint8_t*)&uid_val, 8); 
     node = devtab_select(dth->endpoint.devtab, uid_val);
     if( (require_exists && (node == NULL))
     || ((require_exists==false) && (pre->count==0) && (node != NULL))

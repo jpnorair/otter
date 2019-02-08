@@ -386,13 +386,18 @@ int main(int argc, char* argv[]) {
             bailout = true;
             goto main_FINISH;
         }
+        
         otter_ttylist_add(&ttylist[0], ttyfile->filename[0]);
-        ttylist[0].baudrate = brate->count ? brate->ival[0] : OTTER_PARAM_DEFBAUDRATE;
+        ttylist[0].baudrate     = brate->count ? brate->ival[0] : OTTER_PARAM_DEFBAUDRATE;
+        ttylist[0].enc_bits     = 8;
+        ttylist[0].enc_parity   = (int)'N';
+        ttylist[0].enc_stopbits = 1;
+        
         if (ttyenc->count != 0) {
-            int str_sz              = (int)strlen(ttyenc->sval[0]);
-            ttylist[0].enc_bits     = (str_sz > 0) ? (int)ttyenc->sval[0][0] : 8;
-            ttylist[0].enc_parity   = (str_sz > 1) ? (int)ttyenc->sval[0][1] : (int)'N';
-            ttylist[0].enc_stopbits = (str_sz > 2) ? (int)ttyenc->sval[0][2] : 1;
+            int str_sz = (int)strlen(ttyenc->sval[0]);
+            if (str_sz > 0) ttylist[0].enc_bits     = (int)(ttyenc->sval[0][0]-'0');
+            if (str_sz > 1) ttylist[0].enc_parity   = (int)ttyenc->sval[0][1];
+            if (str_sz > 1) ttylist[0].enc_stopbits = (int)(ttyenc->sval[0][2]-'0');
         }
     }
     if (ttylist == NULL) {
@@ -542,6 +547,9 @@ int otter_main( ttyspec_t* ttylist,
     pthread_cond_t  pktrx_cond;
     pthread_mutex_t pktrx_mutex;
     
+    // 0 is the success code
+    cli.exitcode = 0;
+    
     /// Initialize Otter Environment Variables.
     /// This must be the first module to be initialized.
     ///@todo in the future, let's pull this from an initialization file or
@@ -640,6 +648,13 @@ int otter_main( ttyspec_t* ttylist,
     assert( pthread_mutex_init(&pktrx_mutex, NULL) == 0 );
     pthread_cond_init(&pktrx_cond, NULL);
 
+    /// Initialize the signal handlers for this process.
+    /// These are activated by Ctl+C (SIGINT) and Ctl+\ (SIGQUIT) as is
+    /// typical in POSIX apps.  When activated, the threads are halted and
+    /// Otter is shutdown.
+    _assign_signal(SIGINT, &sigint_handler);
+    _assign_signal(SIGQUIT, &sigquit_handler);
+
     /// Open the mpipe TTY & Setup MPipe threads
     /// The MPipe Filename (e.g. /dev/ttyACMx) is sent as the first argument
     mpipe_args.handle           = mpipe_handle;
@@ -654,8 +669,8 @@ int otter_main( ttyspec_t* ttylist,
     mpipe_args.tlist_cond       = &tlist_cond;
     mpipe_args.pktrx_mutex      = &pktrx_mutex;
     mpipe_args.pktrx_cond       = &pktrx_cond;
-    mpipe_args.kill_mutex       = &cli.kill_mutex;
-    mpipe_args.kill_cond        = &cli.kill_cond;
+//    mpipe_args.kill_mutex       = &cli.kill_mutex;
+//    mpipe_args.kill_cond        = &cli.kill_cond;
     mpipe_args.endpoint         = &dterm_args.endpoint;
     mpipe_args.subscribers      = dterm_args.subscribers;
     for (int i=0; i<num_tty; i++) {
@@ -668,6 +683,7 @@ int otter_main( ttyspec_t* ttylist,
                                 ttylist[i].enc_stopbits,
                                 0, 0, 0);
         if (open_rc < 0) {
+            fprintf(stderr, "Could not open TTY on %s (error %i)\n", ttylist[i].ttyfile, open_rc);
             cli.exitcode = 7;
             goto otter_main_EXIT;
         }
@@ -690,21 +706,15 @@ int otter_main( ttyspec_t* ttylist,
     dterm_args.dtwrite_mutex    = &dtwrite_mutex;
     dterm_args.tlist_mutex      = &tlist_mutex;
     dterm_args.tlist_cond       = &tlist_cond;
-    dterm_args.kill_mutex       = &cli.kill_mutex;
-    dterm_args.kill_cond        = &cli.kill_cond;
+//    dterm_args.kill_mutex       = &cli.kill_mutex;
+//    dterm_args.kill_cond        = &cli.kill_cond;
     dterm_fn                    = (pipe == false) ? &dterm_prompter : &dterm_piper;
-    if (dterm_open(&dterm, pipe) < 0) {
+    rc = dterm_open(&dterm, pipe);
+    if (rc < 0) {
+        fprintf(stderr, "Could not open dterm on fd:%i/%i (error %i)\n", dterm.fd_in, dterm.fd_out, rc);
         cli.exitcode = 8;
         goto otter_main_EXIT;
     }
-    
-    /// Initialize the signal handlers for this process.
-    /// These are activated by Ctl+C (SIGINT) and Ctl+\ (SIGQUIT) as is
-    /// typical in POSIX apps.  When activated, the threads are halted and
-    /// Otter is shutdown.
-    cli.exitcode = 0;
-    _assign_signal(SIGINT, &sigint_handler);
-    _assign_signal(SIGQUIT, &sigquit_handler);
     
     /// Invoke the child threads below.  All of the child threads run
     /// indefinitely until an error occurs or until the user quits.  Quit can 
@@ -735,7 +745,7 @@ int otter_main( ttyspec_t* ttylist,
         } else
 #       endif
         {
-            DEBUG_PRINTF("No active interface is available\n");
+            fprintf(stderr, "Specified interface (id:%i) not supported\n", cliopt_getintf());
             cli.exitcode = 9;
             goto otter_main_EXIT;
         }
@@ -744,9 +754,14 @@ int otter_main( ttyspec_t* ttylist,
     pthread_create(&thr_dterm, NULL, dterm_fn, (void*)&dterm_args);
     DEBUG_PRINTF("Finished creating theads\n");
     
+// ----------------------------------------------------------------------------
+    
     /// Threads are now running.  The rest of the main() code, below, is
-    /// blocked by pthread_cond_wait() until the kill_cond is sent by one of 
+    /// blocked by pthread_cond_wait() until the kill_cond is sent by one of
     /// the child threads.  This will cause the program to quit.
+    
+// ----------------------------------------------------------------------------
+    
     pthread_mutex_lock(&cli.kill_mutex);
     pthread_cond_wait(&cli.kill_cond, &cli.kill_mutex);
     

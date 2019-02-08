@@ -75,6 +75,7 @@ static size_t sub_str_mark(char* str, size_t max) {
 }
 
 
+///@todo integrate with cmd_lineproc() by changing loop to char* cmdline
 static const cmdtab_item_t* sub_cmdproc(loop_input_t* loop, dterm_handle_t* dth) {
     /// Get each line from the pipe.
     const cmdtab_item_t* cmdptr;
@@ -495,10 +496,10 @@ int cmd_xloop(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, siz
         }
         fputs("\n", fp_out);
         
-//fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
+
         // Relock dtwrite mutex to block parser
         pthread_mutex_lock(dth->dtwrite_mutex);
-//fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
+
         // Delete Subscriber (also closes), unsquelch, free
         cmd_xloop_TERM3:
         subscriber_del(dth->subscribers, subscription);
@@ -509,7 +510,7 @@ int cmd_xloop(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, siz
         cmd_xloop_TERM:
         sub_freeinput(&loop);
     }
-//fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
+
     cmd_xloop_EXIT:
     return rc;
 }

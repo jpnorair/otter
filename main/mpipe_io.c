@@ -96,8 +96,9 @@ void* mpipe_reader(void* args) {
     //fnctl(dt->fd_in, F_SETFL, 0);  
     
     /// Setup for usage of the poll function to flush buffer on read timeouts.
-    num_fds = mpipe_pollfd_alloc(mph, fds, (POLLIN | POLLNVAL | POLLHUP));
+    num_fds = mpipe_pollfd_alloc(mph, &fds, (POLLIN | POLLNVAL | POLLHUP));
     if (num_fds <= 0) {
+        fprintf(stderr, "MPipe polling could not be started (error %i): quitting\n", num_fds);
         goto mpipe_reader_TERM;
     }
     

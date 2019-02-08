@@ -251,16 +251,6 @@ static int sub_pktlist_add(user_endpoint_t* endpoint, void* intf, pktlist_t* pli
         return -1;
     }
     
-    ///@note If no explicit interface, use the interface attached to dterm's
-    /// (dterm is the controlling terminal) active endpoint.  "Active endpoint"
-    /// stipulates a device on the network and its access level, typically
-    /// specified by mknode and/or chuser commands.  In normal usage, packets
-    /// for transmission are implicitly routed and packets that are received
-    /// are explicitly routed.
-    if (intf == NULL) {
-        intf = ((devtab_endpoint_t*)endpoint->node)->intf;
-    }
-    
     newpkt = malloc(sizeof(pkt_t));
     if (newpkt == NULL) {
         return -2;
@@ -335,6 +325,18 @@ static int sub_pktlist_add(user_endpoint_t* endpoint, void* intf, pktlist_t* pli
     newpkt->next        = NULL;
     newpkt->tstamp      = time(NULL);
     newpkt->sequence    = plist->txnonce++;
+    
+    ///@note If no explicit interface, use the interface attached to dterm's
+    /// (dterm is the controlling terminal) active endpoint.  "Active endpoint"
+    /// stipulates a device on the network and its access level, typically
+    /// specified by mknode and/or chuser commands.  In normal usage, packets
+    /// for transmission are implicitly routed and packets that are received
+    /// are explicitly routed.
+    if (intf == NULL) {
+        devtab_endpoint_t* dev_ep = devtab_resolve_endpoint(endpoint->node);
+        intf = dev_ep->intf;
+    }
+    newpkt->intf = intf;
     
     // List is empty, so start the list
     if (plist->last == NULL) {

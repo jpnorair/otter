@@ -42,6 +42,7 @@
 #   define HEX_DUMP(HEX, SIZE, ...) do { if (cliopt_isdebug()) { _HEX_(HEX, SIZE, __VA_ARGS__); } } while(0)
 
 #else
+//#   define DEBUG_PRINTF(...)    do { if (cliopt_isdebug()) fprintf(stderr, "DEBUG: " __VA_ARGS__); } while(0)
 #   define DEBUG_PRINTF(...)    do { } while(0)
 #   define TTY_PRINTF(...)      do { } while(0)
 #   define TTY_TX_PRINTF(...)   do { } while(0)

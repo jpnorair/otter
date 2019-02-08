@@ -144,7 +144,7 @@ static int sub_ttybaudrate(int native_baud) {
 
 static void sub_freeparams(mpipe_intf_t* mpintf) {
     if (mpintf != NULL) {
-        if (mpintf->params != NULL)
+        if (mpintf->params != NULL) {
             switch (mpintf->type) {
             case MPINTF_tty:
                 if ( ((mpipe_tty_t*)mpintf->params)->path != NULL) {
@@ -156,6 +156,7 @@ static void sub_freeparams(mpipe_intf_t* mpintf) {
             }
             
             free(mpintf->params);
+            mpintf->params = NULL;
         }
         
         mpintf->type = MPINTF_null;
@@ -214,8 +215,11 @@ int mpipe_init(mpipe_handle_t* handle, size_t num_intf) {
         table->intf[i].fd.out   = -1;
     }
 
+    *handle = (mpipe_handle_t)table;
     return 0;
 }
+
+
 
 void mpipe_deinit(mpipe_handle_t handle) {
     mpipe_tab_t* table;
@@ -237,7 +241,7 @@ void mpipe_deinit(mpipe_handle_t handle) {
 
 
 
-int mpipe_pollfd_alloc(mpipe_handle_t handle, struct pollfd* pollitems, short pollevents) {
+int mpipe_pollfd_alloc(mpipe_handle_t handle, struct pollfd** pollitems, short pollevents) {
     mpipe_tab_t* table;
     
     if ((pollitems == NULL) || (handle == NULL)) {
@@ -246,19 +250,31 @@ int mpipe_pollfd_alloc(mpipe_handle_t handle, struct pollfd* pollitems, short po
     
     table = (mpipe_tab_t*)handle;
     
-    pollitems = calloc(table->size, sizeof(struct pollfd));
+    *pollitems = calloc(table->size, sizeof(struct pollfd));
     if (pollitems == NULL) {
         return -2;
     }
     
     for (int i=0; i<table->size; i++) {
-        pollitems[i].fd     = table->intf[i].fd.in;
-        pollitems[i].events = pollevents;
+        (*pollitems)[i].fd     = table->intf[i].fd.in;
+        (*pollitems)[i].events = pollevents;
     }
     
     return (int)(table->size);
 }
 
+
+
+size_t mpipe_numintf_get(mpipe_handle_t handle) {
+    mpipe_tab_t* table = (mpipe_tab_t*)handle;
+    size_t tabsize = 0;
+
+    if (table != NULL) {
+        tabsize = table->size;
+    }
+    
+    return tabsize;
+}
 
 
 mpipe_fd_t* mpipe_fds_get(mpipe_handle_t handle, int id) {
@@ -382,7 +398,8 @@ static int sub_opentty(mpipe_intf_t* ttyintf) {
     int rc = 0;
 
     // first open with O_NDELAY
-    if( (ttyintf->fd.in = open( ttyparams->path, O_RDWR | O_NDELAY | O_EXCL )) < 0 ) {
+    ttyintf->fd.in = open(ttyparams->path, O_RDWR | O_NDELAY | O_EXCL);
+    if (ttyintf->fd.in < 0 ) {
         rc = -1;
         goto sub_opentty_EXIT;
     }
@@ -391,7 +408,7 @@ static int sub_opentty(mpipe_intf_t* ttyintf) {
     ttyintf->fd.out = ttyintf->fd.in;
     
     // then reset O_NDELAY
-    if( fcntl( ttyintf->fd.in, F_SETFL, O_RDWR ) )  {
+    if ( fcntl(ttyintf->fd.in, F_SETFL, O_RDWR) )  {
         rc = -2;
         goto sub_opentty_EXIT;
     }
@@ -477,14 +494,14 @@ int mpipe_opentty( mpipe_handle_t handle, int id,
     }
 
     strcpy(ttyparams->path, dev);
-fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
-    ttyparams->baud = sub_ttybaudrate(ttyparams->baud);
+
+    ttyparams->baud = sub_ttybaudrate(baud);
     if (ttyparams->baud < 0) {
         fprintf(stderr, "Error: baudrate %d is not permitted.  Default baudrate is 115200\n", baud);
         rc = -4;
         goto mpipe_opentty_EXIT;
     }
-fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
+
     switch (data_bits) {
         case 5: ttyparams->data_bits = CS5; break;
         case 6: ttyparams->data_bits = CS6; break;
@@ -494,7 +511,7 @@ fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
                 rc = -5;
                 break;
     }
-fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
+
     ttyparams->parity       = (parity == (int)'N') ? 0 : PARENB;
     ttyparams->stop_bits    = (stop_bits == 2) ? CSTOPB : 0;
     
@@ -502,7 +519,7 @@ fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
     ttyparams->flowctl      = flowctrl;
     ttyparams->dtr          = dtr;
     ttyparams->rts          = rts;
-fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
+
     // Make sure all flow control is compatible with MPipe spec (i.e. disabled)
     if ((ttyparams->flowctl != 0) || (ttyparams->dtr != 0) || (ttyparams->rts != 0)) {
         fprintf(stderr, "In current MPipe implementation there is no flow control.  You specifed:\n");
@@ -518,7 +535,7 @@ fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
         rc = -6;
         goto mpipe_opentty_EXIT;
     }
-fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
+
     rc = sub_opentty(&table->intf[id]);
     if (rc < 0) {
         switch (rc) {
@@ -532,7 +549,7 @@ fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
         }
         rc = -7;
     }
-fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
+
     mpipe_opentty_EXIT:
     switch (rc) {
         case 0: rc = table->intf[id].fd.in;

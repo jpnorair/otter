@@ -73,6 +73,7 @@ static const cmd_t otter_commands[] = {
     { "su",         &cmd_su },
     { "whoami",     &cmd_whoami },
     { "xloop",      &cmd_xloop },
+    { "xnode",      &cmd_xnode },
 };
 
 ///@todo hbuilder, and Judy handles (envdict) should get wrapped
@@ -269,6 +270,68 @@ int cmd_getname(char* cmdname, char* cmdline, size_t max_cmdname) {
     diff        = max_cmdname - diff;
     return (int)diff;    
 }
+
+
+
+
+///@todo make utils_strmark()
+size_t cmd_strmark(char* str, size_t max) {
+    char* s1 = str;
+    while ((*str!=0) && (*str!='\n') && (max!=0)) {
+        max--;
+        str++;
+    }
+    if (*str=='\n') *str = 0;
+    
+    return (str - s1);
+}
+
+
+const cmdtab_item_t* cmd_quoteline_resolve(char* quoteline, dterm_handle_t* dth) {
+    /// Get each line from the pipe.
+    const cmdtab_item_t* cmdptr;
+    char cmdname[32];
+    int cmdlen;
+    char* mark;
+    char* cmdhead;
+
+    cmdlen  = (int)strlen(quoteline);
+    cmdhead = quoteline;
+    
+    // Convert leading and trailing quotes into spaces
+    mark = strchr(cmdhead, '"');
+    if (mark == NULL) {
+        return NULL;
+    }
+    *mark = ' ';
+    mark = strrchr(cmdhead, '"');
+    if (mark == NULL) {
+        return NULL;
+    }
+    *mark = ' ';
+    
+    // Burn whitespace ahead of command, and burn trailing whitespace
+    while (isspace(cmdhead[0])) {
+        cmdhead++;
+        --cmdlen;
+    }
+    while (isspace(cmdhead[cmdlen-1])) {
+        cmdhead[cmdlen-1] = 0;
+        --cmdlen;
+    }
+    
+    // Then determine length until newline, or null.
+    // then search/get command in list.
+    cmdlen  = (int)cmd_strmark(cmdhead, (size_t)cmdlen);
+    cmdlen  = cmd_getname(cmdname, cmdhead, sizeof(cmdname));
+    cmdptr  = cmd_search(dth->cmdtab, cmdname);
+    
+    // Rewrite loop->cmdline to remove the wrapper parts
+    strcpy(quoteline, cmdhead+cmdlen);
+
+    return cmdptr;
+}
+
 
 
 

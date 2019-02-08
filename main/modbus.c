@@ -103,8 +103,9 @@ void* modbus_reader(void* args) {
     //fnctl(dt->fd_in, F_SETFL, 0);  
     
     /// Setup for usage of the poll function to flush buffer on read timeouts.
-    num_fds = mpipe_pollfd_alloc(mph, fds, (POLLIN | POLLNVAL | POLLHUP));
+    num_fds = mpipe_pollfd_alloc(mph, &fds, (POLLIN | POLLNVAL | POLLHUP));
     if (num_fds <= 0) {
+        fprintf(stderr, "Modbus polling could not be started (error %i): quitting\n", num_fds);
         goto modbus_reader_TERM;
     }
     
@@ -237,6 +238,26 @@ void* modbus_reader(void* args) {
 
 
 
+///@todo make this mpipe_send_to_intf()
+static void sub_write_on_intf(void* intf, uint8_t* data, int data_bytes) {
+    int sent_bytes;
+    mpipe_fd_t* ifds;
+    
+    if ((intf != NULL) && (data != NULL)) {
+        ifds = mpipe_fds_resolve(intf);
+        if (ifds != NULL) {
+            HEX_DUMP(data, data_bytes, "Writing %d bytes to %s\n", data_bytes, mpipe_file_resolve(intf));
+            
+            while (data_bytes > 0) {
+                sent_bytes  = (int)write(ifds->out, data, data_bytes);
+                data       += sent_bytes;
+                data_bytes -= sent_bytes;
+            }
+        }
+    }
+}
+
+
 
 void* modbus_writer(void* args) {
 /// Thread that:
@@ -262,7 +283,6 @@ void* modbus_writer(void* args) {
         
         while (tlist->cursor != NULL) {
             pkt_t* txpkt;
-            mpipe_fd_t* intf_fd;
             
             /// Modbus 1.75ms idle SOF
             usleep(1750);
@@ -282,25 +302,17 @@ void* modbus_writer(void* args) {
                 tlist->cursor   = tlist->marker;
             }
             
-            intf_fd = mpipe_fds_resolve(txpkt->intf);
+            time(&txpkt->tstamp);
             
-            if (intf_fd != NULL) {
-                int bytes_left;
-                int bytes_sent;
-                uint8_t* cursor;
-                
-                time(&txpkt->tstamp);
-                cursor      = txpkt->buffer;
-                bytes_left  = (int)txpkt->size;
-                
-                // Debug Output
-                HEX_DUMP(cursor, bytes_left, "Writing %d bytes to tty\n", bytes_left);
-
-                while (bytes_left > 0) {
-                    bytes_sent  = (int)write(intf_fd->out, cursor, bytes_left);
-                    cursor     += bytes_sent;
-                    bytes_left -= bytes_sent;
+            if (txpkt->intf == NULL) {
+                int id_i = (int)mpipe_numintf_get(mph);
+                while (id_i >= 0) {
+                    id_i--;
+                    sub_write_on_intf(mpipe_intf_get(mph, id_i), txpkt->buffer, (int)txpkt->size);
                 }
+            }
+            else {
+                sub_write_on_intf(txpkt->intf, txpkt->buffer, (int)txpkt->size);
             }
             
             /// Modbus 1.75ms idle EOF
@@ -319,6 +331,9 @@ void* modbus_writer(void* args) {
     raise(SIGINT);
     return NULL;
 }
+
+
+
 
 
 

@@ -39,6 +39,10 @@ int cmd_run(const cmdtab_item_t* cmd, dterm_handle_t* dth, uint8_t* dst, int* in
   */
 int cmd_getname(char* cmdname, char* cmdline, size_t max_cmdname);
 
+size_t cmd_strmark(char* str, size_t max);
+const cmdtab_item_t* cmd_quoteline_resolve(char* quoteline, dterm_handle_t* dth);
+
+
 
 // searches for command by exact name
 // returns command index or -1 if command not found
