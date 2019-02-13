@@ -116,9 +116,6 @@ typedef struct {
 //    pthread_cond_t*     kill_cond;
 } dterm_handle_t;
 
-///@todo deprecated to use dterm_arg_t
-#define dterm_arg_t dterm_handle_t
-
 
 
 // describes supported command types

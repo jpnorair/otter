@@ -36,8 +36,6 @@
 
 
 // MPipe Data Type(s)
-///@todo bury these in a code module
-
 typedef void* mpipe_handle_t;
 
 typedef struct {
@@ -82,6 +80,9 @@ mpipe_fd_t* mpipe_fds_get(mpipe_handle_t handle, int id);
 const char* mpipe_file_get(mpipe_handle_t handle, int id);
 void* mpipe_intf_get(mpipe_handle_t handle, int id);
 void* mpipe_intf_fromfile(mpipe_handle_t handle, const char* file);
+
+void mpipe_writeto_intf(void* intf, uint8_t* data, int data_bytes);
+
 
 int mpipe_id_resolve(mpipe_handle_t handle, void* intfp);
 mpipe_fd_t* mpipe_fds_resolve(void* intfp);

@@ -386,6 +386,26 @@ int mpipe_id_resolve(mpipe_handle_t handle, void* intfp) {
 
 
 
+void mpipe_writeto_intf(void* intf, uint8_t* data, int data_bytes) {
+    int sent_bytes;
+    mpipe_fd_t* ifds;
+    
+    if ((intf != NULL) && (data != NULL)) {
+        ifds = mpipe_fds_resolve(intf);
+        if (ifds != NULL) {
+            HEX_DUMP(data, data_bytes, "Writing %d bytes to %s\n", data_bytes, mpipe_file_resolve(intf));
+            
+            while (data_bytes > 0) {
+                sent_bytes  = (int)write(ifds->out, data, data_bytes);
+                data       += sent_bytes;
+                data_bytes -= sent_bytes;
+            }
+        }
+    }
+}
+
+
+
 
 /** MPipe Control Functions
   * ========================================================================<BR>

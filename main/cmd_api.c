@@ -33,12 +33,6 @@
 
 
 
-///@todo Commands to add
-/// 1. Change addresses
-/// 2. Have chuser command work on addresses (non-local), and change addresses as needed.
-/// 3. ...
-
-
 /// Binary Search Table for Commands
 
 // sorted list of supported commands
