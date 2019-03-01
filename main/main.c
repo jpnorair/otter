@@ -146,6 +146,7 @@ int otter_main( ttyspec_t* ttylist,
                 size_t num_tty,
                 bool pipe,
                 bool quiet,
+                const char* initfile,
                 const char* xpath,
                 cJSON* params
                 ); 
@@ -160,7 +161,8 @@ void otter_json_loadargs(cJSON* json,
                        int* fmt_val,
                        bool* pipe_val,
                        bool* quiet_val,
-                       char* xpath,
+                       char** initfile,
+                       char** xpath,
                        bool* verbose_val );
 
 void ppipelist_populate(cJSON* obj);
@@ -232,6 +234,7 @@ int main(int argc, char* argv[]) {
     struct arg_str  *intf    = arg_str0("i", "intf", "mpipe|modbus",    "Select \"mpipe\" or \"modbus\" interface (default=mpipe)");
     struct arg_str  *fmt     = arg_str0("f", "fmt", "format",           "\"default\", \"json\", \"bintex\", \"hex\"");
     struct arg_lit  *pipe    = arg_lit0("p","pipe",                     "Use pipe I/O instead of terminal console");
+    struct arg_file *initfile= arg_file0("I","init","path",             "Path to initialization routine to run at startup");
     struct arg_file *xpath   = arg_file0("x", "xpath", "path",          "Path to directory of external data processor programs");
     //struct arg_str  *parsers = arg_str1("p", "parsers", "<msg:parser>", "parser call string with comma-separated msg:parser pairs");
     //struct arg_str  *fparse  = arg_str1("P", "parsefile", "<file>",     "file containing comma-separated msg:parser pairs");
@@ -244,13 +247,14 @@ int main(int argc, char* argv[]) {
     struct arg_lit  *version = arg_lit0(NULL,"version",                 "Print version information and exit");
     struct arg_end  *end     = arg_end(20);
     
-    void* argtable[] = { ttyfile, brate, ttyenc, intf, fmt, pipe, xpath, config, verbose, debug, quiet, help, version, end };
+    void* argtable[] = { ttyfile, brate, ttyenc, intf, fmt, pipe, initfile, xpath, config, verbose, debug, quiet, help, version, end };
     const char* progname = OTTER_PARAM(NAME);
     int nerrors;
     bool bailout        = true;
     int exitcode        = 0;
     int num_tty         = 0;
     ttyspec_t* ttylist  = NULL;
+    char* initfile_val  = NULL;
     char* xpath_val     = NULL;
     cJSON* json         = NULL;
     char* buffer        = NULL;
@@ -366,7 +370,8 @@ int main(int argc, char* argv[]) {
                                 &tmp_fmt,
                                 &pipe_val, 
                                 &quiet_val,
-                                xpath_val,
+                                &initfile_val,
+                                &xpath_val,
                                 &verbose_val
                             );
             
@@ -419,6 +424,9 @@ int main(int argc, char* argv[]) {
     if (quiet->count != 0) {
         quiet_val = true;
     }
+    if (initfile->count != 0) {
+        FILL_STRINGARG(initfile, initfile_val);
+    }
     if (xpath->count != 0) {
         FILL_STRINGARG(xpath, xpath_val);
     }
@@ -450,6 +458,7 @@ int main(int argc, char* argv[]) {
                                 num_tty,
                                 pipe_val,
                                 quiet_val,
+                                (const char*)initfile_val,
                                 (const char*)xpath_val,
                                 json    );
     }
@@ -457,16 +466,11 @@ int main(int argc, char* argv[]) {
     /// Free all data that was needed by the otter main program
     otter_ttylist_free(ttylist, num_tty);
 
-    if (xpath_val != NULL) {
-        free(xpath_val);
-    }
-    if (buffer != NULL) {
-        ///@todo see if it's possible to free the json file buffer earlier
-        free(buffer);
-    }
-    if (json != NULL) {
-        cJSON_Delete(json);
-    }
+    cJSON_Delete(json);
+
+    free(xpath_val);
+    free(initfile_val);
+    free(buffer);
 
     return exitcode;
 }
@@ -509,6 +513,7 @@ int otter_main( ttyspec_t* ttylist,
                 size_t num_tty,
                 bool pipe, 
                 bool quiet,
+                const char* initfile,
                 const char* xpath,
                 cJSON* params) {    
     
@@ -762,6 +767,19 @@ int otter_main( ttyspec_t* ttylist,
     
 // ----------------------------------------------------------------------------
     
+    /// Before doing any interactions, run a command file if it exists.
+    if (initfile != NULL) {
+        //VERBOSE_PRINTF("Running init file: %s\n", initfile);
+        if (dterm_cmdfile(&dterm_args, initfile) < 0) {
+            //fprintf(stderr, ERRMARK"Could not run initialization file.\n");
+            fprintf(stderr, "Could not run initialization file.\n");
+        }
+        else {
+            //VERBOSE_PRINTF("Init file finished successfully\n");
+        }
+    }
+    
+    /// Wait for kill cond.  Basic functionality is in the dterm thread(s).
     pthread_mutex_lock(&cli.kill_mutex);
     pthread_cond_wait(&cli.kill_cond, &cli.kill_mutex);
     
@@ -863,7 +881,8 @@ void otter_json_loadargs(cJSON* json,
                        int* fmt_val,
                        bool* pipe_val,
                        bool* quiet_val,
-                       char* xpath,
+                       char** initfile,
+                       char** xpath,
                        bool* verbose_val ) {
     
 #   define GET_STRINGENUM_ARG(DST, FUNC, NAME) do { \
@@ -960,10 +979,9 @@ void otter_json_loadargs(cJSON* json,
     GET_STRINGENUM_ARG(fmt_val, sub_fmt_cmp, "fmt");
     
     GET_BOOL_ARG(quiet_val, "quiet");
-    GET_STRING_ARG(xpath, "xpath");
-    
+    GET_STRING_ARG(*initfile, "init");
+    GET_STRING_ARG(*xpath, "xpath");
     GET_BOOL_ARG(pipe_val, "pipe");
-
     GET_BOOL_ARG(verbose_val, "verbose");
 }
 

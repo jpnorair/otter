@@ -140,6 +140,8 @@ typedef enum {
 int dterm_init(dterm_handle_t* handle);
 void dterm_deinit(dterm_handle_t handle);
 
+int dterm_cmdfile(dterm_handle_t* dth, const char* filename);
+
 
 int dterm_open(dterm_t* dt, bool use_pipe);
 int dterm_close(dterm_t* dt);

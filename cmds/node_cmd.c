@@ -162,6 +162,22 @@ int cmd_mknode(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, si
         rc = sub_editnode(dth, argc, argv, false);
     }
     
+    ///@todo put this is a universal return function for functions that don't
+    ///      hit the nodes.
+    switch (cliopt_getformat()) {
+        case FORMAT_Hex: {
+            const char* ack = "00";
+            const char* nack = "FF";
+            dterm_puts(dth->dt, (rc >= 0) ? ack : nack);
+            break;
+        } break;
+
+        case FORMAT_Json: ///@todo
+        case FORMAT_Bintex: ///@todo
+        default: {
+        } break;
+    }
+    
     cmdutils_freeargv(argv);
     return rc;
 }
@@ -186,6 +202,20 @@ int cmd_chnode(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, si
     }
     else {
         rc = sub_editnode(dth, argc, argv, true);
+    }
+    
+    ///@todo put this is a universal return function for functions that don't
+    ///      hit the nodes.
+    switch (cliopt_getformat()) {
+        case FORMAT_Hex: {
+            dterm_puts(dth->dt, "00");
+            break;
+        } break;
+
+        case FORMAT_Json: ///@todo
+        case FORMAT_Bintex: ///@todo
+        default: {
+        } break;
     }
     
     cmdutils_freeargv(argv);
@@ -235,7 +265,23 @@ int cmd_rmnode(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, si
         arg_freetable(argtable, sizeof(argtable)/sizeof(argtable[0]));
         cmdutils_freeargv(argv);
     }
+    
+    ///@todo put this is a universal return function for functions that don't
+    ///      hit the nodes.
+    switch (cliopt_getformat()) {
+        case FORMAT_Hex: {
+            const char* ack = "00";
+            const char* nack = "FF";
+            dterm_puts(dth->dt, (rc >= 0) ? ack : nack);
+            break;
+        } break;
 
+        case FORMAT_Json: ///@todo
+        case FORMAT_Bintex: ///@todo
+        default: {
+        } break;
+    }
+    
     return rc;
 }
 

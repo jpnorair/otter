@@ -14,6 +14,8 @@
   *
   */
 
+///@todo harmonize this with the more slick dterm from otdb project
+
 // Application Headers
 #include "cliopt.h"
 #include "cmdhistory.h"
@@ -221,6 +223,123 @@ static size_t sub_str_mark(char* str, size_t max) {
 }
 
 
+///@note sub_proc_lineinput() was copied from the otdb project, which has more
+///      sopisticated dterm implementation.  Portions of sub_proc_lineinput()
+///      have been commented-out and/or modified by a new line below in order
+///      to fit with the more primitive otter dterm impl.
+static int sub_proc_lineinput(dterm_handle_t* dth, int* cmdrc, char* loadbuf, int linelen) {
+    uint8_t     protocol_buf[1024];
+    char        cmdname[32];
+    int         cmdlen;
+    //cJSON*      cmdobj;
+    uint8_t*    cursor  = protocol_buf;
+    int         bufmax  = sizeof(protocol_buf);
+    int         bytesout = 0;
+    const cmdtab_item_t* cmdptr;
+    
+    //DEBUG_PRINTF("raw input (%i bytes) %.*s\n", linelen, linelen, loadbuf);
+
+    // Isolation memory context
+    //iso_ctx = dth->tctx;
+
+    // Set allocators for cJSON, argtable
+    //cjson_iso_allocators();
+    //arg_set_allocators(&iso_malloc, &iso_free);
+    
+    ///@todo set context for other data systems
+    
+    /// The input can be JSON of the form:
+    /// { "type":"${cmd_type}", data:"${cmd_data}" }
+    /// where we only truly care about the data object, which must be a string.
+//    cmdobj = cJSON_Parse(loadbuf);
+//    if (cJSON_IsObject(cmdobj)) {
+//        cJSON* dataobj;
+//        cJSON* typeobj;
+//        typeobj = cJSON_GetObjectItemCaseSensitive(cmdobj, "type");
+//        dataobj = cJSON_GetObjectItemCaseSensitive(cmdobj, "data");
+//
+//        if (cJSON_IsString(typeobj) && cJSON_IsString(dataobj)) {
+//            int hdr_sz;
+//            //VCLIENT_PRINTF("JSON Request (%i bytes): %.*s\n", linelen, linelen, loadbuf);
+//            loadbuf = dataobj->valuestring;
+//            hdr_sz  = snprintf((char*)cursor, bufmax-1, "{\"type\":\"%s\", \"data\":", typeobj->valuestring);
+//            cursor += hdr_sz;
+//            bufmax -= hdr_sz;
+//        }
+//        else {
+//            goto sub_proc_lineinput_FREE;
+//        }
+//    }
+    
+    // determine length until newline, or null.
+    // then search/get command in list.
+    cmdlen  = cmd_getname(cmdname, loadbuf, sizeof(cmdname));
+    
+    //cmdptr  = cmd_search(dth->ext->cmdtab, cmdname);
+    cmdptr  = cmd_search(dth->cmdtab, cmdname);
+    
+    if (cmdptr == NULL) {
+        ///@todo build a nicer way to show where the error is,
+        ///      possibly by using pi or ci (sign reversing)
+        if (linelen > 0) {
+            bytesout = snprintf((char*)protocol_buf, sizeof(protocol_buf)-1,
+                        "{\"cmd\":\"%s\", \"err\":1, \"desc\":\"command not found\"}",
+                        cmdname);
+            
+            //dterm_puts(&dth->fd, (char*)protocol_buf);
+            dterm_puts(dth->dt, (char*)protocol_buf);
+        }
+    }
+    else {
+        int bytesin = linelen;
+
+        bytesout = cmd_run(cmdptr, dth, cursor, &bytesin, (uint8_t*)(loadbuf+cmdlen), bufmax);
+        if (cmdrc != NULL) {
+            *cmdrc = bytesout;
+        }
+        
+        ///@todo spruce-up the command error reporting, maybe even with
+        ///      a cursor showing where the first error was found.
+        if (bytesout < 0) {
+            bytesout = snprintf((char*)protocol_buf, sizeof(protocol_buf)-1,
+                        "{\"cmd\":\"%s\", \"err\":%d, \"desc\":\"command execution error\"}",
+                        cmdname, bytesout);
+            //dterm_puts(&dth->fd, (char*)protocol_buf);
+            dterm_puts(dth->dt, (char*)protocol_buf);
+        }
+        
+        // If there are bytes to send to MPipe, do that.
+        // If bytesout == 0, there is no error, but also nothing
+        // to send to MPipe.
+        else if (bytesout > 0) {
+//            if (cJSON_IsObject(cmdobj)) {
+//                //VCLIENT_PRINTF("JSON Response (%i bytes): %.*s\n", bytesout, bytesout, (char*)cursor);
+//                cursor += bytesout;
+//                bufmax -= bytesout;
+//                cursor  = (uint8_t*)stpncpy((char*)cursor, "}\f\0", bufmax);
+//                bytesout= (int)(cursor - protocol_buf);
+//            }
+            
+            //DEBUG_PRINTF("raw output (%i bytes) %.*s\n", bytesout, bytesout, protocol_buf);
+            
+            //write(dth->fd.out, (char*)protocol_buf, bytesout);
+            write(dth->dt->fd_out, (char*)protocol_buf, bytesout);
+        }
+    }
+    
+    sub_proc_lineinput_FREE:
+//    cJSON_Delete(cmdobj);
+    
+    // Return cJSON and argtable to generic context allocators
+    //cjson_std_allocators();
+    //arg_set_allocators(NULL, NULL);
+    
+    return bytesout;
+}
+
+
+
+///@todo harmonize with sub_procline
 void* dterm_piper(void* args) {
 /// Thread that:
 /// <LI> Listens to stdin via read() pipe </LI>
@@ -262,10 +381,10 @@ void* dterm_piper(void* args) {
         cmdlen  = cmd_getname(cmdname, loadbuf, 32);
         cmdptr  = cmd_search(dth->cmdtab, cmdname);
         
-        // Test only
-        //fprintf(stderr, "\nlinebuf=%s\nlinelen=%d\ncmdname=%s, len=%d, ptr=%016X\n", loadbuf, linelen, cmdname, cmdlen, cmdptr);
-        //fflush(stderr);
-        // Test only
+// Test only
+//fprintf(stderr, "\nlinebuf=%s\nlinelen=%d\ncmdname=%s, len=%d, ptr=%016X\n", loadbuf, linelen, cmdname, cmdlen, cmdptr);
+//fflush(stderr);
+// Test only
         
         ///@todo this is the same block of code used in prompter.  It could be
         ///      consolidated into a subroutine called by both.
@@ -327,6 +446,125 @@ void* dterm_piper(void* args) {
     raise(SIGINT);
     return NULL;
 }
+
+
+
+
+///@note dterm_cmdfile() was copied from the otdb project, which has more
+///      sopisticated dterm implementation.  Portions of dterm_cmdfile()
+///      have been commented-out and/or modified by a new line below in order
+///      to fit with the more primitive otter dterm impl.
+int dterm_cmdfile(dterm_handle_t* dth, const char* filename) {
+    int     filebuf_sz;
+    char*   filecursor;
+    char*   filebuf     = NULL;
+    int     rc          = 0;
+    FILE*   fp          = NULL;
+//    dterm_fd_t local;
+//    dterm_fd_t saved;
+    
+    // Initial state = off
+    //dth->intf->state = prompt_off;
+    dth->dt->state = prompt_off;
+    
+    // Open the file, Load the contents into filebuf
+    fp = fopen(filename, "r");
+    if (fp == NULL) {
+        //perror(ERRMARK"cmdfile couldn't be opened");
+        return -1;
+    }
+    
+    fseek(fp, 0L, SEEK_END);
+    filebuf_sz = (int)ftell(fp);
+    rewind(fp);
+    //filebuf = talloc_zero_size(dth->pctx, filebuf_sz+1);
+    filebuf = calloc(filebuf_sz+1, sizeof(char*));
+    
+    if (filebuf == NULL) {
+        rc = -2;
+        goto dterm_cmdfile_END;
+    }
+    
+    rc = !(fread(filebuf, filebuf_sz, 1, fp) == 1);
+    if (rc != 0) {
+        //perror(ERRMARK"cmdfile couldn't be read");
+        rc = -3;
+        goto dterm_cmdfile_END;
+    }
+    
+    // File stream no longer required
+    fclose(fp);
+    fp = NULL;
+    
+    // Preprocess the command inputs strings
+    sub_str_sanitize(filebuf, (size_t)filebuf_sz);
+    
+    // Reset the terminal to default state
+    //dterm_reset(dth->intf);
+    dterm_reset(dth->dt);
+    
+//    pthread_mutex_lock(dth->iso_mutex);
+//    local.in    = STDIN_FILENO;
+//    local.out   = STDOUT_FILENO;
+//    saved       = dth->fd;
+//    dth->fd     = local;
+    pthread_mutex_lock(dth->dtwrite_mutex);
+    
+    // Run the command on each line
+    filecursor = filebuf;
+    while (filebuf_sz > 0) {
+        int linelen;
+        int cmdrc;
+        int byteswritten;
+        
+        // Burn whitespace ahead of command.
+        while (isspace(*filecursor)) { filecursor++; filebuf_sz--; }
+        linelen = (int)sub_str_mark(filecursor, (size_t)filebuf_sz);
+
+        // Create temporary context as a memory pool
+        //dth->tctx = talloc_pool(NULL, cliopt_getpoolsize());
+        
+        // Echo input line to dterm
+        //dprintf(dth->fd.out, _E_MAG"%s"_E_NRM"%s\n", prompt_root, filecursor);
+        dprintf(dth->dt->fd_out, _E_MAG"%s"_E_NRM"%s\n", prompt_root, filecursor);
+        
+        // Process the line-input command
+        byteswritten = sub_proc_lineinput(dth, &cmdrc, filecursor, linelen);
+        if (byteswritten > 0) {
+            //dterm_puts(&dth->fd, "\n");
+            dterm_puts(dth->dt, "\n");
+        }
+        
+        // Free temporary memory pool context
+        //talloc_free(dth->tctx);
+        
+        // Exit the command sequence on first detection of error.
+        if (cmdrc < 0) {
+            //dprintf(dth->fd.out, _E_RED"ERR: "_E_NRM"Command Returned %i: stopping.\n\n", cmdrc);
+            dprintf(dth->dt->fd_out, _E_RED"ERR: "_E_NRM"Command Returned %i: stopping.\n\n", cmdrc);
+            break;
+        }
+        
+        // +1 eats the terminator
+        filebuf_sz -= (linelen + 1);
+        filecursor += (linelen + 1);
+    }
+    
+    //dth->fd = saved;
+    //pthread_mutex_unlock(dth->iso_mutex);
+    pthread_mutex_unlock(dth->dtwrite_mutex);
+
+    dterm_cmdfile_END:
+    if (fp != NULL) fclose(fp);
+    //talloc_free(filebuf);
+    
+    return rc;
+}
+
+
+
+
+
 
 
 
