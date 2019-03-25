@@ -20,7 +20,6 @@
 // Local Headers
 #include "cmds.h"
 #include "cmdutils.h"
-#include "envvar.h"
 #include "cliopt.h"
 #include "dterm.h"
 //#include "test.h"
@@ -40,47 +39,34 @@
 int cmdext_hbuilder(void* hb_handle, void* cmd_handle, dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
     bool is_eos     = false;
     size_t bytesout = 0;
+    char printbuf[80];
+    char* errdesc;
     int rc;
-    
-//    if (dt == NULL) {
-//#       if defined(__HBUILDER__)
-//        hbcc_init();
-//#       endif
-//        return 0;
-//    }
     
     INPUT_SANITIZE_FLAG_EOS(is_eos);
     
     //fprintf(stderr, "hbuilder invoked: %.*s\n", *inbytes, (char*)src);
     
-
     rc = hbuilder_runcmd(hb_handle, cmd_handle, dst, &bytesout, dstmax, src, inbytes);
     
-    if (rc < 0) {
-        if (cliopt_getformat() == FORMAT_Default) {
-            dterm_printf(dth->dt, "HBuilder Command Error (code %d)\n", rc);
-            if (rc == -2) {
-                dterm_printf(dth->dt, "--> Input Error on character %zu\n", bytesout);
-            }
+    if (rc <= 0) {
+        if (rc == -2) {
+            snprintf(printbuf, 80-1, "input error on character %zu", bytesout);
+            errdesc = printbuf;
         }
-        else if (cliopt_getformat() == FORMAT_Json) {
-            dterm_printf(dth->dt, "{\"cmd\":\"%s\", \"err\":%i}", "hb", rc);
+        else {
+            errdesc = NULL;
         }
+        dterm_output_error(dth, "hbuilder", rc, errdesc);
     }
-    else if ((rc > 0) && cliopt_isverbose()) {
-        if (cliopt_getformat() == FORMAT_Default) {
-            fprintf(stdout, "--> HBuilder packetizing %zu bytes\n", bytesout);
-        }
-        else if (cliopt_getformat() == FORMAT_Json) {
-            dterm_printf(dth->dt, "{\"cmd\":\"%s\", \"msg\":\"HBuilder packetizing %zu bytes\"}", "hb", bytesout);
-        }
+    else {
+        snprintf(printbuf, 80-1, "packetized %zu bytes", bytesout);
+        dterm_output_cmdmsg(dth, "hbuilder", printbuf);
     }
 
-    return rc;
+    // HBuilder forms its own command responses, hence always returns 0
+    return 0;
 }
 
 #   endif
 
-
-//    fprintf(stderr, "hbuilder invoked, but not supported.\n--> %s\n", src);
-//    rc = -2;

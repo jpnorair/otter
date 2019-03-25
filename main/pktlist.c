@@ -259,14 +259,14 @@ static int sub_pktlist_add(user_endpoint_t* endpoint, void* intf, pktlist_t* pli
     // Offset is dependent if we are writing a header (8 bytes) or not.
     ///@todo this code can be optimized quite a lot
     if (iswrite) {
-        switch (cliopt_getintf()) {
-            case INTF_mpipe:
+        switch (cliopt_getio()) {
+            case IO_mpipe:
                 max_overhead= 8;
                 put_frame   = &sub_writeframe_mpipe;
                 put_footer  = &sub_writefooter_mpipe;
                 break;
             
-            case INTF_modbus:
+            case IO_modbus:
                 max_overhead= 12;
                 put_frame   = &sub_writeframe_modbus;
                 put_footer  = &sub_writefooter_modbus;
@@ -280,12 +280,12 @@ static int sub_pktlist_add(user_endpoint_t* endpoint, void* intf, pktlist_t* pli
         }
     }
     else {
-        switch (cliopt_getintf()) {
-            case INTF_mpipe:
+        switch (cliopt_getio()) {
+            case IO_mpipe:
                 put_frame   = &sub_frame_null; ///@todo &sub_readframe_mpipe;
                 break;
             
-            case INTF_modbus:
+            case IO_modbus:
                 put_frame   = &sub_readframe_modbus;
                 break;
             
@@ -456,7 +456,7 @@ int pktlist_del(pktlist_t* plist, pkt_t* pkt) {
 
 
 int pktlist_getnew(pktlist_t* plist) {
-    INTF_Type intf;
+    IO_Type intf;
     //time_t      seconds;
 
     // packet list is not allocated -- that's a serious error
@@ -472,11 +472,11 @@ int pktlist_getnew(pktlist_t* plist) {
     // Save Timestamp 
     plist->cursor->tstamp   = time(NULL);   //;localtime(&seconds);
     
-    intf = cliopt_getintf();
+    intf = cliopt_getio();
     
     // MPipe uses Sequence-ID for message matching
     ///@todo move this into pktlist_add() via sub_mpipe_readframe()
-    if (intf == INTF_mpipe) {
+    if (intf == IO_mpipe) {
         uint16_t    crc_val;
         uint16_t    crc_comp;
     
@@ -485,7 +485,7 @@ int pktlist_getnew(pktlist_t* plist) {
         crc_comp                = crc_calc_block(&plist->cursor->buffer[2], plist->cursor->size-2);
         plist->cursor->crcqual  = (crc_comp - crc_val);
     }
-    else if (intf == INTF_modbus) {
+    else if (intf == IO_modbus) {
         // do nothing
     }
     else {

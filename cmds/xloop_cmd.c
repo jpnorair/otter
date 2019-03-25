@@ -26,6 +26,7 @@
 // HBuilder Libraries
 #include <argtable3.h>
 #include <bintex.h>
+#include <talloc.h>
 
 // Standard C & POSIX Libraries
 #include <stdint.h>
@@ -83,6 +84,7 @@ static const cmdtab_item_t* sub_cmdproc(loop_input_t* loop, dterm_handle_t* dth)
     int cmdlen;
     char* mark;
     char* cmdhead;
+    otter_app_t* appdata = dth->ext;
 
     cmdlen  = (int)strlen(loop->cmdline);
     cmdhead = loop->cmdline;
@@ -113,7 +115,7 @@ static const cmdtab_item_t* sub_cmdproc(loop_input_t* loop, dterm_handle_t* dth)
     // then search/get command in list.
     cmdlen  = (int)sub_str_mark(cmdhead, (size_t)cmdlen);
     cmdlen  = cmd_getname(cmdname, cmdhead, sizeof(cmdname));
-    cmdptr  = cmd_search(dth->cmdtab, cmdname);
+    cmdptr  = cmd_search(appdata->cmdtab, cmdname);
     
     // Rewrite loop->cmdline to remove the wrapper parts
     strcpy(loop->cmdline, cmdhead+cmdlen);
@@ -126,15 +128,16 @@ static int sub_cmdrun(dterm_handle_t* dth, const cmdtab_item_t* cmdptr, char* cm
     /// Get each line from the pipe.
     int bytesout;
     int bytesin = 0;
+    otter_app_t* appdata = dth->ext;
     
     bytesout = cmd_run(cmdptr, dth, dst, &bytesin, (uint8_t*)cmddata, dstmax);
     if (bytesout > 0) {
         int list_size;
-        pthread_mutex_lock(dth->tlist_mutex);
-        list_size = pktlist_add_tx(&dth->endpoint, NULL, dth->tlist, dst, bytesout);
-        pthread_mutex_unlock(dth->tlist_mutex);
+        pthread_mutex_lock(appdata->tlist_mutex);
+        list_size = pktlist_add_tx(&appdata->endpoint, NULL, appdata->tlist, dst, bytesout);
+        pthread_mutex_unlock(appdata->tlist_mutex);
         if (list_size > 0) {
-            pthread_cond_signal(dth->tlist_cond);
+            pthread_cond_signal(appdata->tlist_cond);
         }
     }
     
@@ -143,7 +146,7 @@ static int sub_cmdrun(dterm_handle_t* dth, const cmdtab_item_t* cmdptr, char* cm
 
 
 
-static int sub_getinput(loop_input_t* loop, const char* cmdname, int* inbytes, uint8_t* src) {
+static int sub_getinput(TALLOC_CTX* tctx, loop_input_t* loop, const char* cmdname, int* inbytes, uint8_t* src) {
     int rc = 0;
     int argc;
     char** argv;
@@ -193,7 +196,7 @@ static int sub_getinput(loop_input_t* loop, const char* cmdname, int* inbytes, u
             loop->data_size = (int)ftell(fp);
             rewind(fp);
             
-            loop->data = calloc(loop->data_size + 1, sizeof(uint8_t));
+            loop->data = talloc_zero_size(tctx, (loop->data_size + 1) * sizeof(uint8_t));
             if (loop->data == NULL) {
                 rc = -5;
                 goto sub_getinput_CLOSEFILE;
@@ -275,7 +278,7 @@ static int sub_getinput(loop_input_t* loop, const char* cmdname, int* inbytes, u
         /// Copy line input into buffer for loop
         else {
             loop->data_size = (int)strlen(loopdat->sval[0]) / 2;
-            loop->data      = malloc(loop->data_size);
+            loop->data      = talloc_size(tctx, loop->data_size);
             if (loop->data == NULL) {
                 rc = -5;
             }
@@ -288,7 +291,7 @@ static int sub_getinput(loop_input_t* loop, const char* cmdname, int* inbytes, u
         if (rc == 0) {
             size_t linealloc;
             linealloc       = strlen(loopcmd->sval[0]) + 1;
-            loop->cmdline   = calloc(linealloc, sizeof(char));
+            loop->cmdline   = talloc_zero_size(tctx, linealloc * sizeof(char));
             if (loop->cmdline == NULL) {
                 rc = -6;
             }
@@ -309,12 +312,8 @@ static int sub_getinput(loop_input_t* loop, const char* cmdname, int* inbytes, u
 
 static void sub_freeinput(loop_input_t* loop) {
     if (loop != NULL) {
-        if (loop->data != NULL) {
-            free(loop->data);
-        }
-        if (loop->cmdline != NULL) {
-            free(loop->cmdline);
-        }
+        talloc_free(loop->data);
+        talloc_free(loop->cmdline);
     }
 }
 
@@ -373,7 +372,8 @@ int cmd_xloop(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, siz
     subscr_t subscription;
     loop_input_t loop;
     char* xloop_cmd;
-    
+    otter_app_t* appdata;
+    TALLOC_CTX* xloop_heap;
     
     /// dt == NULL is the initialization case.
     /// There may not be an initialization for all command groups.
@@ -383,10 +383,17 @@ int cmd_xloop(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, siz
     
     INPUT_SANITIZE();
 
+    appdata     = dth->ext;
+    xloop_heap  = talloc_new(dth->tctx);
+    if (xloop_heap == NULL) {
+        ///@todo better error code for out of memory
+        return -1;
+    }
+    
     /// Stage 1: Command Line Protocol Extraction
     loop.data = NULL;
     loop.cmdline = NULL;
-    rc = sub_getinput(&loop, xloop_name, inbytes, src);
+    rc = sub_getinput(xloop_heap, &loop, xloop_name, inbytes, src);
 
     /// Command Running & Looping
     /// 1. Acquire Command pointer from input command.  Exit if bad command.
@@ -409,14 +416,14 @@ int cmd_xloop(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, siz
             goto cmd_xloop_TERM;
         }
 
-        xloop_cmd = calloc(strlen(loop.cmdline) + 2*loop.bsize_val + 2 + 1, sizeof(char));
+        xloop_cmd = talloc_zero_size(xloop_heap, (strlen(loop.cmdline) + 2*loop.bsize_val + 2 + 1) * sizeof(char));
         if (xloop_cmd == NULL) {
             rc = -8;
             goto cmd_xloop_TERM;
         }
 
         // Squelch dterm output and get file pointer for dterm-out
-        fd_out = dterm_squelch(dth->dt);
+        fd_out = dterm_squelch(dth);
         if (fd_out < 0) {
             rc = -9;
             goto cmd_xloop_TERM1;
@@ -429,7 +436,7 @@ int cmd_xloop(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, siz
 
         // Set up subscriber, and open it
         ///@todo check command for alp.  Right now it's hard coded to FDP (1)
-        subscription = subscriber_new(dth->subscribers, 1, 0, 0);
+        subscription = subscriber_new(appdata->subscribers, 1, 0, 0);
         if (subscription == NULL) {
             rc = -11;
             goto cmd_xloop_TERM2;
@@ -440,7 +447,7 @@ int cmd_xloop(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, siz
         }
 
         // Unlock the dtwrite mutex so parser thread can operate
-        pthread_mutex_unlock(dth->dtwrite_mutex);
+        pthread_mutex_unlock(dth->iso_mutex);
 
         // Loop the command until all data is gone
         blocksize = loop.bsize_val;
@@ -498,17 +505,18 @@ int cmd_xloop(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, siz
         
 
         // Relock dtwrite mutex to block parser
-        pthread_mutex_lock(dth->dtwrite_mutex);
+        pthread_mutex_lock(dth->iso_mutex);
 
         // Delete Subscriber (also closes), unsquelch, free
         cmd_xloop_TERM3:
-        subscriber_del(dth->subscribers, subscription);
+        subscriber_del(appdata->subscribers, subscription);
         cmd_xloop_TERM2:
-        dterm_unsquelch(dth->dt);
+        dterm_unsquelch(dth);
         cmd_xloop_TERM1:
-        free(xloop_cmd);
+        //talloc_free(xloop_cmd);
         cmd_xloop_TERM:
-        sub_freeinput(&loop);
+        //sub_freeinput(&loop);
+        talloc_free(xloop_heap);
     }
 
     cmd_xloop_EXIT:
@@ -550,12 +558,12 @@ int cmd_sendhex(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, s
         }
         
         if (strcmp(hexfile->extension[0], ".hex") != 0) {
-            dterm_printf(dth->dt, "--> Input Error, file not with .hex\n");
+            dprintf(dth->fd.out, "--> Input Error, file not with .hex\n");
             rc = -2;
             goto cmd_sendhex_EXEC;
         }
         
-        xloop_cmd = calloc(strlen(xloop_fmt) + strlen(hexfile->filename[0]) + 1, sizeof(char));
+        xloop_cmd = talloc_zero_size(dth->tctx, (strlen(xloop_fmt) + strlen(hexfile->filename[0]) + 1) * sizeof(char));
         if (xloop_cmd == NULL) {
             rc = -1;
             goto cmd_sendhex_EXEC;
@@ -570,7 +578,7 @@ int cmd_sendhex(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, s
             //fprintf(stderr, "TO XLOOP: <<%s>>\n", xloop_cmd);
             rc = cmd_xloop(dth, dst, &xloop_bytes, (uint8_t*)xloop_cmd, dstmax);
         }
-        free(xloop_cmd);
+        talloc_free(xloop_cmd);
 
     }
     

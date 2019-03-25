@@ -69,6 +69,10 @@ FORMAT_Type cliopt_getformat(void) {
     return master->format;
 }
 
+IO_Type cliopt_getio(void) {
+    return master->io;
+}
+
 INTF_Type cliopt_getintf(void) {
     return master->intf;
 }
@@ -86,3 +90,18 @@ int cliopt_getsrcaddr(void) {
 void cliopt_setsrcaddr(int addr) {
     master->src_addr = addr;
 }
+
+size_t cliopt_getpoolsize(void) {
+    return master->mempool_size;
+}
+void cliopt_setpoolsize(size_t poolsize) {
+    master->mempool_size = poolsize;
+}
+
+int cliopt_gettimeout(void) {
+    return master->timeout_ms;
+}
+void cliopt_settimeout(int timeout_ms) {
+    master->timeout_ms = timeout_ms;
+}
+

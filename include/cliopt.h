@@ -22,10 +22,17 @@
 #include <stdint.h>
 
 typedef enum {
-    INTF_mpipe  = 0,
-    INTF_modbus = 1,
+    INTF_interactive  = 0,
+    INTF_pipe = 1,
+    INTF_socket = 2,
     INTF_max
 } INTF_Type;
+
+typedef enum {
+    IO_mpipe  = 0,
+    IO_modbus = 1,
+    IO_max
+} IO_Type;
 
 typedef enum {
     FORMAT_Default  = 0,
@@ -41,12 +48,15 @@ typedef struct {
     bool        quiet_on;
     bool        dummy_tty;
     FORMAT_Type format;
+    IO_Type     io;
     INTF_Type   intf;
     
     ///@todo determine if these global client vars belong here.
     int         dst_addr;
     int         src_addr;
-
+    
+    size_t      mempool_size;
+    int         timeout_ms;
 } cliopt_t;
 
 
@@ -64,7 +74,7 @@ bool cliopt_isdummy(void);
 bool cliopt_isquiet(void);
 
 FORMAT_Type cliopt_getformat(void);
-
+IO_Type cliopt_getio(void);
 INTF_Type cliopt_getintf(void);
 
 int cliopt_getdstaddr(void);
@@ -73,6 +83,11 @@ int cliopt_getsrcaddr(void);
 void cliopt_setdstaddr(int addr);
 void cliopt_setsrcaddr(int addr);
 
+size_t cliopt_getpoolsize(void);
+void cliopt_setpoolsize(size_t poolsize);
+
+int cliopt_gettimeout(void);
+void cliopt_settimeout(int timeout_ms);
 
 
 #endif /* cliopt_h */

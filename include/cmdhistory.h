@@ -13,7 +13,9 @@
   * limitations under the License.
   *
   */
-  
+
+///@todo cmdhistory.h/.c go into dterm library
+
 #ifndef cmdhistory_h
 #define cmdhistory_h
 
@@ -34,7 +36,7 @@ typedef struct {
 
 
 // initializes command history
-cmdhist* ch_init(cmdhist* ch);
+cmdhist* ch_init(size_t hist_size);
 
 void ch_free(cmdhist* ch);
 

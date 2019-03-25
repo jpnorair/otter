@@ -18,6 +18,7 @@
 #define dterm_h
 
 // Configuration Header
+#include "cliopt.h"
 #include "otter_cfg.h"
 #include "pktlist.h"
 #include "subscribers.h"
@@ -27,7 +28,10 @@
 #include "cmdhistory.h"
 #include "mpipe.h"
 
+// HB Libraries
+#include <clithread.h>
 #include <cmdtab.h>
+#include <talloc.h>
 
 // Standard C & POSIX Libraries
 #include <pthread.h>
@@ -70,7 +74,12 @@
 #define VT100_CLEAR_CH      "\b\033[K"
 #define VT100_CLEAR_LN      "\033[2K\r"
 
-
+typedef enum {
+    DFMT_Binary,
+    DFMT_Text,
+    DFMT_Native,
+    DFMT_Max
+} DFMT_Type;
 
 // describes dterm possible states
 typedef enum {
@@ -82,40 +91,66 @@ typedef enum {
 
 // defines state of dash terminal
 typedef struct {
+    INTF_Type type;                 // Socket, Pipe, Interactive, etc.
+    volatile prompt_state state;    // state of the terminal prompt
+
     // old and current terminal settings
     struct termios oldter;
     struct termios curter;
     
-    volatile prompt_state state; // state of the terminal prompt
+    //int fd_in;                      // file descriptor for the terminal input
+    //int fd_out;                     // file descriptor for the terminal output
+    //int fd_squelch;                 // For squelch feature
     
-    int fd_in;                  // file descriptor for the terminal input
-    int fd_out;                 // file descriptor for the terminal output
-    int fd_squelch;             // For squelch feature
-    
-    int linelen;                 // line length
-    char *cline;                 // pointer to current position in linebuf
-    
-    char linebuf[LINESIZE];      // command read buffer
-    char readbuf[READSIZE];     // character read buffer
-} dterm_t;
+    int linelen;                    // line length
+    char *cline;                    // pointer to current position in linebuf
+    char linebuf[LINESIZE];         // command read buffer
+    char readbuf[READSIZE];         // character read buffer
+} dterm_intf_t;
 
 
 typedef struct {
-    dterm_t*            dt;
+    // fd_in, fd_out are used by controlling interface.
+    // Usage will differ in case of interactive, pipe, socket
+    int in;
+    int out;
+    int squelch;
+} dterm_fd_t;
+
+
+
+
+typedef struct {
+    // Internally initialized in dterm_init()
+    // Used only by dterm controlling thread.
+    dterm_intf_t*       intf;
     cmdhist*            ch;
-    cmdtab_t*           cmdtab;
-    pktlist_t*          tlist;
-    user_endpoint_t     endpoint;
-    mpipe_handle_t      mpipe;
-    subscr_handle_t     subscribers;
+    clithread_handle_t  clithread;
     
-    pthread_mutex_t*    dtwrite_mutex;
-    pthread_mutex_t*    tlist_mutex;
-    pthread_cond_t*     tlist_cond;
-//    pthread_mutex_t*    kill_mutex;
-//    pthread_cond_t*     kill_cond;
+    // Client Thread I/O parameters.
+    // Should be altered per client thread in cloned dterm_handle_t
+    dterm_fd_t          fd;
+    
+    // Process Context:
+    // Thread Context: may be null if not using talloc
+    TALLOC_CTX*         pctx;
+    TALLOC_CTX*         tctx;
+    
+    // Isolation Mutex
+    // * Used by dterm client threads to prevent more than one command from
+    //    running at any given time.
+    // * Initialized by DTerm
+    pthread_mutex_t*    iso_mutex;
+    
+    // Externally Initialized data elements
+    // These should only be used within lock provided by isolation mutex
+    void*               ext;
+
 } dterm_handle_t;
 
+
+
+typedef void* (*dterm_thread_t)(void*);
 
 
 // describes supported command types
@@ -137,59 +172,48 @@ typedef enum {
 
 ///@todo rework the dterm module into a more normal object.
 /// Presently the handle isn't a real handle, it's a struct.
-int dterm_init(dterm_handle_t* handle);
-void dterm_deinit(dterm_handle_t handle);
+int dterm_init(dterm_handle_t* dth, void* ext_data, INTF_Type intf);
+void dterm_deinit(dterm_handle_t* handle);
 
 int dterm_cmdfile(dterm_handle_t* dth, const char* filename);
 
 
-int dterm_open(dterm_t* dt, bool use_pipe);
-int dterm_close(dterm_t* dt);
-
-int dterm_squelch(dterm_t* dt);
-void dterm_unsquelch(dterm_t* dt);
-
-// DTerm threads called in main.  
-// One one should be started.  
-// Piper is for usage with stdin/stdout pipes, via another process.
-// Prompter is for usage with user console I/O.
-void* dterm_piper(void* args);
-void* dterm_prompter(void* args);
+dterm_thread_t dterm_open(dterm_handle_t* dth, const char* path);
+int dterm_close(dterm_handle_t* dth);
 
 
+int dterm_squelch(dterm_handle_t* dt);
+void dterm_unsquelch(dterm_handle_t* dt);
 
-// resets command buffer
-void dterm_reset(dterm_t *dt);
+
+int dterm_output_error(dterm_handle_t* dth, const char* cmdname, int errcode, const char* desc);
+int dterm_output_cmdmsg(dterm_handle_t* dth, const char* cmdname, const char* msg);
+int dterm_output_rxstat(dterm_handle_t* dth, DFMT_Type dfmt, void* rxdata, size_t rxsize, uint64_t rxaddr, time_t tstamp, int crcqual);
 
 
 
+/** @note All of these dterm output functions are deprecated and in danger of
+  * being removed from the code base in favor of direct utilization of dterm
+  * file descriptors.
+  */
 
-
-
-int dterm_putc(dterm_t *dt, char c);
-
-
-// writes c string to stdout
-// retunrns number of bytes written
-int dterm_puts(dterm_t *dt, char *s);
-
-
-// writes size bytes to stdout
-// retunrns number of bytes written
-int dterm_put(dterm_t *dt, char *s, int size);
+int dterm_put(dterm_fd_t* fd, char *s, int size);
+int dterm_puts(dterm_fd_t* fd, char *s);
+int dterm_putc(dterm_fd_t* fd, char c);
+int dterm_puts2(dterm_fd_t* fd, char *s);
+//int dterm_put(dterm_intf_t *dt, char *s, int size);
+//int dterm_puts(dterm_intf_t *dt, char *s);
+//int dterm_putc(dterm_intf_t *dt, char c);
+//int dterm_puts2(dterm_fd_t* fd, char *s);
 
 
 // writes c string to command buffer
 // retunrns number of bytes written
-int dterm_putsc(dterm_t *dt, char *s);
+int dterm_putsc(dterm_intf_t *dt, char *s);
+int dterm_putcmd(dterm_intf_t *dt, char *s, int size);
 
-
-// printf for dterm.
-int dterm_printf(dterm_t* dt, const char* format, ...);
-
-// scanf for dterm.  Scans a line
-int dterm_scanf(dterm_t* dt, const char* format, ...);
-
+// resets command buffer
+void dterm_reset(dterm_intf_t *dt);
 
 
 #endif

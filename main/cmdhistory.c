@@ -14,8 +14,8 @@
   *
   */
   
-  
-  ///@ todo replace this with GNU History
+///@todo cmdhistory.h/.c go into dterm library
+///@todo consider replacing this with GNU History
   
 // Local Headers
 #include "cmdhistory.h"
@@ -33,29 +33,35 @@ void ch_free(cmdhist* ch) {
         if (ch->history != NULL) {
             free(ch->history);
         }
-        ch->size = 0;
-        ch->count = 0;
+        free(ch);
     }
 }
 
 
 
 
-cmdhist* ch_init(cmdhist *ch) {
-    ///@todo make the size more dynamic than present
-    ch->size        = CMD_HISTSIZE;
+cmdhist* ch_init(size_t hist_size) {
+    cmdhist* ch;
     
-    ch->history = malloc(ch->size);
-    if (ch->history != NULL) {
-	    ch->putcur      = ch->history;
-	    ch->getstart    = ch->history;
-        ch->getend      = ch->history;
-        ch->count       = 0;
-        memset(ch->putcur, 0, ch->size);
-        return ch;
+    ///@todo make the size more dynamic than present
+    if (hist_size == 0) {
+        hist_size = CMD_HISTSIZE;
+    }
+    
+    ch = malloc(sizeof(cmdhist));
+    if (ch != NULL) {
+        ch->size    = hist_size;
+        ch->history = malloc(hist_size);
+        if (ch->history != NULL) {
+            ch->putcur      = ch->history;
+            ch->getstart    = ch->history;
+            ch->getend      = ch->history;
+            ch->count       = 0;
+            memset(ch->putcur, 0, ch->size);
+        }
     }
 
-    return NULL;
+    return ch;
 }
 
 

@@ -22,6 +22,7 @@
 #include "cliopt.h"
 #include "cmds.h"
 #include "dterm.h"
+#include "otter_app.h"
 #include "otter_cfg.h"
 //#include "test.h"
 
@@ -54,6 +55,7 @@ int cmd_chuser(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, si
     char** argv;
     int argc;
     int rc = 0;
+    otter_app_t* appdata;
     
     if (dth == NULL) {
         return 0;
@@ -61,6 +63,7 @@ int cmd_chuser(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, si
     
     INPUT_SANITIZE();
 
+    appdata = dth->ext;
     argc = cmdutils_parsestring(&argv, "chuser", (char*)src, (char*)src, (size_t)*inbytes);
     if (argc <= 0) {
         rc = -256 + argc;
@@ -72,7 +75,6 @@ int cmd_chuser(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, si
         struct arg_end* end     = arg_end(4);
         void* argtable[]        = { utype, uid, vid, end };
         devtab_node_t node;
-        devtab_endpoint_t* endpoint;
         USER_Type usertype;
 
         ///@todo wrap this routine into cmdutils subroutine
@@ -91,13 +93,13 @@ int cmd_chuser(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, si
         if (uid->count > 0) {
             uint64_t uidval = 0;
             bintex_ss(uid->sval[0], (uint8_t*)&uidval, 8);
-            node = devtab_select(dth->endpoint.devtab, uidval);
+            node = devtab_select(appdata->endpoint.devtab, uidval);
         }
         else if (vid->count > 0) {
-            node = devtab_select_vid(dth->endpoint.devtab, (uint16_t)vid->ival[0]);
+            node = devtab_select_vid(appdata->endpoint.devtab, (uint16_t)vid->ival[0]);
         }
         else {
-            node = devtab_select(dth->endpoint.devtab, 0);
+            node = devtab_select(appdata->endpoint.devtab, 0);
         }
 
         /// Make sure a node is found
@@ -114,8 +116,8 @@ int cmd_chuser(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, si
             goto cmd_chuser_TERM;
         }
         rc = 0;
-        dth->endpoint.usertype  = usertype;
-        dth->endpoint.node      = node;
+        appdata->endpoint.usertype  = usertype;
+        appdata->endpoint.node      = node;
 
         cmd_chuser_TERM:
         arg_freetable(argtable, sizeof(argtable)/sizeof(argtable[0]));
@@ -151,6 +153,7 @@ int cmd_whoami(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, si
 /// whoami command does not send any data to the target, it just checks to see
 /// who is the active CLI user, and if it has been authenticated successfully.
     int rc = 0;
+    otter_app_t* appdata;
     
     /// dt == NULL is the initialization case.
     /// There may not be an initialization for all command groups.
@@ -160,11 +163,12 @@ int cmd_whoami(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, si
     
     INPUT_SANITIZE();
     
+    appdata = dth->ext;
+    
     if (*inbytes != 0) {
-        dterm_puts(dth->dt, "Usage: whoami [no parameters]\n");
-        dterm_puts(dth->dt, "Indicates the current user and address\n");
+        dterm_output_error(dth, "whoami", -1, "Usage: whoami [no parameters], Indicates the current user and address");
     }
-    else if (dth->endpoint.node == NULL) {
+    else if (appdata->endpoint.node == NULL) {
         rc = -1;
         goto cmd_whoami_END;
     }
@@ -173,7 +177,7 @@ int cmd_whoami(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, si
         char* cursor;
         devtab_endpoint_t* endpoint;
         
-        endpoint = devtab_resolve_endpoint(dth->endpoint.node);
+        endpoint = devtab_resolve_endpoint(appdata->endpoint.node);
         if (endpoint == NULL) {
             rc = -2;
             goto cmd_whoami_END;
@@ -181,7 +185,7 @@ int cmd_whoami(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, si
         
         cursor = output;
         
-        switch (dth->endpoint.usertype) {
+        switch (appdata->endpoint.usertype) {
             case USER_root: cursor = stpcpy(cursor, "root@");   break;
             case USER_user: cursor = stpcpy(cursor, "user@");   break;
             default:        cursor = stpcpy(cursor, "guest@");  break;
@@ -195,7 +199,7 @@ int cmd_whoami(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, si
             cursor += sprintf(cursor, " (vid=%i)\n", endpoint->vid);
         }
         
-        dterm_puts(dth->dt, output);
+        dterm_output_cmdmsg(dth, "whoami", output);
     }
     
     cmd_whoami_END:

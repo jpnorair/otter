@@ -57,6 +57,7 @@ int cmd_xnode(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, siz
     USER_Type usertype;
     uint64_t uid_val = 0;
     devtab_node_t node = NULL;
+    otter_app_t* appdata;
     
     /// dt == NULL is the initialization case.
     /// There may not be an initialization for all command groups.
@@ -65,6 +66,8 @@ int cmd_xnode(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, siz
     }
     
     INPUT_SANITIZE();
+    
+    appdata = dth->ext;
     
     argc = cmdutils_parsestring(&argv, xnode_name, (char*)src, (char*)src, (size_t)*inbytes);
 
@@ -77,7 +80,7 @@ int cmd_xnode(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, siz
     usertype = user_get_type(nodeuser->sval[0]);
     
     bintex_ss(nodeuid->sval[0], (uint8_t*)&uid_val, 8);
-    node = devtab_select(dth->endpoint.devtab, uid_val);
+    node = devtab_select(appdata->endpoint.devtab, uid_val);
     if (node == NULL) {
         rc = -2;
         goto cmd_xnode_FREEARGS;
@@ -90,8 +93,8 @@ int cmd_xnode(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, siz
         rc = -4;
         goto cmd_xnode_FREEALL;
     }
-    dth->endpoint.usertype  = usertype;
-    dth->endpoint.node      = node;
+    appdata->endpoint.usertype  = usertype;
+    appdata->endpoint.node      = node;
     
     cmdptr  = cmd_quoteline_resolve((char*)nodecmd->sval[0], dth);
     rc      = cmd_run(cmdptr, dth, dst, &bytesin, (uint8_t*)nodecmd->sval[0], dstmax);

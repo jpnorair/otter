@@ -17,6 +17,7 @@
 // Local Headers
 #include "cmds.h"
 #include "cmd_api.h"
+#include "otter_app.h"
 
 // HB libraries
 #include <cmdtab.h>
@@ -281,6 +282,7 @@ size_t cmd_strmark(char* str, size_t max) {
 }
 
 
+///@todo Consider changing dterm_handle_t* input otter_app_t*
 const cmdtab_item_t* cmd_quoteline_resolve(char* quoteline, dterm_handle_t* dth) {
     /// Get each line from the pipe.
     const cmdtab_item_t* cmdptr;
@@ -288,6 +290,7 @@ const cmdtab_item_t* cmd_quoteline_resolve(char* quoteline, dterm_handle_t* dth)
     int cmdlen;
     char* mark;
     char* cmdhead;
+    otter_app_t* appdata;
 
     cmdlen  = (int)strlen(quoteline);
     cmdhead = quoteline;
@@ -316,9 +319,10 @@ const cmdtab_item_t* cmd_quoteline_resolve(char* quoteline, dterm_handle_t* dth)
     
     // Then determine length until newline, or null.
     // then search/get command in list.
+    appdata = dth->ext;
     cmdlen  = (int)cmd_strmark(cmdhead, (size_t)cmdlen);
     cmdlen  = cmd_getname(cmdname, cmdhead, sizeof(cmdname));
-    cmdptr  = cmd_search(dth->cmdtab, cmdname);
+    cmdptr  = cmd_search(appdata->cmdtab, cmdname);
     
     // Rewrite loop->cmdline to remove the wrapper parts
     strcpy(quoteline, cmdhead+cmdlen);

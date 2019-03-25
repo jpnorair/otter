@@ -19,12 +19,10 @@
 
 // Local Headers
 #include "formatters.h"
-#include "pktlist.h"
-#include "subscribers.h"
-#include "user.h"
+#include "otter_app.h"
 
 // HB Library Headers
-#include "cJSON.h"
+//#include <cJSON.h>
 
 // Standard C & POSIX Libraries
 #include <pthread.h>
@@ -45,28 +43,29 @@ typedef struct {
 
 
 
-typedef struct {
-    mpipe_handle_t  handle;
-    
-    pktlist_t*      tlist;           // should be used only by...
-    pktlist_t*      rlist;           // should be used only by...
-    user_endpoint_t* endpoint;
-    subscr_handle_t subscribers;
-    void*           dtprint;
-    
-    ///@todo this msgcall feature is deprecated
-    cJSON*          msgcall;
-
-    pthread_mutex_t*    dtwrite_mutex;
-    pthread_mutex_t*    rlist_mutex;
-    pthread_mutex_t*    tlist_mutex;
-    pthread_mutex_t*    tlist_cond_mutex;
-    pthread_cond_t*     tlist_cond;
-//    pthread_mutex_t*    kill_mutex;
-//    pthread_cond_t*     kill_cond;
-    pthread_mutex_t*    pktrx_mutex;
-    pthread_cond_t*     pktrx_cond;
-} mpipe_arg_t;
+//typedef struct {
+//    mpipe_handle_t  handle;
+//
+//    pktlist_t*      tlist;           // should be used only by...
+//    pktlist_t*      rlist;           // should be used only by...
+//    user_endpoint_t* endpoint;
+//    subscr_handle_t subscribers;
+//    void*           dtfd;
+//
+//    ///@todo this msgcall feature is deprecated
+//    cJSON*          msgcall;
+//
+//    pthread_mutex_t*    iso_mutex;
+//
+//    pthread_mutex_t*    rlist_mutex;
+//    pthread_mutex_t*    tlist_mutex;
+//    pthread_mutex_t*    tlist_cond_mutex;
+//    pthread_cond_t*     tlist_cond;
+////    pthread_mutex_t*    kill_mutex;
+////    pthread_cond_t*     kill_cond;
+//    pthread_mutex_t*    pktrx_mutex;
+//    pthread_cond_t*     pktrx_cond;
+//} mpipe_arg_t;
 
 
 int mpipe_init(mpipe_handle_t* handle, size_t num_intf);

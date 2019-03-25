@@ -173,11 +173,6 @@ int cmdutils_parsestring(char*** pargv, const char* cmdname, char* dst, char* sr
         cursor++;
         remdata--;
     }
-
-// Test printout
-//    for (int i=0; i<src_limit; i++) {
-//        fprintf(stderr, "%03d: %d (%c)\n", i, (int)dst[i], dst[i]);
-//    }
     
     /// If 'cmdname' is NULL: the command name is included in the source string
     /// If 'cmdname' is not NULL: the command name is supplied in 'cmdname'
@@ -209,7 +204,6 @@ int cmdutils_parsestring(char*** pargv, const char* cmdname, char* dst, char* sr
             cursor = dst;
             for (; i<argc; i++) {
                 for (; *cursor==0; cursor++);
-                //fprintf(stderr, "%s\n", cursor);
                 (*pargv)[i] = cursor;
                 for (; *cursor!=0; cursor++);
             }

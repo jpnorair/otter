@@ -18,14 +18,17 @@
 //#include "crc_calc_block.h"
 #include "debug.h"
 #include "mpipe.h"
-#include "ppipelist.h"
+#include "otter_app.h"
 #include "otter_cfg.h"
+
+// Deprecated
+#include "ppipelist.h"
 
 // Local Libraries/Includes
 #include <dterm.h>
 #include <cJSON.h>
 #include <bintex.h>
-#include "m2def.h"
+#include <m2def.h>
 
 // Standard C & POSIX libraries
 #include <fcntl.h>
@@ -45,7 +48,7 @@
 
 
 
-static dterm_t* mpipe_active_dterm;
+static dterm_fd_t* mpipe_active_dterm;
 
 static int sub_dtputs(char* str) {
     return dterm_puts(mpipe_active_dterm, str);
@@ -73,7 +76,8 @@ void* mpipe_reader(void* args) {
 /// <LI> Assembles the packet from TTY data. </LI>
 /// <LI> Adds packet into mpipe.rlist, sends cond-sig to mpipe_parser. </LI>
 ///
-    struct pollfd* fds = NULL;
+    otter_app_t* appdata    = args;
+    struct pollfd* fds      = NULL;
     int num_fds;
     int pollcode;
     int ready_fds;
@@ -87,10 +91,12 @@ void* mpipe_reader(void* args) {
     int new_bytes;
     uint8_t syncinput;
     
+    if (appdata == NULL) {
+        goto mpipe_reader_TERM;
+    }
     
     // The Packet lists are used between threads and thus are Mutexed references
-    mpipe_arg_t* mparg = (mpipe_arg_t*)args;
-    mpipe_handle_t mph = mparg->handle;
+    mpipe_handle_t mph = appdata->mpipe;
     
     // blocking should be in initialization... Here just as a reminder
     //fnctl(dt->fd_in, F_SETFL, 0);  
@@ -241,16 +247,16 @@ void* mpipe_reader(void* args) {
             HEX_DUMP(&rbuf[6], payload_length, "pkt   : ");
 
             // Copy the packet to the rlist and signal mpipe_parser()
-            pthread_mutex_lock(mparg->rlist_mutex);
-            pktlist_add_rx(mparg->endpoint, mpipe_intf_get(mph, i), mparg->rlist, rbuf, (size_t)(header_length + payload_length));
-            pthread_mutex_unlock(mparg->rlist_mutex);
+            pthread_mutex_lock(appdata->rlist_mutex);
+            pktlist_add_rx(&appdata->endpoint, mpipe_intf_get(mph, i), appdata->rlist, rbuf, (size_t)(header_length + payload_length));
+            pthread_mutex_unlock(appdata->rlist_mutex);
             
             // Error Handler: wait a few milliseconds, then handle the error.
             /// @todo supply estimated bytes remaining into mpipe_flush()
             mpipe_reader_ERR:
             switch (errcode) {
                 case 0: TTY_PRINTF(stderr, "Sending packet rx signal\n");
-                        pthread_cond_signal(mparg->pktrx_cond);
+                        pthread_cond_signal(appdata->pktrx_cond);
                         break;
                 
                 case 1: TTY_PRINTF(stderr, "MPipe Packet Sync could not be retrieved.\n");
@@ -300,33 +306,36 @@ void* mpipe_writer(void* args) {
 ///          been added to mpipe.tlist, via a cond-signal. </LI>
 /// <LI> Sends the packet over the TTY. </LI>
 ///
-    mpipe_arg_t* mparg = (mpipe_arg_t*)args;
+    otter_app_t* appdata = args;
+    
+    if (appdata == NULL) {
+        goto mpipe_writer_TERM;
+    }
     
     while (1) {
-        
         //pthread_mutex_lock(tlist_cond_mutex);
-        pthread_cond_wait(mparg->tlist_cond, mparg->tlist_cond_mutex);
-        pthread_mutex_lock(mparg->tlist_mutex);
+        pthread_cond_wait(appdata->tlist_cond, appdata->tlist_cond_mutex);
+        pthread_mutex_lock(appdata->tlist_mutex);
         
-        while (mparg->tlist->cursor != NULL) {
+        while (appdata->tlist->cursor != NULL) {
             pkt_t* txpkt;
             mpipe_fd_t* intf_fd;
             
             ///@todo wait also for RX to be off
             
-            txpkt = mparg->tlist->cursor;
+            txpkt = appdata->tlist->cursor;
             
             // This is a never-before transmitted packet (not a re-transmit)
             // Move to the next in the list.
-            if (mparg->tlist->cursor == mparg->tlist->marker) {
-                pkt_t* next_pkt         = mparg->tlist->marker->next;
-                mparg->tlist->cursor    = next_pkt;
-                mparg->tlist->marker    = next_pkt;
+            if (appdata->tlist->cursor == appdata->tlist->marker) {
+                pkt_t* next_pkt         = appdata->tlist->marker->next;
+                appdata->tlist->cursor  = next_pkt;
+                appdata->tlist->marker  = next_pkt;
             }
             // This is a packet that has just been re-transmitted.  
             // Move to the marker, which is where the new packets start.
             else {
-                mparg->tlist->cursor    = mparg->tlist->marker;
+                appdata->tlist->cursor  = appdata->tlist->marker;
             }
             
             intf_fd = mpipe_fds_resolve(txpkt->intf);
@@ -355,8 +364,10 @@ void* mpipe_writer(void* args) {
             usleep(10000);
         }
         
-        pthread_mutex_unlock(mparg->tlist_mutex);
+        pthread_mutex_unlock(appdata->tlist_mutex);
     }
+    
+    mpipe_writer_TERM:
     
     /// This code should never occur, given the while(1) loop.
     /// If it does (possibly a stack fuck-up), we print this "chaotic error."
@@ -381,7 +392,14 @@ void* mpipe_parser(void* args) {
 ///          print it out in a human-readable way. </LI>
 ///
     static char putsbuf[2048];
-    mpipe_arg_t* mparg = (mpipe_arg_t*)args;
+    otter_app_t* appdata = args;
+    dterm_handle_t* dth;
+    
+    if (appdata == NULL) {
+        goto mpipe_parser_TERM;
+    }
+
+    dth = appdata->dterm_parent;
 
     // This looks like an infinite loop, but is not.  The pkt_condition
     // variable will break the loop if the rlist has no new packets.
@@ -393,20 +411,20 @@ void* mpipe_parser(void* args) {
         pkt_t*  tpkt;
     
         //pthread_mutex_lock(pktrx_mutex);
-        pthread_cond_wait(mparg->pktrx_cond, mparg->pktrx_mutex);
-        pthread_mutex_lock(mparg->dtwrite_mutex);
-        pthread_mutex_lock(mparg->rlist_mutex);
-        pthread_mutex_lock(mparg->tlist_mutex);
+        pthread_cond_wait(appdata->pktrx_cond, appdata->pktrx_mutex);
+        pthread_mutex_lock(dth->iso_mutex);
+        pthread_mutex_lock(appdata->rlist_mutex);
+        pthread_mutex_lock(appdata->tlist_mutex);
         
-        mpipe_active_dterm = (dterm_t*)mparg->dtprint;
-        rpkt = mparg->rlist->cursor;
+        mpipe_active_dterm = (dterm_fd_t*)&dth->fd;
+        rpkt = appdata->rlist->cursor;
         
         // pktlist_getnew will validate and decrypt the packet:
         // - It returns 0 if all is well
         // - It returns -1 if the list is empty
         // - It returns a positive error code if there is some packet error
         // - rlist->cursor points to the working packet
-        pkt_condition = pktlist_getnew(mparg->rlist);
+        pkt_condition = pktlist_getnew(appdata->rlist);
         if (pkt_condition < 0) {
             goto mpipe_parser_END;
         }
@@ -417,7 +435,7 @@ void* mpipe_parser(void* args) {
         if (pkt_condition > 0) {
             ///@todo some sort of error code
             fprintf(stderr, "A malformed packet was sent for parsing\n");
-            pktlist_del(mparg->rlist, rpkt);
+            pktlist_del(appdata->rlist, rpkt);
         }
         else {
             uint8_t*    payload_front;
@@ -429,7 +447,7 @@ void* mpipe_parser(void* args) {
             // Response Packets should match to a sequence number of the last Request.
             // If there is no match, then there is no response processing, we just 
             // print the damn packet.
-            tpkt = mparg->tlist->front;
+            tpkt = appdata->tlist->front;
             while (tpkt != NULL) {
                 if (tpkt->sequence == rpkt->sequence) {
                     // matching transmitted packet: it IS a response
@@ -475,9 +493,9 @@ void* mpipe_parser(void* args) {
             ///@note in present versions there is some unreliability with
             ///      CRC: possibly data alignment or something, or might be
             ///      a problem on the test sender.
-            if (mparg->rlist->cursor->crcqual != 0) {
+            if (appdata->rlist->cursor->crcqual != 0) {
                 fmt_printhex(&sub_dtputs, &rpkt->buffer[6], rpkt->size-6, 16);
-                pktlist_del(mparg->rlist, rpkt);
+                pktlist_del(appdata->rlist, rpkt);
                 goto mpipe_parser_END;
             }
             
@@ -523,9 +541,9 @@ void* mpipe_parser(void* args) {
             }
             else if (rpkt_is_valid)  {
                 int subsig, fmt_result;
-                fmt_result  = fmt_fprintalp(&sub_dtputs, mparg->msgcall, payload_front, payload_bytes);
+                fmt_result  = fmt_fprintalp(&sub_dtputs, NULL, payload_front, payload_bytes);
                 subsig      = (fmt_result >= 0) ? SUBSCR_SIG_OK : SUBSCR_SIG_ERR;
-                subscriber_post(mparg->subscribers, fmt_result, subsig, NULL, 0);
+                subscriber_post(appdata->subscribers, fmt_result, subsig, NULL, 0);
             }
             else {
                 fmt_printhex(&sub_dtputs, payload_front, payload_bytes, 16);
@@ -533,7 +551,7 @@ void* mpipe_parser(void* args) {
 
             // Clear the rpkt if required
             if (clear_rpkt) {
-                pktlist_del(mparg->rlist, rpkt);
+                pktlist_del(appdata->rlist, rpkt);
             }
             
             // Clear the tpkt if it is matched with an rpkt
@@ -547,19 +565,21 @@ void* mpipe_parser(void* args) {
                 //}
             }
             else if (tpkt != NULL) {
-                pktlist_del(mparg->tlist, tpkt);
+                pktlist_del(appdata->tlist, tpkt);
             }
         } 
         
         mpipe_parser_END:
-        pthread_mutex_unlock(mparg->tlist_mutex);
-        pthread_mutex_unlock(mparg->rlist_mutex);
-        pthread_mutex_unlock(mparg->dtwrite_mutex);
+        pthread_mutex_unlock(appdata->tlist_mutex);
+        pthread_mutex_unlock(appdata->rlist_mutex);
+        pthread_mutex_unlock(dth->iso_mutex);
         
         ///@todo Can check for major error in pkt_condition
         ///      Major errors are integers less than -1
         
     } // END OF WHILE()
+    
+    mpipe_parser_TERM:
     
     /// This code should never occur, given the while(1) loop.
     /// If it does (possibly a stack fuck-up), we print this "chaotic error."

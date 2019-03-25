@@ -29,7 +29,7 @@ endif
 GITHEAD := $(shell git rev-parse --short HEAD)
 
 DEFAULT_DEF := -D__HBUILDER__ -DOTTER_PARAM_GITHEAD=\"$(GITHEAD)\"
-LIBMODULES  := argtable cJSON cmdtab bintex m2def libjudy OTEAX libotfs hbuilder-lib $(EXT_LIBS)
+LIBMODULES  := argtable cJSON clithread cmdtab bintex m2def OTEAX libotfs hbuilder-lib $(EXT_LIBS)
 SUBMODULES  := cmds main test
 
 SRCEXT      := c
@@ -42,7 +42,7 @@ CFLAGS      := -std=gnu99 -O3 -pthread
 INC         := -I. -I./include -I./$(SYSDIR)/include
 INCDEP      := -I.
 LIBINC      := -L./$(SYSDIR)/lib
-LIB         := -largtable -lbintex -lcJSON -lcmdtab -lsmut -lhbuilder -lotfs -loteax -ljudy -lm -lc $(LIBBSD)
+LIB         := -largtable -lbintex -lcJSON -lclithread -lcmdtab -lsmut -lhbuilder -lotfs -loteax -ltalloc -lm -lc $(LIBBSD)
 
 OTTER_PKG   := $(PKGDIR)
 OTTER_DEF   := $(DEFAULT_DEF) $(EXT_DEF)

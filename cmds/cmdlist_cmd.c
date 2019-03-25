@@ -20,6 +20,7 @@
 #include "cliopt.h"
 #include "cmds.h"
 #include "dterm.h"
+#include "otter_app.h"
 #include "otter_cfg.h"
 //#include "test.h"
 
@@ -34,8 +35,9 @@
 
 
 int cmd_cmdlist(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
-    int bytes_out;
+    int bytesout;
     char cmdprint[1024];
+    otter_app_t* appdata;
 
     /// dt == NULL is the initialization case.
     /// There may not be an initialization for all command groups.
@@ -45,9 +47,14 @@ int cmd_cmdlist(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, s
     
     INPUT_SANITIZE();
     
-    bytes_out = cmdtab_list(dth->cmdtab, cmdprint, 1024);
-    dterm_puts(dth->dt, "Commands available:\n");
-    dterm_puts(dth->dt, cmdprint);
+    appdata = dth->ext;
+    
+    bytesout = cmdtab_list(appdata->cmdtab, cmdprint, 1024);
+    if (bytesout >= 0) {
+        dterm_output_cmdmsg(dth, "cmdls", cmdprint);
+        bytesout = 0;
+    }
+    
 
-    return 0;
+    return bytesout;
 }

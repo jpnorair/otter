@@ -22,6 +22,7 @@
 #include "cliopt.h"
 #include "cmds.h"
 #include "dterm.h"
+#include "otter_app.h"
 #include "otter_cfg.h"
 //#include "test.h"
 
@@ -54,6 +55,7 @@ static int sub_editnode(dterm_handle_t* dth, int argc, char** argv, bool require
     uint8_t userkey_dat[16];
     int rc = 0;
     devtab_node_t node = NULL;
+    otter_app_t* appdata;
 
     ///@todo wrap this routine into cmdutils subroutine
     if (arg_nullcheck(argtable) != 0) {
@@ -68,7 +70,7 @@ static int sub_editnode(dterm_handle_t* dth, int argc, char** argv, bool require
     
     /// UID is a required element
     bintex_ss(uid->sval[0], (uint8_t*)&uid_val, 8); 
-    node = devtab_select(dth->endpoint.devtab, uid_val);
+    node = devtab_select(appdata->endpoint.devtab, uid_val);
     if( (require_exists && (node == NULL))
     || ((require_exists==false) && (pre->count==0) && (node != NULL))
     ) {
@@ -80,7 +82,7 @@ static int sub_editnode(dterm_handle_t* dth, int argc, char** argv, bool require
         vid_val = (uint16_t)vid->ival[0];
     }
     else if (node != NULL) {
-        vid_val = devtab_get_vid(dth->endpoint.devtab, node);
+        vid_val = devtab_get_vid(appdata->endpoint.devtab, node);
     }
     else {
         vid_val = 0;
@@ -88,13 +90,13 @@ static int sub_editnode(dterm_handle_t* dth, int argc, char** argv, bool require
     
     if (intf->count > 0) {
         ///@todo Must be able to do mpipe_intf_get(mph, ttyname)
-        intf_val = mpipe_intf_fromfile(dth->mpipe, intf->sval[0]);
+        intf_val = mpipe_intf_fromfile(appdata->mpipe, intf->sval[0]);
     }
     else if (node != NULL) {
-        intf_val = devtab_get_intf(dth->endpoint.devtab, node);
+        intf_val = devtab_get_intf(appdata->endpoint.devtab, node);
     }
     else {
-        intf_val = mpipe_intf_get(dth->mpipe, 0);
+        intf_val = mpipe_intf_get(appdata->mpipe, 0);
     }
     
     if (rootkey->count > 0) {
@@ -103,7 +105,7 @@ static int sub_editnode(dterm_handle_t* dth, int argc, char** argv, bool require
         bintex_ss(rootkey->sval[0], rootkey_dat, 16);
     }
     else if (node != NULL) {
-        rootkey_val = devtab_get_rootctx(dth->endpoint.devtab, node);
+        rootkey_val = devtab_get_rootctx(appdata->endpoint.devtab, node);
     }
     else {
         rootkey_val = NULL;
@@ -115,13 +117,13 @@ static int sub_editnode(dterm_handle_t* dth, int argc, char** argv, bool require
         bintex_ss(userkey->sval[0], userkey_dat, 16);
     }
     else if (node != NULL) {
-        userkey_val = devtab_get_userctx(dth->endpoint.devtab, node);
+        userkey_val = devtab_get_userctx(appdata->endpoint.devtab, node);
     }
     else {
         userkey_val = NULL;
     }
 
-    rc = devtab_insert(dth->endpoint.devtab, uid_val, vid_val, intf_val, rootkey_val, userkey_val);
+    rc = devtab_insert(appdata->endpoint.devtab, uid_val, vid_val, intf_val, rootkey_val, userkey_val);
 
     sub_editnode_TERM:
     arg_freetable(argtable, sizeof(argtable)/sizeof(argtable[0]));
@@ -162,21 +164,9 @@ int cmd_mknode(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, si
         rc = sub_editnode(dth, argc, argv, false);
     }
     
-    ///@todo put this is a universal return function for functions that don't
-    ///      hit the nodes.
-    switch (cliopt_getformat()) {
-        case FORMAT_Hex: {
-            const char* ack = "00";
-            const char* nack = "FF";
-            dterm_puts(dth->dt, (rc >= 0) ? ack : nack);
-            break;
-        } break;
-
-        case FORMAT_Json: ///@todo
-        case FORMAT_Bintex: ///@todo
-        default: {
-        } break;
-    }
+    ///@todo better error reporting
+    // ACK (0), NACK (!0)
+    rc = (rc >= 0) ? 0 : rc;
     
     cmdutils_freeargv(argv);
     return rc;
@@ -204,19 +194,9 @@ int cmd_chnode(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, si
         rc = sub_editnode(dth, argc, argv, true);
     }
     
-    ///@todo put this is a universal return function for functions that don't
-    ///      hit the nodes.
-    switch (cliopt_getformat()) {
-        case FORMAT_Hex: {
-            dterm_puts(dth->dt, "00");
-            break;
-        } break;
-
-        case FORMAT_Json: ///@todo
-        case FORMAT_Bintex: ///@todo
-        default: {
-        } break;
-    }
+    ///@todo better error reporting
+    // ACK (0), NACK (!0)
+    rc = (rc >= 0) ? 0 : rc;
     
     cmdutils_freeargv(argv);
     return 0;
@@ -227,6 +207,7 @@ int cmd_rmnode(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, si
     char** argv;
     int argc;
     int rc;
+    otter_app_t* appdata;
     
     /// dt == NULL is the initialization case.
     /// There may not be an initialization for all command groups.
@@ -235,6 +216,8 @@ int cmd_rmnode(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, si
     }
     
     INPUT_SANITIZE();
+    
+    appdata = dth->ext;
     
     argc = cmdutils_parsestring(&argv, "rmnode", (char*)src, (char*)src, (size_t)*inbytes);
     if (argc <= 0) {
@@ -259,36 +242,25 @@ int cmd_rmnode(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, si
         
         /// UID is a required element
         bintex_ss(uid->sval[0], (uint8_t*)&uid_val, 8);
-        rc = devtab_remove(dth->endpoint.devtab, uid_val);
+        rc = devtab_remove(appdata->endpoint.devtab, uid_val);
 
         cmd_rmnode_TERM:
         arg_freetable(argtable, sizeof(argtable)/sizeof(argtable[0]));
         cmdutils_freeargv(argv);
     }
     
-    ///@todo put this is a universal return function for functions that don't
-    ///      hit the nodes.
-    switch (cliopt_getformat()) {
-        case FORMAT_Hex: {
-            const char* ack = "00";
-            const char* nack = "FF";
-            dterm_puts(dth->dt, (rc >= 0) ? ack : nack);
-            break;
-        } break;
-
-        case FORMAT_Json: ///@todo
-        case FORMAT_Bintex: ///@todo
-        default: {
-        } break;
-    }
+    ///@todo better error reporting
+    // ACK (0), NACK (!0)
+    rc = (rc >= 0) ? 0 : rc;
     
     return rc;
 }
 
 
 int cmd_lsnode(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
-    int bytes_out;
+    int bytesout;
     char printbuf[1024];
+    otter_app_t* appdata;
 
     /// dt == NULL is the initialization case.
     /// There may not be an initialization for all command groups.
@@ -298,10 +270,11 @@ int cmd_lsnode(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, si
     
     INPUT_SANITIZE();
     
-    bytes_out = devtab_list(dth->endpoint.devtab, printbuf, 1024);
-    dterm_puts(dth->dt, "Nodes available:\n");
-    dterm_puts(dth->dt, printbuf);
-
+    appdata  = dth->ext;
+    bytesout = devtab_list(appdata->endpoint.devtab, printbuf, 1024);
+    
+    dterm_output_cmdmsg(dth, "lsnode", printbuf);
+    
     return 0;
 }
 

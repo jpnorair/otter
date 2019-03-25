@@ -15,7 +15,7 @@
 
 // Configuration Include
 #include "otter_cfg.h"
-#if (OTTER_FEATURE_MODBUS == ENABLED)
+#if 1 //(OTTER_FEATURE_MODBUS == ENABLED)
 
 // Application Includes
 #include "cliopt.h"
@@ -49,7 +49,7 @@
 
 
 
-static dterm_t* modbus_active_dterm;
+static dterm_fd_t* modbus_active_dterm;
 
 static int sub_dtputs(char* str) {
     return dterm_puts(modbus_active_dterm, str);
@@ -76,8 +76,9 @@ void* modbus_reader(void* args) {
 /// <LI> Listens to modbus TTY via read(). </LI>
 /// <LI> Assembles the packet from TTY data. </LI>
 /// <LI> Adds packet into mpipe.rlist, sends cond-sig to modbus_parser. </LI>
-
-    struct pollfd* fds = NULL;
+    otter_app_t* appdata    = args;
+    struct pollfd* fds      = NULL;
+    mpipe_handle_t mph;
     int num_fds;
     int pollcode;
     int ready_fds;
@@ -89,15 +90,19 @@ void* modbus_reader(void* args) {
     int list_size;
     int errcode;
     
+    if (appdata == NULL) {
+        goto modbus_reader_TERM;
+    }
+    
     // Local copy of MPipe Ctl data: it is used in multiple threads without
     // mutexes (it is read-only anyway)
-    mpipe_handle_t mph = ((mpipe_arg_t*)args)->handle;
+    mph = appdata->mpipe;
     
     // The Packet lists are used between threads and thus are Mutexed references
-    pktlist_t* rlist                = ((mpipe_arg_t*)args)->rlist;
-    pthread_mutex_t* rlist_mutex    = ((mpipe_arg_t*)args)->rlist_mutex;
-    pthread_cond_t* pktrx_cond      = ((mpipe_arg_t*)args)->pktrx_cond;
-    user_endpoint_t* endpoint       = ((mpipe_arg_t*)args)->endpoint;
+//    pktlist_t* rlist                = appdata->rlist;
+//    pthread_mutex_t* rlist_mutex    = appdata->rlist_mutex;
+//    pthread_cond_t* pktrx_cond      = appdata->pktrx_cond;
+//    user_endpoint_t* endpoint       = &appdata->endpoint;
 
     // blocking should be in initialization... Here just as a reminder
     //fnctl(dt->fd_in, F_SETFL, 0);  
@@ -187,9 +192,9 @@ void* modbus_reader(void* args) {
             }
 
             /// Copy the packet to the rlist and signal modbus_parser()
-            pthread_mutex_lock(rlist_mutex);
-            list_size = pktlist_add_rx(endpoint, mpipe_intf_get(mph, i), rlist, rbuf, (size_t)frame_length);
-            pthread_mutex_unlock(rlist_mutex);
+            pthread_mutex_lock(appdata->rlist_mutex);
+            list_size = pktlist_add_rx(&appdata->endpoint, mpipe_intf_get(mph, i), appdata->rlist, rbuf, (size_t)frame_length);
+            pthread_mutex_unlock(appdata->rlist_mutex);
             
             if (list_size <= 0) {
                 errcode = 3;
@@ -201,7 +206,7 @@ void* modbus_reader(void* args) {
             switch (errcode) {
                 case 0: TTY_RX_PRINTF("Packet Received Successfully (%d bytes).\n", frame_length);
                         HEX_DUMP(rbuf, frame_length, "Reading %d Bytes on tty\n", frame_length);
-                        pthread_cond_signal(pktrx_cond);
+                        pthread_cond_signal(appdata->pktrx_cond);
                         break;
                 
                 case 2: TTY_RX_PRINTF("Modbus Packet Payload Length (%d bytes) is out of bounds.\n", frame_length);
@@ -265,11 +270,19 @@ void* modbus_writer(void* args) {
 ///          been added to mpipe.tlist, via a cond-signal. </LI>
 /// <LI> Sends the packet over the TTY. </LI>
 ///
-    mpipe_handle_t mph                  = ((mpipe_arg_t*)args)->handle;
-    pktlist_t* tlist                    = ((mpipe_arg_t*)args)->tlist;
-    pthread_cond_t* tlist_cond          = ((mpipe_arg_t*)args)->tlist_cond;
-    pthread_mutex_t* tlist_cond_mutex   = ((mpipe_arg_t*)args)->tlist_cond_mutex;
-    pthread_mutex_t* tlist_mutex        = ((mpipe_arg_t*)args)->tlist_mutex;
+    otter_app_t* appdata = args;
+    mpipe_handle_t mph;
+//    mpipe_handle_t mph                  = ((mpipe_arg_t*)args)->handle;
+//    pktlist_t* tlist                    = ((mpipe_arg_t*)args)->tlist;
+//    pthread_cond_t* tlist_cond          = ((mpipe_arg_t*)args)->tlist_cond;
+//    pthread_mutex_t* tlist_cond_mutex   = ((mpipe_arg_t*)args)->tlist_cond_mutex;
+//    pthread_mutex_t* tlist_mutex        = ((mpipe_arg_t*)args)->tlist_mutex;
+    
+    if (appdata == NULL) {
+        goto modbus_writer_TERM;
+    }
+    
+    mph = appdata->mpipe;
     
     while (1) {
         
@@ -277,29 +290,29 @@ void* modbus_writer(void* args) {
         /// pthread_cond_wait() for conds, but it doesn't work with this 
         /// configuration.
         //pthread_mutex_lock(tlist_cond_mutex);
-        pthread_cond_wait(tlist_cond, tlist_cond_mutex);
+        pthread_cond_wait(appdata->tlist_cond, appdata->tlist_cond_mutex);
         
-        pthread_mutex_lock(tlist_mutex);
+        pthread_mutex_lock(appdata->tlist_mutex);
         
-        while (tlist->cursor != NULL) {
+        while (appdata->tlist->cursor != NULL) {
             pkt_t* txpkt;
             
             /// Modbus 1.75ms idle SOF
             usleep(1750);
             
-            txpkt = tlist->cursor;
+            txpkt = appdata->tlist->cursor;
             
             // This is a never-before transmitted packet (not a re-transmit)
             // Move to the next in the list.
-            if (tlist->cursor == tlist->marker) {
-                pkt_t* next_pkt = tlist->marker->next;
-                tlist->cursor   = next_pkt;
-                tlist->marker   = next_pkt;
+            if (appdata->tlist->cursor == appdata->tlist->marker) {
+                pkt_t* next_pkt         = appdata->tlist->marker->next;
+                appdata->tlist->cursor  = next_pkt;
+                appdata->tlist->marker  = next_pkt;
             }
             // This is a packet that has just been re-transmitted.  
             // Move to the marker, which is where the new packets start.
             else {
-                tlist->cursor   = tlist->marker;
+                appdata->tlist->cursor  = appdata->tlist->marker;
             }
             
             time(&txpkt->tstamp);
@@ -322,8 +335,10 @@ void* modbus_writer(void* args) {
             
         }
         
-        pthread_mutex_unlock(tlist_mutex);
+        pthread_mutex_unlock(appdata->tlist_mutex);
     }
+    
+    modbus_writer_TERM:
     
     /// This code should never occur, given the while(1) loop.
     /// If it does (possibly a stack fuck-up), we print this "chaotic error."
@@ -351,18 +366,25 @@ void* modbus_parser(void* args) {
 ///          print it out in a human-readable way. </LI>
 ///
     static char putsbuf[2048];
-    mpipe_arg_t* mparg = ((mpipe_arg_t*)args);
+    otter_app_t* appdata = args;
+    dterm_handle_t* dth;
+
+    if (appdata == NULL) {
+        goto modbus_parser_TERM;
+    }
+
+    dth = appdata->dterm_parent;
 
     while (1) {
         int pkt_condition;  // tracks some error conditions
     
         //pthread_mutex_lock(pktrx_mutex);
-        pthread_cond_wait(mparg->pktrx_cond, mparg->pktrx_mutex);
-        pthread_mutex_lock(mparg->dtwrite_mutex);
-        pthread_mutex_lock(mparg->rlist_mutex);
-        pthread_mutex_lock(mparg->tlist_mutex);
+        pthread_cond_wait(appdata->pktrx_cond, appdata->pktrx_mutex);
+        pthread_mutex_lock(dth->iso_mutex);
+        pthread_mutex_lock(appdata->rlist_mutex);
+        pthread_mutex_lock(appdata->tlist_mutex);
         
-        modbus_active_dterm = (dterm_t*)mparg->dtprint;
+        modbus_active_dterm = &dth->fd;
         
         // This looks like an infinite loop, but is not.  The pkt_condition
         // variable will break the loop if the rlist has no new packets.
@@ -376,7 +398,7 @@ void* modbus_parser(void* args) {
         /// - It returns -1 if the list is empty
         /// - It returns a positive error code if there is some packet error
         /// - rlist->cursor points to the working packet
-        pkt_condition = pktlist_getnew(mparg->rlist);
+        pkt_condition = pktlist_getnew(appdata->rlist);
         if (pkt_condition < 0) {
             goto modbus_parser_END;
         }
@@ -388,63 +410,30 @@ void* modbus_parser(void* args) {
         if (pkt_condition > 0) {
             ///@todo some sort of error code
             fprintf(stderr, "A malformed packet was sent for parsing\n");
-            pktlist_del(mparg->rlist, mparg->rlist->cursor);
+            pktlist_del(appdata->rlist, appdata->rlist->cursor);
         }
         else {
             uint16_t    output_bytes;
             int         proc_result;
             int         msgtype;
             uint8_t*    msg;
-            uint16_t    msgbytes;
+            size_t      msgbytes;
             bool        clear_rpkt      = true;
             bool        rpkt_is_resp;
             pkt_t*      rpkt;
+            DFMT_Type   rxstat_fmt;
 
             /// For a Modbus master (like this), all received packets are 
             /// responses.  In some type of peer-peer modbus system, this would
             /// need to be intelligently managed.
             rpkt_is_resp    = true;
-            rpkt            = mparg->rlist->cursor;
+            rpkt            = appdata->rlist->cursor;
 
-            /// If Verbose, Print received header in real language
-            /// If not Verbose, just print the encoded packet status
-            if (cliopt_isverbose()) {
-                sprintf(putsbuf, "\n" _E_BBLK "RX'ed %zu bytes at %s, %s CRC: %s" _E_NRM "\n",
-                            rpkt->size,
-                            fmt_time(&rpkt->tstamp),
-                            fmt_crc(rpkt->crcqual),
-                            fmt_hexdump_header(rpkt->buffer)
-                        );
-            }
-            else {
-                switch (cliopt_getformat()) {
-                    case FORMAT_Hex: {
-                        putsbuf[0] = '0';
-                        putsbuf[1] = '0' + (rpkt->crcqual != 0);
-                        putsbuf[2] = 0;
-                        ///@todo put this to the buffer without flushing it
-                    } break;
-
-                    case FORMAT_Json: ///@todo
-                            break;
-                        
-                    case FORMAT_Bintex: ///@todo
-                    
-                    default: {
-                        const char* valid_sym = _E_GRN"v";
-                        const char* error_sym = _E_RED"x";
-                        const char* crc_sym   = (rpkt->crcqual == 0) ? valid_sym : error_sym;
-                        sprintf(putsbuf, _E_WHT "[" "%s" _E_WHT "][%03d] " _E_NRM,
-                                crc_sym, rpkt->sequence);
-                    } break;
-                }
-            }
-            sub_dtputs(putsbuf);
-
-            /// If CRC is bad, dump hex of buffer-size and discard packet now.
-            if (mparg->rlist->cursor->crcqual != 0) {
-                fmt_printhex(&sub_dtputs, &rpkt->buffer[0], rpkt->size, 16);
-                pktlist_del(mparg->rlist, rpkt);
+            /// If CRC is bad, discard packet now, and rxstat an error
+            if (appdata->rlist->cursor->crcqual != 0) {
+                ///@todo add rx address of input packet (set to 0)
+                dterm_output_rxstat(dth, DFMT_Binary, rpkt->buffer, rpkt->size, 0, rpkt->tstamp, rpkt->crcqual);
+                pktlist_del(appdata->rlist, rpkt);
                 goto modbus_parser_END;
             }
             
@@ -454,55 +443,50 @@ void* modbus_parser(void* args) {
             msgbytes    = rpkt->size;
             msgtype     = smut_extract_payload((void**)&msg, (void*)msg, &msgbytes, msgbytes, true);
             
-            if ((proc_result == 0) && (msgtype >= 0)) {
+            if ((proc_result == 0) && (msgtype == 0)) {
                 // ALP message
                 // proc_result now takes the value from the protocol formatter.
                 // The formatter will give negative values on framing errors
                 // and also for protocol errors (i.e. NACKs).
-                if (msgtype == 0) {
-                    int subsig;
-                    proc_result = fmt_fprintalp(&sub_dtputs, mparg->msgcall, msg, msgbytes);
-                    ///@todo figure out if this extra formatting step is necessary
-                    ///      it is here to print a certain type of frame.
-//                    if (output_bytes != 0) {
-//                        //fprintf(stderr, "fmt_fprintalp(..., ..., %016llX, %d)\n", (uint64_t)putsbuf, output_bytes);
-//                        fmt_fprintalp(&sub_dtputs, mparg->msgcall, (uint8_t*)putsbuf, output_bytes);
-//                    }
-                    
-                    // subscribers
-                    subsig = (proc_result >= 0) ? SUBSCR_SIG_OK : SUBSCR_SIG_ERR;
-                    subscriber_post(mparg->subscribers, proc_result, subsig, NULL, 0);
-                }
-                // Raw Message
-                else {
-                    sprintf(putsbuf, "Raw Modbus Message received\n");
-                    sub_dtputs(putsbuf);
-                    fmt_printhex(&sub_dtputs, msg, msgbytes, 16);
-                }
+                int subsig;
+                ///@todo rework fmt_fprintalp to output to putsbuf
+                ///@todo also add Format option, or just get from cliopts
+                proc_result = fmt_fprintalp((uint8_t*)putsbuf, NULL, msg, &msgbytes);
+                rxstat_fmt  = DFMT_Native;
+                
+                // subscribers
+                subsig = (proc_result >= 0) ? SUBSCR_SIG_OK : SUBSCR_SIG_ERR;
+                subscriber_post(appdata->subscribers, proc_result, subsig, NULL, 0);
             }
             else {
-                sprintf(putsbuf, "Unidentified Message received\n");
-                sub_dtputs(putsbuf);
-                fmt_printhex(&sub_dtputs, mparg->rlist->cursor->buffer, mparg->rlist->cursor->size, 16);
+                // Raw or Unidentified Message received
+                ///@todo rework fmt_printhex to output to putsbuf
+                proc_result = fmt_printhex(putsbuf, msg, msgbytes, 16);
+                rxstat_fmt  = DFMT_Text;
             }
+            
+            ///@todo add rx address of input packet (set to 0)
+            dterm_output_rxstat(dth, rxstat_fmt, putsbuf, proc_result, 0, rpkt->tstamp, rpkt->crcqual);
             
             // clear_rpkt will always be true.  It means that the received 
             // packet should be cleared from the packet list.
             if (clear_rpkt) {
-                pkt_t*  scratch = mparg->rlist->cursor;
-                pktlist_del(mparg->rlist, scratch);
+                pkt_t*  scratch = appdata->rlist->cursor;
+                pktlist_del(appdata->rlist, scratch);
             }
         }
         
         modbus_parser_END:
-        pthread_mutex_unlock(mparg->tlist_mutex);
-        pthread_mutex_unlock(mparg->rlist_mutex);
-        pthread_mutex_unlock(mparg->dtwrite_mutex);
+        pthread_mutex_unlock(appdata->tlist_mutex);
+        pthread_mutex_unlock(appdata->rlist_mutex);
+        pthread_mutex_unlock(dth->iso_mutex);
         
         ///@todo Can check for major error in pkt_condition
         ///      Major errors are integers less than -1
         
     } // END OF WHILE()
+    
+    modbus_parser_TERM:
     
     /// This code should never occur, given the while(1) loop.
     /// If it does (possibly a stack fuck-up), we print this "chaotic error."

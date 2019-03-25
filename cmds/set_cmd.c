@@ -17,8 +17,6 @@
 // Local Headers
 #include "cmdutils.h"
 
-#include "envvar.h"
-
 #include "cliopt.h"
 #include "cmds.h"
 #include "dterm.h"
@@ -69,7 +67,7 @@ int cmd_sethome(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, s
     INPUT_SANITIZE();
     
     if (*inbytes >= 1023) {
-        dterm_puts(dth->dt, "Error: supplied home-path is too long, must be < 1023 chars.\n");
+        dterm_output_error(dth, "sethome", -1, "supplied home-path is too long, must be < 1023 chars.");
     }
     else {
         ///@todo just make this call "set HOME"

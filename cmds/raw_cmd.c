@@ -17,8 +17,6 @@
 // Local Headers
 #include "cmdutils.h"
 
-#include "envvar.h"
-
 #include "cliopt.h"
 #include "cmds.h"
 #include "dterm.h"
@@ -87,10 +85,12 @@ int cmd_raw(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, size_
     
     ///@todo convert the character number into a line and character number
     if (bytesout < 0) {
-        dterm_printf(dth->dt, "Bintex error on character %d.\n", -bytesout);
+        dprintf(dth->fd.out, "Bintex error on character %d.\n", -bytesout);
     }
-    else if (cliopt_isverbose() && (bytesout > 0)) {
-        fprintf(stdout, "--> raw packetizing %d bytes (max=%zu)\n", bytesout, dstmax);
+    else if ((bytesout > 0) && cliopt_isverbose() && (cliopt_getintf() == INTF_interactive)) {
+        char printbuf[80];
+        snprintf(printbuf, 80, "packetizing %d bytes (max=%zu)", bytesout, dstmax);
+        dterm_output_cmdmsg(dth, "raw", printbuf);
     }
 
     return bytesout;

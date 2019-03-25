@@ -18,8 +18,6 @@
 #include "cmds.h"
 #include "cmdutils.h"
 
-#include "envvar.h"
-
 #include "cliopt.h"
 
 #include "dterm.h"
@@ -45,7 +43,7 @@ int app_null(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, size
     }
     
     INPUT_SANITIZE();
-    fprintf(stderr, "null invoked %s\n", src);
-    return -1;
+
+    return 0;
 }
 
