@@ -15,7 +15,7 @@
 
 // Configuration Include
 #include "otter_cfg.h"
-#if 1 //(OTTER_FEATURE_MODBUS == ENABLED)
+#if (OTTER_FEATURE_MODBUS == ENABLED)
 
 // Application Includes
 #include "cliopt.h"
