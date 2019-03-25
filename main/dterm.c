@@ -421,7 +421,7 @@ void dterm_unsquelch(dterm_handle_t* dth) {
 
 
 ///@todo finish this, and add dfmt selective output
-int dterm_output_rxstat(dterm_handle_t* dth, DFMT_Type dfmt, void* rxdata, size_t rxsize, uint64_t rxaddr, time_t tstamp, int crcqual) {
+int dterm_output_rxstat(dterm_handle_t* dth, DFMT_Type dfmt, void* rxdata, size_t rxsize, uint64_t rxaddr, int seqid, time_t tstamp, int crcqual) {
     int bytesout;
 
     ///@todo getformat and isverbose calls should reference dterm data
@@ -431,34 +431,38 @@ int dterm_output_rxstat(dterm_handle_t* dth, DFMT_Type dfmt, void* rxdata, size_
         } break;
         
         case FORMAT_Json: {
-            bytesout = dprintf(dth->fd.out, "{cmd:\"rxstat\", rxaddr:\"%llx\", time:%li, crcqual:%i, rxbytes:%zu, rxdata:\"",
-                                rxaddr, tstamp, crcqual, rxsize);
+            bytesout = dprintf(dth->fd.out, "{\"type\":\"rxstat\", "\
+                                "\"data\":{\"sid\":%i, \"addr\":\"%llx\", \"qual\":%i, \"time\":%li, \"rxbytes\":%zu, \"\":\"",
+                                seqid, rxaddr, crcqual, tstamp, rxsize);
             bytesout += sub_hexstream(dth->fd.out, rxdata, rxsize);
-            bytesout += dprintf(dth->fd.out, "\"}");
+            bytesout += dprintf(dth->fd.out, "\"}}");
         } break;
         
         case FORMAT_Bintex: {
             ///@todo this
+            bytesout = 0;
         } break;
         
         default: {
             if (cliopt_isverbose()) {
                 static char time_buf[26];
                 //strftime(time_buf, 26, "%T", localtime(tstamp) );
-                bytesout = dprintf(dth->fd.out, _E_BBLK"RX %zu bytes at %s, %s"_E_NRM" ",
-                                    rxsize, ctime_r(&tstamp, time_buf), sub_crcfmt(crcqual));
+                bytesout = dprintf(dth->fd.out, _E_BBLK"RX.%i: %zu bytes at %s, %s"_E_NRM" ",
+                                    seqid, rxsize, ctime_r(&tstamp, time_buf), sub_crcfmt(crcqual));
                 bytesout += sub_hexstream(dth->fd.out, rxdata, rxsize);
             }
             else {
                 const char* valid_sym = _E_GRN"v";
                 const char* error_sym = _E_RED"x";
                 const char* crc_sym   = (crcqual==0) ? valid_sym : error_sym;
-                bytesout = dprintf(dth->fd.out, _E_WHT"[%s"_E_WHT"][%llx]"_E_NRM" ", crc_sym, rxaddr);
+                bytesout = dprintf(dth->fd.out, _E_WHT"[%i][%llx][%s"_E_WHT"]"_E_NRM" ", seqid, rxaddr, crc_sym);
                 bytesout += sub_hexstream(dth->fd.out, rxdata, 6);
             }
             
         } break;
     }
+    
+    return bytesout;
 }
 
 
@@ -483,7 +487,7 @@ int dterm_output_cmdmsg(dterm_handle_t* dth, const char* cmdname, const char* ms
             const char* lineend;
             int linesize;
             
-            bytesout = dprintf(dth->fd.out, "{\"cmd\":\"%s\", \"msg\":[", cmdname);
+            bytesout = dprintf(dth->fd.out, "{\"type\":\"msg\", \"data\":{\"cmd\":\"%s\", \"lines\":[", cmdname);
 
             if (msg != NULL) {
                 linefront = msg;
@@ -512,7 +516,7 @@ int dterm_output_cmdmsg(dterm_handle_t* dth, const char* cmdname, const char* ms
                 }
             }
             
-            bytesout += dprintf(dth->fd.out, "]}");
+            bytesout += dprintf(dth->fd.out, "]}}");
         } break;
         
         case FORMAT_Bintex: ///@todo
@@ -540,11 +544,11 @@ int dterm_output_error(dterm_handle_t* dth, const char* cmdname, int errcode, co
 
         case FORMAT_Json: {
             if ((errcode != 0) && (desc != NULL)) {
-                bytesout += dprintf(dth->fd.out, "{\"cmd\":\"%s\", \"err\":%i, \"desc\":\"%s\"}",
+                bytesout += dprintf(dth->fd.out, "{\"type\":\"err\", \"data\":{\"cmd\":\"%s\", \"code\":%i, \"desc\":\"%s\"}}",
                                 cmdname, errcode, desc);
             }
             else {
-                bytesout += dprintf(dth->fd.out, "{\"cmd\":\"%s\", \"err\":%i}",
+                bytesout += dprintf(dth->fd.out, "{\"type\":\"err\", \"data\":{\"cmd\":\"%s\", \"code\":%i}}",
                                 cmdname, errcode);
             }
         } break;
@@ -554,10 +558,10 @@ int dterm_output_error(dterm_handle_t* dth, const char* cmdname, int errcode, co
         
         default: {
             if ((errcode != 0) && (desc != NULL)) {
-                bytesout += dprintf(dth->fd.out, "%s (%i): %s", cmdname, errcode, desc);
+                bytesout += dprintf(dth->fd.out, "ERR: %s (%i): %s", cmdname, errcode, desc);
             }
             else {
-                bytesout += dprintf(dth->fd.out, "%s (%i)", cmdname, errcode);
+                bytesout += dprintf(dth->fd.out, "ERR: %s (%i)", cmdname, errcode);
             }
         } break;
     }

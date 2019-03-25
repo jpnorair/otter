@@ -413,15 +413,14 @@ void* modbus_parser(void* args) {
             pktlist_del(appdata->rlist, appdata->rlist->cursor);
         }
         else {
-            uint16_t    output_bytes;
+            uint16_t    smut_outbytes;
+            uint16_t    smut_msgbytes;
             int         proc_result;
             int         msgtype;
             uint8_t*    msg;
-            size_t      msgbytes;
-            bool        clear_rpkt      = true;
+            int         msgbytes;
             bool        rpkt_is_resp;
             pkt_t*      rpkt;
-            DFMT_Type   rxstat_fmt;
 
             /// For a Modbus master (like this), all received packets are 
             /// responses.  In some type of peer-peer modbus system, this would
@@ -430,50 +429,53 @@ void* modbus_parser(void* args) {
             rpkt            = appdata->rlist->cursor;
 
             /// If CRC is bad, discard packet now, and rxstat an error
+            /// CRC is good, so send packet to Modbus processor.
             if (appdata->rlist->cursor->crcqual != 0) {
                 ///@todo add rx address of input packet (set to 0)
-                dterm_output_rxstat(dth, DFMT_Binary, rpkt->buffer, rpkt->size, 0, rpkt->tstamp, rpkt->crcqual);
-                pktlist_del(appdata->rlist, rpkt);
-                goto modbus_parser_END;
-            }
-            
-            /// CRC is good, so send packet to Modbus processor.
-            proc_result = smut_resp_proc(putsbuf, rpkt->buffer, &output_bytes, rpkt->size, true);
-            msg         = rpkt->buffer;
-            msgbytes    = rpkt->size;
-            msgtype     = smut_extract_payload((void**)&msg, (void*)msg, &msgbytes, msgbytes, true);
-            
-            if ((proc_result == 0) && (msgtype == 0)) {
-                // ALP message
-                // proc_result now takes the value from the protocol formatter.
-                // The formatter will give negative values on framing errors
-                // and also for protocol errors (i.e. NACKs).
-                int subsig;
-                ///@todo rework fmt_fprintalp to output to putsbuf
-                ///@todo also add Format option, or just get from cliopts
-                proc_result = fmt_fprintalp((uint8_t*)putsbuf, NULL, msg, &msgbytes);
-                rxstat_fmt  = DFMT_Native;
-                
-                // subscribers
-                subsig = (proc_result >= 0) ? SUBSCR_SIG_OK : SUBSCR_SIG_ERR;
-                subscriber_post(appdata->subscribers, proc_result, subsig, NULL, 0);
+                dterm_output_rxstat(dth, DFMT_Binary, rpkt->buffer, rpkt->size, 0, rpkt->sequence, rpkt->tstamp, rpkt->crcqual);
             }
             else {
-                // Raw or Unidentified Message received
-                ///@todo rework fmt_printhex to output to putsbuf
-                proc_result = fmt_printhex(putsbuf, msg, msgbytes, 16);
-                rxstat_fmt  = DFMT_Text;
+                proc_result     = smut_resp_proc(putsbuf, rpkt->buffer, &smut_outbytes, rpkt->size, true);
+                msg             = rpkt->buffer;
+                smut_msgbytes   = rpkt->size;
+                msgtype         = smut_extract_payload((void**)&msg, (void*)msg, &smut_msgbytes, smut_msgbytes, true);
+                msgbytes        = smut_msgbytes;
+                
+                while (msgbytes > 0) {
+                    DFMT_Type rxstat_fmt;
+                    int subsig;
+                    size_t putsbytes = 0;
+                    uint8_t* lastmsg = msg;
+                
+                    if ((proc_result == 0) && (msgtype == 0)) {
+                        /// ALP message:
+                        /// proc_result now takes the value from the protocol formatter.
+                        /// The formatter will give negative values on framing errors
+                        /// and also for protocol errors (i.e. NACKs).
+                        proc_result = fmt_fprintalp((uint8_t*)putsbuf, &putsbytes, &msg, msgbytes);
+                        rxstat_fmt  = DFMT_Native;
+                        
+                        /// Successful formatted output gets propagated to any
+                        /// subscribers of this ALP ID.
+                        subsig = (proc_result >= 0) ? SUBSCR_SIG_OK : SUBSCR_SIG_ERR;
+                        subscriber_post(appdata->subscribers, proc_result, subsig, NULL, 0);
+                    }
+                    else {
+                        // Raw or Unidentified Message received
+                        proc_result = fmt_printhex((uint8_t*)putsbuf, &putsbytes, &msg, msgbytes, 16);
+                        rxstat_fmt  = DFMT_Text;
+                    }
+
+                    ///@todo add rx address of input packet (set to 0)
+                    dterm_output_rxstat(dth, rxstat_fmt, putsbuf, putsbytes, 0, rpkt->sequence, rpkt->tstamp, rpkt->crcqual);
+                    
+                    // Recalculate message size following the treatment of the last segment
+                    msgbytes -= (msg - lastmsg);
+                }
             }
             
-            ///@todo add rx address of input packet (set to 0)
-            dterm_output_rxstat(dth, rxstat_fmt, putsbuf, proc_result, 0, rpkt->tstamp, rpkt->crcqual);
-            
-            // clear_rpkt will always be true.  It means that the received 
-            // packet should be cleared from the packet list.
-            if (clear_rpkt) {
-                pkt_t*  scratch = appdata->rlist->cursor;
-                pktlist_del(appdata->rlist, scratch);
-            }
+            // Remove the packet that was just received
+            pktlist_del(appdata->rlist, rpkt);
         }
         
         modbus_parser_END:

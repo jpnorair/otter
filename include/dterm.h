@@ -188,7 +188,7 @@ void dterm_unsquelch(dterm_handle_t* dt);
 
 int dterm_output_error(dterm_handle_t* dth, const char* cmdname, int errcode, const char* desc);
 int dterm_output_cmdmsg(dterm_handle_t* dth, const char* cmdname, const char* msg);
-int dterm_output_rxstat(dterm_handle_t* dth, DFMT_Type dfmt, void* rxdata, size_t rxsize, uint64_t rxaddr, time_t tstamp, int crcqual);
+int dterm_output_rxstat(dterm_handle_t* dth, DFMT_Type dfmt, void* rxdata, size_t rxsize, uint64_t rxaddr, int seqid, time_t tstamp, int crcqual);
 
 
 

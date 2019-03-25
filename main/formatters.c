@@ -750,7 +750,7 @@ int fmt_fprintalp(uint8_t* dst, size_t* dst_accum, uint8_t** src, size_t srcsz) 
             
         case FORMAT_Bintex:
             ///@note No checks return code, because all error cases are already checked
-            dcurs += fmt_printhex((uint8_t*)dcurs, dst_accum, src, 4, 0);
+            dcurs += sub_printhex((uint8_t*)dcurs, dst_accum, src, 4, 0);
             break;
         
         case FORMAT_Hex:
@@ -774,7 +774,7 @@ int fmt_fprintalp(uint8_t* dst, size_t* dst_accum, uint8_t** src, size_t srcsz) 
                 
             case FORMAT_Default:
                 ///@note No checks return code, because all error cases are already checked
-                dcurs += fmt_printhex((uint8_t*)dcurs, dst_accum, src, 4, 0);
+                dcurs += sub_printhex((uint8_t*)dcurs, dst_accum, src, 4, 0);
                 break;
                 
             default: // Do nothing
@@ -799,29 +799,27 @@ int fmt_fprintalp(uint8_t* dst, size_t* dst_accum, uint8_t** src, size_t srcsz) 
            default: {
 #           if OTTER_FEATURE(HBUILDER)
                 //rc = hbuilder_fmtalp(puts_fn, (HBFMT_Type)cliopt_getformat(), id, cmd, scurs, length);
-                rc = hbuilder_sfmtalp(dst, 2048, (HBFMT_Type)cliopt_getformat(), id, cmd, src, length);
-                *src += length;
+                rc = hbuilder_snfmtalp(dst, dst_accum, 2048, (HBFMT_Type)cliopt_getformat(), id, cmd, *src, length);
+                if (rc >= 0) {
+                    *src += length;
+                }
 #           else
                 rc = -1;
 #           endif
-               
                 /// Anything that falls through the cracks gets crapped-out as hex
-                ///@todo check if this condition is acceptable
                 if (rc < 0) {
                     size_t output_bytes = (size_t)length;
                     switch (cliopt_getformat()) {
                         case FORMAT_Json:
                             dcurs = stpcpy(dcurs, "\"fmt\":\"hex\", \"dat\":");
                             break;
-                            
                         case FORMAT_Bintex:
                             break;
-                        
                         default:
                             output_bytes += 4;
                             break;
                     }
-                    dcurs += fmt_printhex((uint8_t*)dcurs, dst_accum, src, output_bytes, 16);
+                    dcurs += sub_printhex((uint8_t*)dcurs, dst_accum, src, output_bytes, 16);
                 }
             } break;
         }
@@ -848,6 +846,8 @@ int fmt_fprintalp(uint8_t* dst, size_t* dst_accum, uint8_t** src, size_t srcsz) 
 
 
 int fmt_printtext(uint8_t* dst, size_t* dst_accum, uint8_t** src, size_t srcsz, size_t cols) {
+    int rc;
+    
     if ((dst == NULL) || (src == NULL)) {
         return -1;
     }
@@ -855,7 +855,10 @@ int fmt_printtext(uint8_t* dst, size_t* dst_accum, uint8_t** src, size_t srcsz, 
         return 0;
     }
     
-    return sub_printtext(dst, dst_accum, src, srcsz, cols);
+    rc = sub_printtext(dst, dst_accum, src, srcsz, cols);
+    
+    ///@todo could possibly do something here
+    return rc;
 }
 
 
@@ -863,6 +866,8 @@ int fmt_printtext(uint8_t* dst, size_t* dst_accum, uint8_t** src, size_t srcsz, 
 
 
 int fmt_printhex(uint8_t* dst, size_t* dst_accum, uint8_t** src, size_t srcsz, size_t cols) {
+    int rc;
+
     if ((dst == NULL) || (src == NULL)) {
         return -1;
     }
@@ -870,7 +875,10 @@ int fmt_printhex(uint8_t* dst, size_t* dst_accum, uint8_t** src, size_t srcsz, s
         return 0;
     }
     
-    return sub_printhex(dst, dst_accum, src, srcsz, cols);
+    rc = sub_printhex(dst, dst_accum, src, srcsz, cols);
+    
+    ///@todo could possibly do something here
+    return rc;
 }
 
 

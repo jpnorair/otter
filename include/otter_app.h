@@ -37,7 +37,7 @@ typedef struct {
     ///@todo see if this can be made into a pointer
     user_endpoint_t     endpoint;
     
-    mpipe_handle_t      mpipe;
+    void*               mpipe;
     subscr_handle_t     subscribers;
     void*               smut_handle;
     void*               dterm_parent;

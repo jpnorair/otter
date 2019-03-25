@@ -439,7 +439,7 @@ void* mpipe_parser(void* args) {
         }
         else {
             uint8_t*    payload_front;
-            size_t      payload_bytes;
+            int         payload_bytes;
             bool        clear_rpkt      = true;
             bool        rpkt_is_resp    = false;
             bool        rpkt_is_valid   = false;
@@ -457,98 +457,82 @@ void* mpipe_parser(void* args) {
                 tpkt = tpkt->next;
             }
             
-            // If Verbose, Print received header in real language
-            // If not Verbose, just print the encoded packet status
-            if (cliopt_isverbose()) {
-                sprintf(putsbuf, "\n" _E_BBLK "RX'ed %zu bytes at %s, %s CRC: %s" _E_NRM "\n",
-                            rpkt->size,
-                            fmt_time(&rpkt->tstamp),
-                            fmt_crc(rpkt->crcqual),
-                            fmt_hexdump_header(rpkt->buffer)
-                        );
+            /// If CRC is bad, discard packet now, and rxstat an error
+            /// Else, if CRC is good, send packet to processor.
+            if (appdata->rlist->cursor->crcqual != 0) {
+                ///@todo add rx address of input packet (set to 0)
+                dterm_output_rxstat(dth, DFMT_Binary, rpkt->buffer, rpkt->size, 0, rpkt->sequence, rpkt->tstamp, rpkt->crcqual);
             }
             else {
-                switch (cliopt_getformat()) {
-                    case FORMAT_Hex: {
-                        putsbuf[0] = '0';
-                        putsbuf[1] = '0' + (rpkt->crcqual != 0);
-                        putsbuf[2] = 0;
-                        ///@todo put this to the buffer without flushing it
-                    } break;
-                    case FORMAT_Json: ///@todo
-                    case FORMAT_Bintex: ///@todo
-                    default: {
-                        const char* valid_sym = _E_GRN"v";
-                        const char* error_sym = _E_RED"x"; 
-                        const char* crc_sym   = (rpkt->crcqual == 0) ? valid_sym : error_sym;
-                        sprintf(putsbuf, _E_WHT "[" "%s" _E_WHT "][%03d] " _E_NRM, 
-                                crc_sym, rpkt->sequence);
-                    } break;
-                }
-            }
-            sub_dtputs(putsbuf);
-            
-            /// If CRC is bad, dump hex of buffer-size and discard the 
-            /// packet now.
-            ///@note in present versions there is some unreliability with
-            ///      CRC: possibly data alignment or something, or might be
-            ///      a problem on the test sender.
-            if (appdata->rlist->cursor->crcqual != 0) {
-                fmt_printhex(&sub_dtputs, &rpkt->buffer[6], rpkt->size-6, 16);
-                pktlist_del(appdata->rlist, rpkt);
-                goto mpipe_parser_END;
-            }
-            
-            // Here is where decryption would go
-            if (rpkt->buffer[5] & (3<<5)) {
-                ///@todo Deal with encryption here.  When implemented, there
-                /// should be an encryption header at this offset (6), 
+                // -----------------------------------------------------------
+                ///@todo Here is where decryption might go, if not handled in pktlist
+                /// there should be an encryption header at this offset (6),
                 /// followed by the payload, and then the real data payload.
                 /// The real data payload is followed by a 4 byte Message
-                /// Authentication Check (Crypto-MAC) value.  AES128 EAX
-                /// is the cryptography and cipher used.
-                payload_front = &rpkt->buffer[6];
-            }
-            else {
-                payload_front = &rpkt->buffer[6];
+                /// Authentication Check (Crypto-MAC) value.  AES128 EAX is the
+                /// cryptography and cipher used.
+                if (rpkt->buffer[5] & (3<<5)) {
+                    // Case with encryption
+                    payload_front = &rpkt->buffer[6];
+                }
+                else {
+                    payload_front = &rpkt->buffer[6];
+                }
+                // -----------------------------------------------------------
+                
+                // Inspect header to see if M2DEF
+                if ((rpkt->buffer[5] & (1<<7)) == 0) {
+                    rpkt_is_valid = true;
+                    //parse some shit
+                    //clear_rpkt = false when there is non-atomic input
+                }
+                
+                // Get Payload Bytes, found in buffer[2:3]
+                // Then print-out the payload.
+                // If it is a M2DEF payload, the print-out can be formatted in different ways
+                payload_bytes   = rpkt->buffer[2] * 256;
+                payload_bytes  += rpkt->buffer[3];
+
+                /// 1. If payload is too big, send an error
+                /// 2a. If packet is valid, punt it to the ALP output formatter.
+                /// 2b. If ALP formatting is correct, send data to the subscriber
+                /// 3. If packet is not valid, dump its hex
+                ///@note: ALP formatters should deal internally with protocol variations
+                if (payload_bytes > rpkt->size) {
+                    dterm_output_error(dth, "rxstat", -1, "Reported Payload Length is larger than buffer");
+                }
+                else if (rpkt_is_valid) {
+                    while (payload_bytes > 0) {
+                        size_t putsbytes = 0;
+                        uint8_t* lastfront = payload_front;
+                        int subsig;
+                        int proc_result;
+                    
+                        /// ALP message:
+                        /// proc_result now takes the value from the protocol formatter.
+                        /// The formatter will give negative values on framing errors
+                        /// and also for protocol errors (i.e. NACKs).
+                        proc_result = fmt_fprintalp((uint8_t*)putsbuf, &putsbytes, &payload_front, payload_bytes);
+                        
+                        /// Successful formatted output gets propagated to any
+                        /// subscribers of this ALP ID.
+                        subsig = (proc_result >= 0) ? SUBSCR_SIG_OK : SUBSCR_SIG_ERR;
+                        subscriber_post(appdata->subscribers, proc_result, subsig, NULL, 0);
+                        
+                        // Send RXstat message back to control interface.
+                        dterm_output_rxstat(dth, DFMT_Native, putsbuf, putsbytes, 0, rpkt->sequence, rpkt->tstamp, rpkt->crcqual);
+                        
+                        // Recalculate message size following the treatment of the last segment
+                        payload_bytes -= (payload_front - lastfront);
+                    }
+                }
+                else {
+                    size_t putsbytes = 0;
+                    fmt_printhex((uint8_t*)putsbuf, &putsbytes, &payload_front, payload_bytes, 16);
+                    dterm_output_rxstat(dth, DFMT_Text, putsbuf, putsbytes, 0, rpkt->sequence, rpkt->tstamp, rpkt->crcqual);
+                }
             }
             
-            // Inspect header to see if M2DEF
-            if ((rpkt->buffer[5] & (1<<7)) == 0) {
-                rpkt_is_valid = true;
-                //parse some shit
-                //clear_rpkt = false when there is non-atomic input
-            }
-            
-            // Get Payload Bytes, found in buffer[2:3]
-            // Then print-out the payload.
-            // If it is a M2DEF payload, the print-out can be formatted in different ways
-            payload_bytes   = rpkt->buffer[2] * 256;
-            payload_bytes  += rpkt->buffer[3];
-
-            /// 1. If payload is too big, send an error
-            /// 2a. If packet is valid, punt it to the ALP output formatter.
-            /// 2b. If ALP formatting is correct, send data to the subscriber
-            /// 3. If packet is not valid, dump its hex
-            ///@note: ALP formatters should deal internally with protocol variations
-            if (payload_bytes > rpkt->size) {
-                ///@todo handle format variations
-                sprintf(putsbuf, "... Reported Payload Length (%zu) is larger than buffer (%zu).\n" \
-                                 "... Possible transmission error.\n",
-                                payload_bytes, rpkt->size
-                        );
-                sub_dtputs(putsbuf);
-            }
-            else if (rpkt_is_valid)  {
-                int subsig, fmt_result;
-                fmt_result  = fmt_fprintalp(&sub_dtputs, NULL, payload_front, payload_bytes);
-                subsig      = (fmt_result >= 0) ? SUBSCR_SIG_OK : SUBSCR_SIG_ERR;
-                subscriber_post(appdata->subscribers, fmt_result, subsig, NULL, 0);
-            }
-            else {
-                fmt_printhex(&sub_dtputs, payload_front, payload_bytes, 16);
-            }
-
             // Clear the rpkt if required
             if (clear_rpkt) {
                 pktlist_del(appdata->rlist, rpkt);
