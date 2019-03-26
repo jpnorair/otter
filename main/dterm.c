@@ -210,12 +210,13 @@ int dterm_init(dterm_handle_t* dth, void* ext_data, INTF_Type intf) {
     
     dth->ext    = ext_data;
     dth->ch     = NULL;
-    dth->intf   = malloc(sizeof(dterm_intf_t));
+    dth->intf   = calloc(1, sizeof(dterm_intf_t));
     if (dth->intf == NULL) {
         rc = -2;
         goto dterm_init_TERM;
     }
     
+    dth->intf->state = prompt_off;
     dth->intf->type = intf;
     if (intf == INTF_interactive) {
         dth->ch = ch_init(0);
@@ -265,6 +266,7 @@ int dterm_init(dterm_handle_t* dth, void* ext_data, INTF_Type intf) {
 }
 
 void dterm_deinit(dterm_handle_t* dth) {
+fprintf(stderr, "%s:%i\n", __FUNCTION__, __LINE__);
     if (dth->intf != NULL) {
         dterm_close(dth);
         free(dth->intf);
@@ -304,7 +306,7 @@ dterm_thread_t dterm_open(dterm_handle_t* dth, const char* path) {
             fprintf(stderr, "Unable to access active termios settings for fd = %d\n", dth->fd.in);
             goto dterm_open_END;
         }
-        
+
         retcode = tcgetattr(dth->fd.in, &(dth->intf->curter));
         if (retcode < 0) {
             perror(NULL);
@@ -379,7 +381,7 @@ dterm_thread_t dterm_open(dterm_handle_t* dth, const char* path) {
 
 int dterm_close(dterm_handle_t* dth) {
     int retcode;
-    
+fprintf(stderr, "%s:%i\n", __FUNCTION__, __LINE__);
     if (dth == NULL)        return -1;
     if (dth->intf == NULL)  return -1;
     
@@ -1091,8 +1093,7 @@ void* dterm_prompter(void* args) {
 /// <LI> Prints to the output while the prompt is active. </LI>
 /// <LI> Sends signal (and the accompanied input) to dterm_parser() when a new
 ///          input is entered. </LI>
-/// 
-    
+///
     uint8_t protocol_buf[1024];
     
     static const cmdtype npcodes[32] = {
@@ -1134,9 +1135,17 @@ void* dterm_prompter(void* args) {
     char                cmdname[256];
     char                c           = 0;
     ssize_t             keychars    = 0;
-    dterm_handle_t*     dth         = (dterm_handle_t*)args;
+    dterm_handle_t*     dth         = args;
+    
+    ///@todo this needs to be abstracted to not require cmdtab or endpoint.usertype
     otter_app_t*        appdata     = dth->ext;
     
+    
+    if (dth->ext != appdata) {
+        fprintf(stderr, "Linkage error between dterm handle and application data.\n");
+        goto dterm_prompter_TERM;
+    }
+
     // Initial state = off
     dth->intf->state = prompt_off;
     
@@ -1269,28 +1278,28 @@ void* dterm_prompter(void* args) {
                 case ct_enter: {
                     int bytesout;
                     dterm_putc(&dth->fd, '\n');
-                    
+fprintf(stderr, "%s:%i\n", __FUNCTION__, __LINE__);
                     if (!ch_contains(dth->ch, dth->intf->linebuf)) {
                         ch_add(dth->ch, dth->intf->linebuf);
                     }
-                    
+fprintf(stderr, "%s:%i\n", __FUNCTION__, __LINE__);
                     // Create temporary context as a memory pool
                     dth->tctx = talloc_pool(NULL, cliopt_getpoolsize());
-                    
+fprintf(stderr, "%s:%i\n", __FUNCTION__, __LINE__);
                     // Run command(s) from line input
                     bytesout = sub_proc_lineinput( dth, NULL,
                                         (char*)dth->intf->linebuf,
                                         (int)sub_str_mark((char*)dth->intf->linebuf, 1024)
                                     );
-                    
+fprintf(stderr, "%s:%i\n", __FUNCTION__, __LINE__);
                     // Free temporary memory pool context
                     talloc_free(dth->tctx);
-                    
+fprintf(stderr, "%s:%i\n", __FUNCTION__, __LINE__);
                     // If there's meaningful output, add a linebreak
                     if (bytesout > 0) {
                         dterm_puts(&dth->fd, "\n");
                     }
-
+fprintf(stderr, "%s:%i\n", __FUNCTION__, __LINE__);
                     dterm_reset(dth->intf);
                     dth->intf->state = prompt_close;
                 } break;
@@ -1480,8 +1489,9 @@ int dterm_putlinec(dterm_intf_t *dt, char c) {
 
 int dterm_remc(dterm_intf_t *dt, int count) {
     int cl = dt->linelen;
-    while (count-- > 0) {
-        *dt->cline-- = 0;
+    while (--count >= 0) {
+        dt->cline[0] = 0;
+        dt->cline--;
         dt->linelen--;
     }
     return cl - dt->linelen;
@@ -1497,16 +1507,9 @@ void dterm_remln(dterm_intf_t *dt, dterm_fd_t* fd) {
 
 
 void dterm_reset(dterm_intf_t *dt) {
-    dt->cline = dt->linebuf;
-    
-    //int i = LINESIZE;
-    //while (--i >= 0) {                            ///@todo this way is the preferred way
-    while (dt->cline < (dt->linebuf + LINESIZE)) {
-        *dt->cline++ = 0;  
-    }
-    
-    dt->cline    = dt->linebuf;
-    dt->linelen  = 0;
+    memset(dt->linebuf, 0, LINESIZE);
+    dt->cline   = dt->linebuf;
+    dt->linelen = 0;
 }
 
 

@@ -374,7 +374,11 @@ void* modbus_parser(void* args) {
     }
 
     dth = appdata->dterm_parent;
-
+    if (dth->ext != appdata) {
+        fprintf(stderr, "Error: dterm handle is not linked to dterm_parent in application data.\n");
+        goto modbus_parser_TERM;
+    }
+    
     while (1) {
         int pkt_condition;  // tracks some error conditions
     

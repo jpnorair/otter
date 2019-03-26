@@ -103,7 +103,7 @@ typedef struct {
     //int fd_squelch;                 // For squelch feature
     
     int linelen;                    // line length
-    char *cline;                    // pointer to current position in linebuf
+    char* cline;                    // pointer to current position in linebuf
     char linebuf[LINESIZE];         // command read buffer
     char readbuf[READSIZE];         // character read buffer
 } dterm_intf_t;

@@ -291,7 +291,7 @@ mpipe_fd_t* mpipe_fds_get(mpipe_handle_t handle, int id) {
     return fds;
 }
 
-
+///@todo DEBUG: this function seems to return NULL in modbus_reader/mpipe_reader
 const char* mpipe_file_get(mpipe_handle_t handle, int id) {
     mpipe_tab_t* table;
     const char* output = NULL;

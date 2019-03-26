@@ -551,7 +551,6 @@ int otter_main( ttyspec_t* ttylist,
     
     // DTerm Datastructs
     dterm_handle_t dterm_handle;
-    dterm_intf_t   dterm;
     
     // Thread & Mutex Instances
     ///@todo do tlist_mutex, tlist_cond need instantiation here?
@@ -810,7 +809,7 @@ int otter_main( ttyspec_t* ttylist,
     DEBUG_PRINTF("--> done\n");
     
     DEBUG_PRINTF("Creating Dterm theads\n");
-    pthread_create(&thr_dterm, NULL, dterm_fn, (void*)&appdata);
+    pthread_create(&thr_dterm, NULL, dterm_fn, (void*)&dterm_handle);
     DEBUG_PRINTF("--> done\n");
     
 // ----------------------------------------------------------------------------
