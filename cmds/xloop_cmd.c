@@ -151,7 +151,7 @@ static int sub_getinput(TALLOC_CTX* tctx, loop_input_t* loop, const char* cmdnam
     int argc;
     char** argv;
     
-    argc = cmdutils_parsestring(&argv, cmdname, (char*)src, (char*)src, (size_t)*inbytes);
+    argc = cmdutils_parsestring(tctx, &argv, cmdname, (char*)src, (size_t)*inbytes);
     
     if (argc <= 0) {
         rc = -256 + argc;;
@@ -303,7 +303,7 @@ static int sub_getinput(TALLOC_CTX* tctx, loop_input_t* loop, const char* cmdnam
         /// Free argtable & argv now that they are not necessary
         sub_getinput_FREEARGS:
         arg_freetable(argtable, sizeof(argtable)/sizeof(argtable[0]));
-        cmdutils_freeargv(argv);
+        cmdutils_freeargv(tctx, argv);
     }
     
     return rc;
@@ -405,8 +405,6 @@ int cmd_xloop(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, siz
     /// 6. Relock the dtwrite mutex to block the parser thread while xloop runs.
     /// 7. Destroy resources on the heap
     if (rc == 0) {
-        char* cmd_insert;
-        FILE* fp_out;
         int blocksize;
 
         // Process Command Line and determine loop command
@@ -426,11 +424,6 @@ int cmd_xloop(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, siz
         fd_out = dterm_squelch(dth);
         if (fd_out < 0) {
             rc = -9;
-            goto cmd_xloop_TERM1;
-        }
-        fp_out = fdopen(fd_out, "w");   //don't close this!  Merely fd --> fp conversion
-        if (fp_out == NULL) {
-            rc = -10;
             goto cmd_xloop_TERM1;
         }
 
@@ -467,42 +460,46 @@ int cmd_xloop(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, siz
             rc = sub_cmdrun(dth, cmdptr, xloop_cmd, dst, dstmax);
             if (rc < 0) {
                 rc += -256;
-                fprintf(fp_out, "--> Command Runtime Error: (%i)", rc);
+                dterm_force_error(fd_out, "xloop", rc, 0, "Runtime Error");
                 break;
             }
 
             rc = subscriber_wait(subscription, loop.timeout_val);
             if (rc == 0) {
+                char printbuf[80];
+                size_t printsz;
+                
                 ///@todo check signal
                 
                 dat_i += blocksize;
                 
-                if (cliopt_isverbose() || cliopt_isdebug()) {
-                    fprintf(fp_out, "Status: %i/%i (%i%%)\n", dat_i, loop.data_size, (int)((100*dat_i)/loop.data_size));
+                printsz = sprintf(printbuf, "Status %i/%i (%i%%)", dat_i, loop.data_size, (int)((100*dat_i)/loop.data_size));
+                
+                if (cliopt_getintf() == INTF_interactive) {
+                    write(fd_out, VT100_CLEAR_LN, sizeof(VT100_CLEAR_LN));
+                    write(fd_out, printbuf, printsz);
                 }
                 else {
-                    fputs(VT100_CLEAR_LN, fp_out);
-                    fflush(fp_out);
-                    fprintf(fp_out, "Status: %i/%i (%i%%)", dat_i, loop.data_size, (int)((100*dat_i)/loop.data_size));
-                    fflush(fp_out);
+                    dterm_force_cmdmsg(fd_out, "xloop", printbuf);
                 }
                 
                 loop.retries_cnt = loop.retries_val;
             }
             else if (rc == ETIMEDOUT) {
                 if (--loop.retries_cnt <= 0) {
-                    fputs("--> Command Timeout Error", fp_out);
+                    dterm_force_error(fd_out, "xloop", -13, 0, "Command Timeout Error");
                     rc = -13;
                     break;
                 }
             }
             else {
-                fprintf(fp_out, "--> Internal Error: (%i)", rc);
+                dterm_force_error(fd_out, "xloop", rc, 0, "Internal Error");
                 break;
             }
         }
-        fputs("\n", fp_out);
-        
+        if (cliopt_getintf() == INTF_interactive) {
+            write(fd_out, "\n", 1);
+        }
 
         // Relock dtwrite mutex to block parser
         pthread_mutex_lock(dth->iso_mutex);
@@ -542,7 +539,7 @@ int cmd_sendhex(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, s
     
     INPUT_SANITIZE();
     
-    argc = cmdutils_parsestring(&argv, sendhex_name, (char*)src, (char*)src, (size_t)*inbytes);
+    argc = cmdutils_parsestring(dth->tctx, &argv, sendhex_name, (char*)src, (size_t)*inbytes);
     if (argc <= 0) {
         rc = -256 + argc;
     }
@@ -558,7 +555,7 @@ int cmd_sendhex(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, s
         }
         
         if (strcmp(hexfile->extension[0], ".hex") != 0) {
-            dprintf(dth->fd.out, "--> Input Error, file not with .hex\n");
+            dterm_send_error(dth, "sendhex", -2, 0, "Input Error, file not with .hex");
             rc = -2;
             goto cmd_sendhex_EXEC;
         }
@@ -573,7 +570,7 @@ int cmd_sendhex(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, s
         
         cmd_sendhex_EXEC:
         arg_freetable(argtable, sizeof(argtable)/sizeof(argtable[0]));
-        cmdutils_freeargv(argv);
+        cmdutils_freeargv(dth->tctx, argv);
         if (rc == 0) {
             //fprintf(stderr, "TO XLOOP: <<%s>>\n", xloop_cmd);
             rc = cmd_xloop(dth, dst, &xloop_bytes, (uint8_t*)xloop_cmd, dstmax);

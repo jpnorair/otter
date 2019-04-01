@@ -67,7 +67,7 @@ int cmd_sethome(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, s
     INPUT_SANITIZE();
     
     if (*inbytes >= 1023) {
-        dterm_output_error(dth, "sethome", -1, "supplied home-path is too long, must be < 1023 chars.");
+        dterm_send_error(dth, "sethome", -1, 0, "supplied home-path is too long, must be < 1023 chars.");
     }
     else {
         ///@todo just make this call "set HOME"

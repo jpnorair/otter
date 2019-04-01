@@ -90,7 +90,7 @@ int cmd_raw(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, size_
     else if ((bytesout > 0) && cliopt_isverbose() && (cliopt_getintf() == INTF_interactive)) {
         char printbuf[80];
         snprintf(printbuf, 80, "packetizing %d bytes (max=%zu)", bytesout, dstmax);
-        dterm_output_cmdmsg(dth, "raw", printbuf);
+        dterm_send_cmdmsg(dth, "raw", printbuf);
     }
 
     return bytesout;

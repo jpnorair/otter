@@ -64,7 +64,7 @@ int cmd_chuser(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, si
     INPUT_SANITIZE();
 
     appdata = dth->ext;
-    argc = cmdutils_parsestring(&argv, "chuser", (char*)src, (char*)src, (size_t)*inbytes);
+    argc = cmdutils_parsestring(dth->tctx, &argv, "chuser", (char*)src, (size_t)*inbytes);
     if (argc <= 0) {
         rc = -256 + argc;
     }
@@ -123,7 +123,7 @@ int cmd_chuser(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, si
         arg_freetable(argtable, sizeof(argtable)/sizeof(argtable[0]));
     }
 
-    cmdutils_freeargv(argv);
+    cmdutils_freeargv(dth->tctx, argv);
     
     return rc;
 }
@@ -166,7 +166,7 @@ int cmd_whoami(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, si
     appdata = dth->ext;
     
     if (*inbytes != 0) {
-        dterm_output_error(dth, "whoami", -1, "Usage: whoami [no parameters], Indicates the current user and address");
+        dterm_send_error(dth, "whoami", -1, 0, "Usage: whoami [no parameters], Indicates the current user and address");
     }
     else if (appdata->endpoint.node == NULL) {
         rc = -1;
@@ -199,7 +199,7 @@ int cmd_whoami(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, si
             cursor += sprintf(cursor, " (vid=%i)\n", endpoint->vid);
         }
         
-        dterm_output_cmdmsg(dth, "whoami", output);
+        dterm_send_cmdmsg(dth, "whoami", output);
     }
     
     cmd_whoami_END:

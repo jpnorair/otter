@@ -51,21 +51,21 @@ int cmdext_hbuilder(void* hb_handle, void* cmd_handle, dterm_handle_t* dth, uint
     
     if (rc <= 0) {
         if (rc == -2) {
-            snprintf(printbuf, 80-1, "input error on character %zu", bytesout);
+            sprintf(printbuf, "input error on character %zu\n", bytesout);
             errdesc = printbuf;
         }
         else {
             errdesc = NULL;
         }
-        dterm_output_error(dth, "hbuilder", rc, errdesc);
+        dterm_send_error(dth, "hbuilder", rc, 0, errdesc);
     }
-    else {
-        snprintf(printbuf, 80-1, "packetized %zu bytes", bytesout);
-        dterm_output_cmdmsg(dth, "hbuilder", printbuf);
+    else if (cliopt_isverbose()){
+        sprintf(printbuf, "packetized %zu bytes\n", bytesout);
+        dterm_send_cmdmsg(dth, "hbuilder", printbuf);
     }
 
-    // HBuilder forms its own command responses, hence always returns 0
-    return 0;
+    // This is the data to be sent over the I/O interface
+    return (int)bytesout;
 }
 
 #   endif

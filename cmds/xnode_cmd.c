@@ -69,7 +69,7 @@ int cmd_xnode(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, siz
     
     appdata = dth->ext;
     
-    argc = cmdutils_parsestring(&argv, xnode_name, (char*)src, (char*)src, (size_t)*inbytes);
+    argc = cmdutils_parsestring(dth->tctx, &argv, xnode_name, (char*)src, (size_t)*inbytes);
 
     rc = cmdutils_argcheck(argtable, end, argc, argv);
     if (rc != 0) {
@@ -105,7 +105,7 @@ int cmd_xnode(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, siz
 
     cmd_xnode_FREEARGS:
     arg_freetable(argtable, sizeof(argtable)/sizeof(argtable[0]));
-    cmdutils_freeargv(argv);
+    cmdutils_freeargv(dth->tctx, argv);
 
     return rc;
 }

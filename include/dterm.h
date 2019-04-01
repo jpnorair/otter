@@ -142,6 +142,9 @@ typedef struct {
     // * Initialized by DTerm
     pthread_mutex_t*    iso_mutex;
     
+    // Thread flags
+    bool thread_active;
+    
     // Externally Initialized data elements
     // These should only be used within lock provided by isolation mutex
     void*               ext;
@@ -186,10 +189,13 @@ int dterm_squelch(dterm_handle_t* dt);
 void dterm_unsquelch(dterm_handle_t* dt);
 
 
-int dterm_output_error(dterm_handle_t* dth, const char* cmdname, int errcode, const char* desc);
-int dterm_output_cmdmsg(dterm_handle_t* dth, const char* cmdname, const char* msg);
-int dterm_output_rxstat(dterm_handle_t* dth, DFMT_Type dfmt, void* rxdata, size_t rxsize, uint64_t rxaddr, int seqid, time_t tstamp, int crcqual);
+int dterm_send_error(dterm_handle_t* dth, const char* cmdname, int errcode, uint32_t sid, const char* desc);
+int dterm_send_cmdmsg(dterm_handle_t* dth, const char* cmdname, const char* msg);
+int dterm_send_rxstat(dterm_handle_t* dth, DFMT_Type dfmt, void* rxdata, size_t rxsize, uint64_t rxaddr, uint32_t sid, time_t tstamp, int crcqual);
 
+int dterm_force_error(int fd_out, const char* cmdname, int errcode, uint32_t sid, const char* desc);
+int dterm_force_cmdmsg(int fd_out, const char* cmdname, const char* msg);
+int dterm_force_rxstat(int fd_out, DFMT_Type dfmt, void* rxdata, size_t rxsize, uint64_t rxaddr, uint32_t sid, time_t tstamp, int crcqual);
 
 
 /** @note All of these dterm output functions are deprecated and in danger of
