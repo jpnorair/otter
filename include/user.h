@@ -87,7 +87,7 @@ USER_Type user_get_type(const char* type_string);
   * Typically this is 3 (header only, for guest access), or 7 (full IV placed).
   * If it is a negative value, there has been an error.
   */ 
-int user_preencrypt(USER_Type usertype, uint8_t* dst, uint8_t* hdr24);
+int user_preencrypt(USER_Type usertype, uint32_t* seqnonce, uint8_t* dst, uint8_t* hdr24);
 
 
 

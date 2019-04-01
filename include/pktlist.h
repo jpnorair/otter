@@ -21,7 +21,7 @@ typedef struct pkt {
     uint8_t*        buffer;
     size_t          size;
     int             crcqual;
-    int             sequence;
+    uint32_t        sequence;
     time_t          tstamp;
     struct pkt      *prev;
     struct pkt      *next;

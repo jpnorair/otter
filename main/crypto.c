@@ -57,7 +57,6 @@ void crypto_putnonce(uint8_t* dst, unsigned int total_size) {
 ///   thus the nonce gets padded with whatever bytes are already in dst.
     int         pad_bytes;
     int         write_bytes;
-    uint32_t    output_nonce;
     
     write_bytes = 4;
     pad_bytes   = total_size - 4;
@@ -72,15 +71,15 @@ void crypto_putnonce(uint8_t* dst, unsigned int total_size) {
     /// It's also possible to change to network endian here, but it
     /// doesn't technically matter as long as the nonce data is 
     /// conveyed congruently.
-    output_nonce = dlls_nonce++;
+    dlls_nonce++;
+    dlls_nonce += (dlls_nonce == 0);
     
-    memcpy(dst, &output_nonce, write_bytes);
+    memcpy(dst, &dlls_nonce, write_bytes);
 }
 
 
 uint32_t crypto_getnonce(void) {
-/// Increment the internal nonce integer each time a nonce is got.
-    uint32_t output_nonce = dlls_nonce++;
+    uint32_t output_nonce = dlls_nonce;
     return output_nonce;
 }
 

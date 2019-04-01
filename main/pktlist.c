@@ -77,17 +77,27 @@ static void sub_readframe_modbus(user_endpoint_t* endpoint, pkt_t* newpkt, uint8
     if (newpkt->crcqual != 0) {
         goto sub_readframe_modbus_LOAD;
     }
-        
+    
     // If the frame uses encryption, decrypt it.
     // Else, pass it through with CRC removed.
     if ((mbcmd >= 68) && (mbcmd <= 70)) {
         uint16_t    src_addr;
         uint8_t     hdr24[3];
+        uint32_t    sequence;
+        uint8_t*    seq8;
         int         offset;
         
         // Copy the source address to packet.  This is in all 68-70 packets
         newpkt->buffer[2]   = data[2];
         src_addr            = (uint16_t)data[2];
+        
+        // Get the sequence id (it's the 32bit end of the nonce)
+        seq8    = (uint8_t*)&sequence;
+        seq8[0] = data[3];
+        seq8[1] = data[4];
+        seq8[2] = data[5];
+        seq8[3] = data[6];
+        newpkt->sequence = sequence;
         
         // For 68/69 packets, there's an encrypted subframe.
         // frame_size will become the size of the decrypted data, at returned offset
@@ -161,6 +171,7 @@ static void sub_writeframe_modbus(user_endpoint_t* endpoint, pkt_t* newpkt, uint
         newpkt->buffer[2]   = cliopt_getsrcaddr() & 0xFF;
         hdr_size            = user_preencrypt(
                                 endpoint->usertype,
+                                &newpkt->sequence,
                                 &newpkt->buffer[0],
                                 &newpkt->buffer[0]);
         
@@ -224,7 +235,7 @@ static void sub_footer_null(pkt_t* newpkt) {
 static void sub_writefooter_mpipe(pkt_t* newpkt) {
 /// Adds no bytes to packet
     uint16_t crcval;
-    newpkt->buffer[6]   = newpkt->sequence;
+    newpkt->buffer[6]   = 255 & newpkt->sequence;
     crcval              = crc_calc_block(&newpkt->buffer[4], newpkt->size - 4);
     newpkt->buffer[2]   = (crcval >> 8) & 0xff;
     newpkt->buffer[3]   = crcval & 0xff;
@@ -296,7 +307,11 @@ static int sub_pktlist_add(user_endpoint_t* endpoint, void* intf, pktlist_t* pli
         put_footer  = &sub_footer_null;
         max_overhead= 0;
     }
-
+    
+    // Sequence is written first, because it may be overwritten if there's
+    // frame encryption
+    newpkt->sequence    = plist->txnonce++;
+    
     // Setup list connections for the new packet
     // Also allocate the buffer of the new packet
     // The starting size is the payload size, and put_frame() will modify it.
@@ -324,8 +339,7 @@ static int sub_pktlist_add(user_endpoint_t* endpoint, void* intf, pktlist_t* pli
     newpkt->prev        = plist->last;
     newpkt->next        = NULL;
     newpkt->tstamp      = time(NULL);
-    newpkt->sequence    = plist->txnonce++;
-    
+
     ///@note If no explicit interface, use the interface attached to dterm's
     /// (dterm is the controlling terminal) active endpoint.  "Active endpoint"
     /// stipulates a device on the network and its access level, typically
@@ -360,8 +374,6 @@ static int sub_pktlist_add(user_endpoint_t* endpoint, void* intf, pktlist_t* pli
         }
     }
     
-    ///@todo Move Sequence Number entry and CRC entry to somewhere in writer
-    ///      thread, so that it can be retransmitted with new sequence
     put_footer(newpkt);
     
     // Increment the list size to account for new packet

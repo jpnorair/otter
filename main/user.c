@@ -98,7 +98,9 @@ USER_Type user_get_type(const char* type_string) {
 
 
 
-int user_preencrypt(USER_Type usertype, uint8_t* dst, uint8_t* hdr24) {
+
+
+int user_preencrypt(USER_Type usertype, uint32_t* seqnonce, uint8_t* dst, uint8_t* hdr24) {
 #if (OTTER_FEATURE(SECURITY))
     int bytes_added;
     
@@ -111,9 +113,14 @@ int user_preencrypt(USER_Type usertype, uint8_t* dst, uint8_t* hdr24) {
         }
         bytes_added = 3;
         
-        if (usertype < USER_guest) {
+        ///@note 1 April 2019: using nonce with all packets now
+        //if (usertype < USER_guest) {
             crypto_putnonce(dst, 7);
             bytes_added += 4;
+        //}
+        
+        if (seqnonce != NULL) {
+            *seqnonce = crypto_getnonce();
         }
     }
     else {
@@ -160,7 +167,8 @@ int user_encrypt(user_endpoint_t* endpoint, uint16_t vid, uint64_t uid, uint8_t*
         }
     }
     else {
-        rc = 3; // guest case.
+        ///@note 1 April 2019: adding 4 byte nonce to guest frames
+        rc = 3 + 4; // guest case.
     }
     
     return rc;
@@ -191,7 +199,11 @@ int user_decrypt(user_endpoint_t* endpoint, uint16_t vid, uint64_t uid, uint8_t*
     *frame_len -= 3;    // 24 bit header
     
     if (usertype == USER_guest) {
-        if (*frame_len < 4) return -4;
+        ///@note 1 April 2019: adding nonce to plaintext guest message
+        if (*frame_len < 8) return -4;
+
+        bytes_added += 4;
+        *frame_len -= 4;
     }
     else if ((usertype == USER_root) || (usertype == USER_user)) {
         void* ctx;
