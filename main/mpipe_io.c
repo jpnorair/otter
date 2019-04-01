@@ -461,7 +461,7 @@ void* mpipe_parser(void* args) {
             /// Else, if CRC is good, send packet to processor.
             if (appdata->rlist->cursor->crcqual != 0) {
                 ///@todo add rx address of input packet (set to 0)
-                dterm_output_rxstat(dth, DFMT_Binary, rpkt->buffer, rpkt->size, 0, rpkt->sequence, rpkt->tstamp, rpkt->crcqual);
+                dterm_send_rxstat(dth, DFMT_Binary, rpkt->buffer, rpkt->size, 0, rpkt->sequence, rpkt->tstamp, rpkt->crcqual);
             }
             else {
                 // -----------------------------------------------------------
@@ -499,7 +499,7 @@ void* mpipe_parser(void* args) {
                 /// 3. If packet is not valid, dump its hex
                 ///@note: ALP formatters should deal internally with protocol variations
                 if (payload_bytes > rpkt->size) {
-                    dterm_output_error(dth, "rxstat", -1, "Reported Payload Length is larger than buffer");
+                    dterm_send_error(dth, "rxstat", -1, 0, "Reported Payload Length is larger than buffer");
                 }
                 else if (rpkt_is_valid) {
                     while (payload_bytes > 0) {
@@ -520,7 +520,7 @@ void* mpipe_parser(void* args) {
                         subscriber_post(appdata->subscribers, proc_result, subsig, NULL, 0);
                         
                         // Send RXstat message back to control interface.
-                        dterm_output_rxstat(dth, DFMT_Native, putsbuf, putsbytes, 0, rpkt->sequence, rpkt->tstamp, rpkt->crcqual);
+                        dterm_send_rxstat(dth, DFMT_Native, putsbuf, putsbytes, 0, rpkt->sequence, rpkt->tstamp, rpkt->crcqual);
                         
                         // Recalculate message size following the treatment of the last segment
                         payload_bytes -= (payload_front - lastfront);
@@ -529,7 +529,7 @@ void* mpipe_parser(void* args) {
                 else {
                     size_t putsbytes = 0;
                     fmt_printhex((uint8_t*)putsbuf, &putsbytes, &payload_front, payload_bytes, 16);
-                    dterm_output_rxstat(dth, DFMT_Text, putsbuf, putsbytes, 0, rpkt->sequence, rpkt->tstamp, rpkt->crcqual);
+                    dterm_send_rxstat(dth, DFMT_Text, putsbuf, putsbytes, 0, rpkt->sequence, rpkt->tstamp, rpkt->crcqual);
                 }
             }
             
