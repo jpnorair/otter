@@ -272,11 +272,6 @@ void* modbus_writer(void* args) {
 ///
     otter_app_t* appdata = args;
     mpipe_handle_t mph;
-//    mpipe_handle_t mph                  = ((mpipe_arg_t*)args)->handle;
-//    pktlist_t* tlist                    = ((mpipe_arg_t*)args)->tlist;
-//    pthread_cond_t* tlist_cond          = ((mpipe_arg_t*)args)->tlist_cond;
-//    pthread_mutex_t* tlist_cond_mutex   = ((mpipe_arg_t*)args)->tlist_cond_mutex;
-//    pthread_mutex_t* tlist_mutex        = ((mpipe_arg_t*)args)->tlist_mutex;
     
     if (appdata == NULL) {
         goto modbus_writer_TERM;
@@ -286,12 +281,10 @@ void* modbus_writer(void* args) {
     
     while (1) {
         
-        ///@note documentation says to have pthread_mutex_lock() ahead of
-        /// pthread_cond_wait() for conds, but it doesn't work with this 
-        /// configuration.
         //pthread_mutex_lock(tlist_cond_mutex);
         pthread_cond_wait(appdata->tlist_cond, appdata->tlist_cond_mutex);
         
+        ///@todo this lock may be redundant
         pthread_mutex_lock(appdata->tlist_mutex);
         
         while (appdata->tlist->cursor != NULL) {
@@ -436,7 +429,7 @@ void* modbus_parser(void* args) {
             /// CRC is good, so send packet to Modbus processor.
             if (appdata->rlist->cursor->crcqual != 0) {
                 ///@todo add rx address of input packet (set to 0)
-                dterm_output_rxstat(dth, DFMT_Binary, rpkt->buffer, rpkt->size, 0, rpkt->sequence, rpkt->tstamp, rpkt->crcqual);
+                dterm_send_rxstat(dth, DFMT_Binary, rpkt->buffer, rpkt->size, 0, rpkt->sequence, rpkt->tstamp, rpkt->crcqual);
             }
             else {
                 proc_result     = smut_resp_proc(putsbuf, rpkt->buffer, &smut_outbytes, rpkt->size, true);
@@ -471,7 +464,7 @@ void* modbus_parser(void* args) {
                     }
 
                     ///@todo add rx address of input packet (set to 0)
-                    dterm_output_rxstat(dth, rxstat_fmt, putsbuf, putsbytes, 0, rpkt->sequence, rpkt->tstamp, rpkt->crcqual);
+                    dterm_send_rxstat(dth, rxstat_fmt, putsbuf, putsbytes, 0, rpkt->sequence, rpkt->tstamp, rpkt->crcqual);
                     
                     // Recalculate message size following the treatment of the last segment
                     msgbytes -= (msg - lastmsg);
