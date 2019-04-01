@@ -51,7 +51,7 @@ int cmd_cmdlist(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, s
     
     bytesout = cmdtab_list(appdata->cmdtab, cmdprint, 1024);
     if (bytesout >= 0) {
-        dterm_output_cmdmsg(dth, "cmdls", cmdprint);
+        dterm_send_cmdmsg(dth, "cmdls", cmdprint);
         bytesout = 0;
     }
     
