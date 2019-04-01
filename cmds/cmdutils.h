@@ -43,10 +43,10 @@ uint8_t* cmdutils_markstring(uint8_t** psrc, int* search_limit, int string_limit
 uint8_t* cmdutils_goto_eol(uint8_t* src);
 
 
-int cmdutils_parsestring(char*** pargv, const char* cmdname, char* dst, char* src, size_t src_limit);
+int cmdutils_parsestring(void* ctx, char*** pargv, const char* cmdname, char* src, size_t src_limit);
 
 
-void cmdutils_freeargv(char** argv);
+void cmdutils_freeargv(void* ctx, char** argv);
 
 
 int cmdutils_argcheck(void* argtable, struct arg_end* end, int argc, char** argv);

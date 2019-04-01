@@ -17,11 +17,15 @@
 // Local Headers
 #include "cmdutils.h"
 
+#include <talloc.h>
+
 // Standard C & POSIX Libraries
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 #include <ctype.h>
+
+///@todo add context arguments to all functions
 
 
 int cmdutils_uint8_to_hexstr(char* dst, uint8_t* src, size_t src_bytes) {
@@ -128,17 +132,14 @@ uint8_t* cmdutils_goto_eol(uint8_t* src) {
 }
 
 
-int cmdutils_parsestring(char*** pargv, const char* cmdname, char* dst, char* src, size_t src_limit) {
+int cmdutils_parsestring(void* ctx, char*** pargv, const char* cmdname, char* src, size_t src_limit) {
     char* cursor;
     int argc = 0;
     int remdata;
     int paren, brack, quote;
     bool ws_lead;
-    
-    if (dst != src) {
-        strncpy(dst, src, src_limit);
-    }
-    cursor = dst;
+
+    cursor = src;
 
     /// Zero out whitespace that's not protected
     /// Protections:
@@ -157,7 +158,6 @@ int cmdutils_parsestring(char*** pargv, const char* cmdname, char* dst, char* sr
             case '(':   paren++;                break;
             case ']':   brack -= (brack > 0);   break;
             case ')':   paren -= (paren > 0);   break;
-            
             default:
                 if ((quote==0) && (brack==0) && (paren==0)) {
                     if (isspace(*cursor)) {
@@ -184,7 +184,12 @@ int cmdutils_parsestring(char*** pargv, const char* cmdname, char* dst, char* sr
     /// - allocate argv
     /// - populate argv array with pointers to first chars after zeros.
     if (argc != 0) {
-        *pargv = calloc(sizeof(char*), argc);
+        if (ctx == NULL) {
+            *pargv = calloc(sizeof(char*), argc);
+        }
+        else {
+            *pargv = talloc_zero_size(ctx, sizeof(char*) * argc);
+        }
         if (*pargv == NULL) {
             argc = -2;
         }
@@ -201,7 +206,7 @@ int cmdutils_parsestring(char*** pargv, const char* cmdname, char* dst, char* sr
             // Bypass leading whitespace (now zeros)
             // Fill argv[i]
             // Bypass trailing non-whitespace
-            cursor = dst;
+            cursor = src;
             for (; i<argc; i++) {
                 for (; *cursor==0; cursor++);
                 (*pargv)[i] = cursor;
@@ -213,9 +218,12 @@ int cmdutils_parsestring(char*** pargv, const char* cmdname, char* dst, char* sr
     return argc;
 }
 
-void cmdutils_freeargv(char** argv) {
-    if (argv != NULL) {
+void cmdutils_freeargv(void* ctx, char** argv) {
+    if (ctx == NULL) {
         free(argv);
+    }
+    else {
+        talloc_free(argv);
     }
 }
 
