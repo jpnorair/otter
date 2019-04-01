@@ -55,19 +55,20 @@ static int sub_editnode(dterm_handle_t* dth, int argc, char** argv, bool require
     uint8_t userkey_dat[16];
     int rc = 0;
     devtab_node_t node = NULL;
-    otter_app_t* appdata;
+    otter_app_t* appdata = dth->ext;
 
     ///@todo wrap this routine into cmdutils subroutine
     if (arg_nullcheck(argtable) != 0) {
         rc = -1;
         goto sub_editnode_TERM;
     }
+
     if ((argc <= 1) || (arg_parse(argc, argv, argtable) > 0)) {
         arg_print_errors(stderr, end, argv[0]);
         rc = -2;
         goto sub_editnode_TERM;
     }
-    
+
     /// UID is a required element
     bintex_ss(uid->sval[0], (uint8_t*)&uid_val, 8); 
     node = devtab_select(appdata->endpoint.devtab, uid_val);
@@ -77,7 +78,7 @@ static int sub_editnode(dterm_handle_t* dth, int argc, char** argv, bool require
         rc = -3;
         goto sub_editnode_TERM;
     }
-    
+
     if (vid->count > 0) {
         vid_val = (uint16_t)vid->ival[0];
     }
@@ -87,7 +88,7 @@ static int sub_editnode(dterm_handle_t* dth, int argc, char** argv, bool require
     else {
         vid_val = 0;
     }
-    
+
     if (intf->count > 0) {
         ///@todo Must be able to do mpipe_intf_get(mph, ttyname)
         intf_val = mpipe_intf_fromfile(appdata->mpipe, intf->sval[0]);
@@ -98,7 +99,7 @@ static int sub_editnode(dterm_handle_t* dth, int argc, char** argv, bool require
     else {
         intf_val = mpipe_intf_get(appdata->mpipe, 0);
     }
-    
+
     if (rootkey->count > 0) {
         rootkey_val = rootkey_dat;
         memset(rootkey_dat, 0, 16);
@@ -110,7 +111,7 @@ static int sub_editnode(dterm_handle_t* dth, int argc, char** argv, bool require
     else {
         rootkey_val = NULL;
     }
-    
+
     if (userkey->count > 0) {
         userkey_val = userkey_dat;
         memset(userkey_dat, 0, 16);
@@ -127,7 +128,7 @@ static int sub_editnode(dterm_handle_t* dth, int argc, char** argv, bool require
 
     sub_editnode_TERM:
     arg_freetable(argtable, sizeof(argtable)/sizeof(argtable[0]));
-    
+
     return rc;
 }
 
@@ -156,7 +157,7 @@ int cmd_mknode(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, si
     
     INPUT_SANITIZE();
     
-    argc = cmdutils_parsestring(&argv, "mknode", (char*)src, (char*)src, (size_t)*inbytes);
+    argc = cmdutils_parsestring(dth->tctx, &argv, "mknode", (char*)src, (size_t)*inbytes);
     if (argc <= 0) {
         rc = -256 + argc;
     }
@@ -168,7 +169,7 @@ int cmd_mknode(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, si
     // ACK (0), NACK (!0)
     rc = (rc >= 0) ? 0 : rc;
     
-    cmdutils_freeargv(argv);
+    cmdutils_freeargv(dth->tctx, argv);
     return rc;
 }
 
@@ -186,7 +187,7 @@ int cmd_chnode(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, si
     
     INPUT_SANITIZE();
     
-    argc = cmdutils_parsestring(&argv, "chnode", (char*)src, (char*)src, (size_t)*inbytes);
+    argc = cmdutils_parsestring(dth->tctx, &argv, "chnode", (char*)src, (size_t)*inbytes);
     if (argc <= 0) {
         rc = -256 + argc;
     }
@@ -198,7 +199,7 @@ int cmd_chnode(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, si
     // ACK (0), NACK (!0)
     rc = (rc >= 0) ? 0 : rc;
     
-    cmdutils_freeargv(argv);
+    cmdutils_freeargv(dth->tctx, argv);
     return 0;
 }
 
@@ -219,7 +220,7 @@ int cmd_rmnode(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, si
     
     appdata = dth->ext;
     
-    argc = cmdutils_parsestring(&argv, "rmnode", (char*)src, (char*)src, (size_t)*inbytes);
+    argc = cmdutils_parsestring(dth->tctx, &argv, "rmnode", (char*)src, (size_t)*inbytes);
     if (argc <= 0) {
         rc = -256 + argc;
     }
@@ -246,7 +247,7 @@ int cmd_rmnode(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, si
 
         cmd_rmnode_TERM:
         arg_freetable(argtable, sizeof(argtable)/sizeof(argtable[0]));
-        cmdutils_freeargv(argv);
+        cmdutils_freeargv(dth->tctx, argv);
     }
     
     ///@todo better error reporting
@@ -273,7 +274,7 @@ int cmd_lsnode(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, si
     appdata  = dth->ext;
     bytesout = devtab_list(appdata->endpoint.devtab, printbuf, 1024);
     
-    dterm_output_cmdmsg(dth, "lsnode", printbuf);
+    dterm_send_cmdmsg(dth, "lsnode", printbuf);
     
     return 0;
 }
