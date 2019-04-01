@@ -809,6 +809,8 @@ int otter_main( ttyspec_t* ttylist,
     DEBUG_PRINTF("--> done\n");
     
     DEBUG_PRINTF("Creating Dterm theads\n");
+    ///@todo thread_active should be handled internally, maybe in dterm_open?
+    dterm_handle.thread_active = true;
     pthread_create(&thr_dterm, NULL, dterm_fn, (void*)&dterm_handle);
     DEBUG_PRINTF("--> done\n");
     
@@ -823,19 +825,26 @@ int otter_main( ttyspec_t* ttylist,
     /// Wait for kill cond.  Basic functionality is in the dterm thread(s).
     pthread_mutex_lock(&cli.kill_mutex);
     pthread_cond_wait(&cli.kill_cond, &cli.kill_mutex);
-    
+
+    ///@todo hack: wait for dterm thread to close on its own
+    usleep(100000);
+
     DEBUG_PRINTF("Cancelling Theads\n");
-    pthread_detach(thr_dterm);
     pthread_cancel(thr_dterm);
-    
+
     if (appdata.mpipe != NULL) {
         pthread_cancel(thr_mpreader);
         pthread_cancel(thr_mpwriter);
         pthread_cancel(thr_mpparser);
     }
-    
+
     /// Close the drivers/files and deinitialize all submodules
     otter_main_EXIT:
+    
+    // Return cJSON and argtable to generic context allocators
+    cJSON_InitHooks(NULL);
+    arg_set_allocators(NULL, NULL);
+    
     switch (cli.exitcode) {
        default:
         case 11:// Failure in MPipe thread creation
@@ -848,37 +857,37 @@ int otter_main( ttyspec_t* ttylist,
                     smut_free(appdata.smut_handle);
                 }
 #               endif
-       
+
         case 8: // Failure on mpipe_init()
                 DEBUG_PRINTF("Deinitializing Packet Lists\n");
                 pktlist_free(&mpipe_rlist);
                 pktlist_free(&mpipe_tlist);
-        
+
         case 7: // Failure on pktlist_init()
                 DEBUG_PRINTF("Deinitializing User Module\n");
                 user_deinit();
-       
+
         case 6: // Failure on user_init()
                 DEBUG_PRINTF("Deinitializing Subscribers\n");
                 subscriber_deinit(appdata.subscribers);
-            
+
         case 5: // Failure on subscriber_init()
         case 4: // Failure on devtab_insert()
                 DEBUG_PRINTF("Deinitializing Device Table\n");
                 devtab_free(appdata.endpoint.devtab);
-        
+
         case 3: // Failure on devtab_init()
                 DEBUG_PRINTF("Deinitializing Command Table\n");
                 cmd_free(appdata.cmdtab);
-        
+
         case 2: // Failure on cmd_init()
                 dterm_deinit(&dterm_handle);
-        
+
         case 1: // Failure on dterm_init()
                 ppipelist_deinit();
                 break;
     }
-    
+
     DEBUG_PRINTF("Destroying thread resources\n");
     pthread_mutex_unlock(&rlist_mutex);
     pthread_mutex_destroy(&rlist_mutex);
@@ -893,11 +902,11 @@ int otter_main( ttyspec_t* ttylist,
     pthread_mutex_unlock(&pktrx_mutex);
     pthread_mutex_destroy(&pktrx_mutex);
     pthread_cond_destroy(&pktrx_cond);
-    
+
     DEBUG_PRINTF("Exiting cleanly and flushing output buffers\n");
     fflush(stdout);
     fflush(stderr);
-    
+
     ///@todo there is a SIGILL that happens on pthread_cond_destroy(), but only
     ///      after packets have been TX'ed.
     ///      - Happens on two different systems
@@ -910,7 +919,7 @@ int otter_main( ttyspec_t* ttylist,
     DEBUG_PRINTF("-- pthread_mutex_destroy(&cli.kill_mutex)\n");
     pthread_cond_destroy(&cli.kill_cond);
     DEBUG_PRINTF("-- cli.kill_mutex & cli.kill_cond destroyed\n");
-    
+
     return cli.exitcode;
 }
 

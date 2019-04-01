@@ -173,20 +173,18 @@ int cmd_free(cmdtab_t* init_table) {
     if (init_table == NULL) {
         return -1;
     }
-    
     /// First, free commands on xpath (should require nothing)
     
     /// Second, free hbuilder
 #   if OTTER_FEATURE(HBUILDER)
         hbuilder_free(hbuilder_handle);
 #   endif
-    
     /// third, free cmdtab
     cmdtab_free(init_table);
-    
+
     /// fourth, free the object itself
     free(init_table);
-    
+
     return 0;
 }
 
