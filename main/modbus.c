@@ -78,7 +78,7 @@ void* modbus_reader(void* args) {
 /// <LI> Adds packet into mpipe.rlist, sends cond-sig to modbus_parser. </LI>
     otter_app_t* appdata    = args;
     struct pollfd* fds      = NULL;
-    mpipe_handle_t mph;
+    mpipe_handle_t mph      = NULL;
     int num_fds;
     int pollcode;
     int ready_fds;
@@ -162,7 +162,7 @@ void* modbus_reader(void* args) {
                 int new_bytes;
                 
                 // 1. Read all bytes that have been received, but don't go beyond limit
-                new_bytes       = read(fds[i].fd, rbuf_cursor, read_limit);
+                new_bytes       = (int)read(fds[i].fd, rbuf_cursor, read_limit);
                 rbuf_cursor    += new_bytes;
                 read_limit     -= new_bytes;
                 
@@ -182,7 +182,7 @@ void* modbus_reader(void* args) {
         
             /// In Modbus, frame length is determined implicitly based on the number
             /// of bytes received prior to a idle-time violation.
-            frame_length  = rbuf_cursor - rbuf;
+            frame_length  = (int)(rbuf_cursor - rbuf);
             
             /// Now do some checks to prevent malformed packets.
             if (((unsigned int)frame_length < 4) \
