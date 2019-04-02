@@ -9,6 +9,8 @@
 #ifndef formatters_h
 #define formatters_h
 
+//#include "cliopt.h"
+
 #include <stdio.h>
 #include <stdint.h>
 #include <time.h>

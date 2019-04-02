@@ -211,6 +211,9 @@ static FORMAT_Type sub_fmt_cmp(const char* s1) {
     else if (strcmp(s1, "json") == 0) {
         selected_fmt = FORMAT_Json;
     }
+    else if (strcmp(s1, "jsonhex") == 0) {
+        selected_fmt = FORMAT_JsonHex;
+    }
     else if (strcmp(s1, "bintex") == 0) {
         selected_fmt = FORMAT_Bintex;
     }
@@ -243,7 +246,7 @@ int main(int argc, char* argv[]) {
     struct arg_int  *brate   = arg_int0(NULL,NULL,"baudrate",           "Baudrate, default is 115200");
     struct arg_str  *ttyenc  = arg_str0("e", "encoding", "ttyenc",      "Manual-entry for TTY encoding (default mpipe:8N1, modbus:8N2)");
     struct arg_str  *iobus   = arg_str0("b", "bus", "mpipe|modbus",      "Select \"mpipe\" or \"modbus\" bus (default=mpipe)");
-    struct arg_str  *fmt     = arg_str0("f", "fmt", "format",           "\"default\", \"json\", \"bintex\", \"hex\"");
+    struct arg_str  *fmt     = arg_str0("f", "fmt", "format",           "\"default\", \"json\", \"jsonhex\", \"bintex\", \"hex\"");
     struct arg_str  *intf    = arg_str0("i","intf", "interactive|pipe|socket", "Interface select.  Default: interactive");
     struct arg_file *socket  = arg_file0("S","socket","path/addr",      "Socket path/address to use for otter daemon");
     struct arg_file *initfile= arg_file0("I","init","path",             "Path to initialization routine to run at startup");

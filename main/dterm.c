@@ -465,7 +465,8 @@ int dterm_force_rxstat(int fd_out, DFMT_Type dfmt, void* rxdata, size_t rxsize, 
             bytesout = sub_hexwrite(fd_out, (crcqual != 0));
         } break;
         
-        case FORMAT_Json: {
+        case FORMAT_Json: ///@todo FORMAT_Json will use a slightly different handling of interface data (not rxbytes)
+        case FORMAT_JsonHex: {
             bytesout = dprintf(fd_out, "{\"type\":\"rxstat\", "\
                                 "\"data\":{\"sid\":%u, \"addr\":\"%llx\", \"qual\":%i, \"time\":%li, \"rxbytes\":%zu, \"\":\"",
                                 sid, rxaddr, crcqual, tstamp, rxsize);
@@ -512,7 +513,8 @@ int dterm_force_cmdmsg(int fd_out, const char* cmdname, const char* msg) {
             bytesout += sub_hexstream(fd_out, (const uint8_t*)msg, strlen(msg));
         } break;
 
-        case FORMAT_Json: {
+        case FORMAT_Json:
+        case FORMAT_JsonHex: {
             const char* linefront;
             const char* lineback;
             const char* lineend;
@@ -590,7 +592,8 @@ int dterm_force_error(int fd_out, const char* cmdname, int errcode, uint32_t sid
             //bytesout += dprintf(dth->fd.out, "%02X", (uint8_t)(255 & abs(errcode)));
         } break;
 
-        case FORMAT_Json: {
+        case FORMAT_Json:
+        case FORMAT_JsonHex: {
             bytesout += dprintf(fd_out, "{\"type\":\"ack\", \"data\":{\"cmd\":\"%s\", \"err\":%i", cmdname, errcode);
             if (errcode == 0) {
                 if (sid >= 0) {

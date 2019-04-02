@@ -37,8 +37,10 @@ typedef enum {
 typedef enum {
     FORMAT_Default  = 0,
     FORMAT_Json     = 1,
-    FORMAT_Bintex   = 2,
-    FORMAT_Hex      = 3
+    FORMAT_JsonHex  = 2,
+    FORMAT_Bintex   = 3,
+    FORMAT_Hex      = 4,
+    FORMAT_MAX
 } FORMAT_Type;
 
 

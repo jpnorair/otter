@@ -178,7 +178,7 @@ static int sub_passhex_loop(uint8_t* dst, uint8_t** src, size_t srcsz, size_t co
 
 
 
-static int sub_passtext_loop(uint8_t* dst, uint8_t** src, size_t srcsz, size_t cols) {
+static int sub_passtext_loop(FORMAT_Type fmt, uint8_t* dst, uint8_t** src, size_t srcsz, size_t cols) {
     int i;
     char* dcurs     = (char*)dst;
     char* scurs     = (char*)*src;
@@ -190,6 +190,7 @@ static int sub_passtext_loop(uint8_t* dst, uint8_t** src, size_t srcsz, size_t c
     // - Certain characters are conditionally removed (\r, ...)
     i = (int)cols;
     while (srcsz-- != 0) {
+        ///@todo integrate this into FORMAT_Type somehow
         if (cliopt_getintf() == INTF_interactive) {
             *dcurs++ = *scurs++;
             if (cols != 0) {
@@ -203,7 +204,7 @@ static int sub_passtext_loop(uint8_t* dst, uint8_t** src, size_t srcsz, size_t c
         else {
             switch (*scurs) {
                 case '\"':
-                    if (cliopt_getformat() != FORMAT_Default) {
+                    if (fmt != FORMAT_Default) {
                         *dcurs++ = '\\';
                         *dcurs++ = '\"';
                     } break;
@@ -229,7 +230,7 @@ static int sub_passtext_loop(uint8_t* dst, uint8_t** src, size_t srcsz, size_t c
 }
 
 
-static int sub_passhex(uint8_t* dst, size_t* dst_accum, uint8_t** src, size_t srcsz, size_t cols) {
+static int sub_passhex(FORMAT_Type fmt, uint8_t* dst, size_t* dst_accum, uint8_t** src, size_t srcsz, size_t cols) {
     static const char* term_json = "\"";
     static const char* term_bintex = "]";
     int rc;
@@ -242,13 +243,14 @@ static int sub_passhex(uint8_t* dst, size_t* dst_accum, uint8_t** src, size_t sr
     
     // The column printing feature is only available in Default (text) printing
     // to interactive console.
-    switch (cliopt_getformat()) {
+    switch (fmt) {
         case FORMAT_Hex:
             cols = 0;
             strterm = NULL;
             break;
             
         case FORMAT_Json:
+        case FORMAT_JsonHex:
             cols = 0;
             dcurs = stpcpy(dcurs, "\"");
             strterm = term_json;
@@ -286,7 +288,7 @@ static int sub_passhex(uint8_t* dst, size_t* dst_accum, uint8_t** src, size_t sr
 }
 
 
-static int sub_printhex(uint8_t* dst, size_t* dst_accum, uint8_t** src, size_t srcsz, size_t cols) {
+static int sub_printhex(FORMAT_Type fmt, uint8_t* dst, size_t* dst_accum, uint8_t** src, size_t srcsz, size_t cols) {
     static const char convert[] = "0123456789ABCDEF";
     static const char* term_json = "\"";
     static const char* term_bintex = "]";
@@ -301,13 +303,14 @@ static int sub_printhex(uint8_t* dst, size_t* dst_accum, uint8_t** src, size_t s
     
     // The column printing feature is only available in Default (text) printing
     // to interactive console.
-    switch (cliopt_getformat()) {
+    switch (fmt) {
         case FORMAT_Hex:
             cols = 0;
             strterm = NULL;
             break;
             
         case FORMAT_Json:
+        case FORMAT_JsonHex:
             cols = 0;
             dcurs = stpcpy(dcurs, "\"");
             strterm = term_json;
@@ -366,17 +369,18 @@ static int sub_printhex(uint8_t* dst, size_t* dst_accum, uint8_t** src, size_t s
 }
 
 
-static int sub_printtext(uint8_t* dst, size_t* dst_accum, uint8_t** src, size_t srcsz, size_t cols) {
+static int sub_printtext(FORMAT_Type fmt, uint8_t* dst, size_t* dst_accum, uint8_t** src, size_t srcsz, size_t cols) {
     int rc;
     char* dcurs = (char*)dst;
     
     // The column printing feature is only available in Default (text) printing
     // to interactive console.
-    switch (cliopt_getformat()) {
+    switch (fmt) {
         case FORMAT_Hex:
-            return sub_printhex(dst, dst_accum, src, srcsz, cols/3);
+            return sub_printhex(fmt, dst, dst_accum, src, srcsz, cols/3);
             
         case FORMAT_Json:
+        case FORMAT_JsonHex:
         case FORMAT_Bintex:
             cols = 0;
             dcurs = stpcpy(dcurs, "\"");
@@ -394,11 +398,12 @@ static int sub_printtext(uint8_t* dst, size_t* dst_accum, uint8_t** src, size_t 
             break;
     }
     
-    dcurs += sub_passtext_loop((uint8_t*)dcurs, src, srcsz, cols);
+    dcurs += sub_passtext_loop(fmt, (uint8_t*)dcurs, src, srcsz, cols);
     
     // Terminator
-    switch (cliopt_getformat()) {
+    switch (fmt) {
         case FORMAT_Json:
+        case FORMAT_JsonHex:
         case FORMAT_Bintex:
             dcurs = stpcpy(dcurs, "\"");
             break;
@@ -418,7 +423,7 @@ static int sub_printtext(uint8_t* dst, size_t* dst_accum, uint8_t** src, size_t 
 }
 
 
-static int sub_log_binmsg(uint8_t* dst, size_t* dst_accum, uint8_t** src, size_t srcsz) {
+static int sub_log_binmsg(FORMAT_Type fmt, uint8_t* dst, size_t* dst_accum, uint8_t** src, size_t srcsz) {
 ///@note subroutine, so inputs are expected to be valid -- no checks
     char* msgbreak;
     char* dcurs;
@@ -445,9 +450,10 @@ static int sub_log_binmsg(uint8_t* dst, size_t* dst_accum, uint8_t** src, size_t
         
         use_delim = false;
         use_newline = (cliopt_getintf() == INTF_interactive);
-        switch (cliopt_getformat()) {
+        switch (fmt) {
             //case FORMAT_Hex:  // Hex format handled in top-level formatter func
             case FORMAT_Json:
+            case FORMAT_JsonHex:
                 use_delim = true;
                 use_newline = false;
                 
@@ -458,7 +464,7 @@ static int sub_log_binmsg(uint8_t* dst, size_t* dst_accum, uint8_t** src, size_t
                 dcurs = stpcpy(dcurs, front);
                 if (use_newline) {
                     dcurs = stpcpy(dcurs, "\n");
-                    dcurs += sub_printhex((uint8_t*)dcurs, NULL, (uint8_t**)&msgbreak, length, 16);
+                    dcurs += sub_printhex(fmt, (uint8_t*)dcurs, NULL, (uint8_t**)&msgbreak, length, 16);
                 }
                 else {
                     dcurs = stpcpy(dcurs, " ");
@@ -470,8 +476,8 @@ static int sub_log_binmsg(uint8_t* dst, size_t* dst_accum, uint8_t** src, size_t
                 break;
                 
             case FORMAT_Bintex:
-                dcurs += sub_printtext((uint8_t*)dcurs, NULL, (uint8_t**)&front, strlen(front), 0);
-                dcurs += sub_printhex((uint8_t*)dcurs, NULL, (uint8_t**)&msgbreak, length, 0);
+                dcurs += sub_printtext(fmt, (uint8_t*)dcurs, NULL, (uint8_t**)&front, strlen(front), 0);
+                dcurs += sub_printhex(fmt, (uint8_t*)dcurs, NULL, (uint8_t**)&msgbreak, length, 0);
                 break;
                 
             default:
@@ -490,7 +496,7 @@ static int sub_log_binmsg(uint8_t* dst, size_t* dst_accum, uint8_t** src, size_t
 }
 
 
-static int sub_log_hexmsg(uint8_t* dst, size_t* dst_accum, uint8_t** src, size_t srcsz) {
+static int sub_log_hexmsg(FORMAT_Type fmt, uint8_t* dst, size_t* dst_accum, uint8_t** src, size_t srcsz) {
 ///@note subroutine, so inputs are expected to be valid -- no checks
     char* msgbreak;
     char* dcurs;
@@ -513,9 +519,10 @@ static int sub_log_hexmsg(uint8_t* dst, size_t* dst_accum, uint8_t** src, size_t
         
         use_delim = false;
         use_newline = (cliopt_getintf() == INTF_interactive);
-        switch (cliopt_getformat()) {
+        switch (fmt) {
             //case FORMAT_Hex:  // Hex format handled in top-level formatter func
             case FORMAT_Json:
+            case FORMAT_JsonHex:
                 use_delim = true;
                 use_newline = false;
                 
@@ -532,7 +539,7 @@ static int sub_log_hexmsg(uint8_t* dst, size_t* dst_accum, uint8_t** src, size_t
                 break;
                 
             case FORMAT_Bintex:
-                dcurs += sub_printtext((uint8_t*)dcurs, NULL, (uint8_t**)&front, strlen(front), 0);
+                dcurs += sub_printtext(fmt, (uint8_t*)dcurs, NULL, (uint8_t**)&front, strlen(front), 0);
                 dcurs = stpcpy(dcurs, "[");
                 dcurs += sub_passhex_loop((uint8_t*)dcurs, (uint8_t**)&msgbreak, length, 0);
                 dcurs = stpcpy(dcurs, "]");
@@ -555,7 +562,7 @@ static int sub_log_hexmsg(uint8_t* dst, size_t* dst_accum, uint8_t** src, size_t
 
 
 
-static int sub_log_textmsg(uint8_t* dst, size_t* dst_accum, uint8_t** src, size_t srcsz) {
+static int sub_log_textmsg(FORMAT_Type fmt, uint8_t* dst, size_t* dst_accum, uint8_t** src, size_t srcsz) {
 ///@note subroutine, so inputs are expected to be valid -- no checks
     char* msgbreak;
     char* dcurs;
@@ -578,9 +585,10 @@ static int sub_log_textmsg(uint8_t* dst, size_t* dst_accum, uint8_t** src, size_
         
         use_delim = false;
         use_newline = (cliopt_getintf() == INTF_interactive);
-        switch (cliopt_getformat()) {
+        switch (fmt) {
             //case FORMAT_Hex:  // Hex format handled in top-level formatter func
             case FORMAT_Json:
+            case FORMAT_JsonHex:        ///@todo convert text to Hex
                 use_delim = true;
                 use_newline = false;
                 
@@ -590,15 +598,15 @@ static int sub_log_textmsg(uint8_t* dst, size_t* dst_accum, uint8_t** src, size_
                 }
                 dcurs = stpcpy(dcurs, front);
                 dcurs = stpcpy(dcurs, use_newline ? "\n" : " ");
-                dcurs += sub_passtext_loop((uint8_t*)dcurs, (uint8_t**)&msgbreak, length, use_newline ? 80 : 0);
+                dcurs += sub_passtext_loop(fmt, (uint8_t*)dcurs, (uint8_t**)&msgbreak, length, use_newline ? 80 : 0);
                 if (use_delim) {
                     dcurs = stpcpy(dcurs, "\"");
                 }
                 break;
                 
             case FORMAT_Bintex:
-                dcurs += sub_printtext((uint8_t*)dcurs, NULL, (uint8_t**)&front, strlen(front), 0);
-                dcurs += sub_printtext((uint8_t*)dcurs, NULL, (uint8_t**)&msgbreak, length, 0);
+                dcurs += sub_printtext(fmt, (uint8_t*)dcurs, NULL, (uint8_t**)&front, strlen(front), 0);
+                dcurs += sub_printtext(fmt, (uint8_t*)dcurs, NULL, (uint8_t**)&msgbreak, length, 0);
                 break;
                 
             default:
@@ -618,10 +626,10 @@ static int sub_log_textmsg(uint8_t* dst, size_t* dst_accum, uint8_t** src, size_
 
 
 
-static int sub_printlog(uint8_t* dst, size_t* dst_accum, uint8_t** src, size_t length, uint8_t cmd) {
+static int sub_printlog(FORMAT_Type fmt, uint8_t* dst, size_t* dst_accum, uint8_t** src, size_t length, uint8_t cmd) {
     char* dcurs = (char*)dst;
     
-    if (cliopt_getformat() == FORMAT_Json) {
+    if ((fmt == FORMAT_Json) || (fmt == FORMAT_JsonHex)) {
         if ((cmd == 1) || (cmd == 4) || (cmd == 5) || (cmd == 7)) {
             dcurs = stpcpy(dcurs, "\"fmt\":\"text\", \"dat\":");
         }
@@ -632,43 +640,43 @@ static int sub_printlog(uint8_t* dst, size_t* dst_accum, uint8_t** src, size_t l
     
     switch (cmd) {
         // "Raw" Data.  Print as hex
-        case 0: dcurs += sub_printhex((uint8_t*)dcurs, dst_accum, src, length, 16);
+        case 0: dcurs += sub_printhex(fmt, (uint8_t*)dcurs, dst_accum, src, length, 16);
             break;
     
         // UTF-8 Unstructured Data
-        case 1: dcurs += sub_printtext((uint8_t*)dcurs, dst_accum, src, length, 80);
+        case 1: dcurs += sub_printtext(fmt, (uint8_t*)dcurs, dst_accum, src, length, 80);
             break;
             
         // Unicode (UTF-16) unstructured Data
         // (UTF-16 Not presently supported, treated as binary)
-        case 2: dcurs += sub_printhex((uint8_t*)dcurs, dst_accum, src, length, 16);
+        case 2: dcurs += sub_printhex(fmt, (uint8_t*)dcurs, dst_accum, src, length, 16);
             break;
         
         // UTF-8 Hex-encoded data
-        case 3: dcurs += sub_passhex((uint8_t*)dcurs, dst_accum, src, length, 80);
+        case 3: dcurs += sub_passhex(fmt, (uint8_t*)dcurs, dst_accum, src, length, 80);
             break;
         
         // Message with raw data
-        case 4: dcurs += sub_log_binmsg((uint8_t*)dcurs, dst_accum, src, length);
+        case 4: dcurs += sub_log_binmsg(fmt, (uint8_t*)dcurs, dst_accum, src, length);
             break;
             
         // Message with UTF-8 data
-        case 5: dcurs += sub_log_textmsg((uint8_t*)dcurs, dst_accum, src, length);
+        case 5: dcurs += sub_log_textmsg(fmt, (uint8_t*)dcurs, dst_accum, src, length);
             break;
         
         // Message with Unicode (UTF-16) data
         // (UTF-16 Not presently supported, treated as binary)
-        case 6: dcurs += sub_log_binmsg((uint8_t*)dcurs, dst_accum, src, length);
+        case 6: dcurs += sub_log_binmsg(fmt, (uint8_t*)dcurs, dst_accum, src, length);
             break;
             
         // Message with UTF-8 encoded Hex data
         ///@todo have this print out hex in similar output to fmt_printhex
-        case 7: dcurs += sub_log_hexmsg((uint8_t*)dcurs, dst_accum, src, length);
+        case 7: dcurs += sub_log_hexmsg(fmt, (uint8_t*)dcurs, dst_accum, src, length);
             break;
         
         // Hexify anything that isn't known
         default:
-            dcurs += sub_printhex((uint8_t*)dcurs, dst_accum, src, length, 16);
+            dcurs += sub_printhex(fmt, (uint8_t*)dcurs, dst_accum, src, length, 16);
             break;
     }
     
@@ -691,6 +699,7 @@ int fmt_fprintalp(uint8_t* dst, size_t* dst_accum, uint8_t** src, size_t srcsz) 
     int rc = 0;
     char* dcurs = (char*)dst;
     uint8_t* scurs;
+    FORMAT_Type fmt = cliopt_getformat();
 
     /// Early exit conditions
     if ((dst == NULL) || (src == NULL) || (srcsz < 4) || (srcsz > 65535)) {
@@ -738,19 +747,20 @@ int fmt_fprintalp(uint8_t* dst, size_t* dst_accum, uint8_t** src, size_t srcsz) 
     /// JSON: "alp":{"id":X, "cmd":Y, "len":Z, "fmt":["hex"|"text"|"obj"], "dat":[STRING|OBJECT]}
     /// Bintex: [Header (Hex)] [Payload (Hex)] or [Header (Hex)] "Payload (Text)"
     /// Default: Formatted Text per ID and command
-    switch (cliopt_getformat()) {
+    switch (fmt) {
         default:
         case FORMAT_Default:
             break;
             
         case FORMAT_Json:
+        case FORMAT_JsonHex:
             (*src) += 4;
             dcurs += sprintf(dcurs, "\"alp\":{\"id\":%u, \"cmd\":%u, \"len\":%u, ", id, cmd, length);
             break;
             
         case FORMAT_Bintex:
             ///@note No checks return code, because all error cases are already checked
-            dcurs += sub_printhex((uint8_t*)dcurs, dst_accum, src, 4, 0);
+            dcurs += sub_printhex(fmt, (uint8_t*)dcurs, dst_accum, src, 4, 0);
             break;
         
         case FORMAT_Hex:
@@ -766,15 +776,16 @@ int fmt_fprintalp(uint8_t* dst, size_t* dst_accum, uint8_t** src, size_t srcsz) 
     /// JSON: close the object
     /// Default: dump the header
     if ((length == 0) || (id == 0)) {
-        switch (cliopt_getformat()) {
+        switch (fmt) {
             case FORMAT_Json:
+            case FORMAT_JsonHex:
                 // -2 is to eat the trailing ", " delimeter
                 dcurs = stpcpy(dcurs-2, "}");
                 break;
                 
             case FORMAT_Default:
                 ///@note No checks return code, because all error cases are already checked
-                dcurs += sub_printhex((uint8_t*)dcurs, dst_accum, src, 4, 0);
+                dcurs += sub_printhex(fmt, (uint8_t*)dcurs, dst_accum, src, 4, 0);
                 break;
                 
             default: // Do nothing
@@ -792,14 +803,21 @@ int fmt_fprintalp(uint8_t* dst, size_t* dst_accum, uint8_t** src, size_t srcsz) 
     else {
         switch (id) {
             // logger
-            case 4: dcurs += sub_printlog((uint8_t*)dcurs, dst_accum, src, length, cmd);
+            case 4: dcurs += sub_printlog(fmt, (uint8_t*)dcurs, dst_accum, src, length, cmd);
                 break;
                 
             // everything else
            default: {
 #           if OTTER_FEATURE(HBUILDER)
+                static const HBFMT_Type hbfmt_convert[FORMAT_MAX] = {
+                    HBFMT_Default,  //FORMAT_Default
+                    HBFMT_Json,     //FORMAT_Json
+                    HBFMT_Hex,      //FORMAT_JsonHex
+                    HBFMT_Bintex,   //FORMAT_Bintex
+                    HBFMT_Hex,      //FORMAT_Hex
+                };
                 //rc = hbuilder_fmtalp(puts_fn, (HBFMT_Type)cliopt_getformat(), id, cmd, scurs, length);
-                rc = hbuilder_snfmtalp(dst, dst_accum, 2048, (HBFMT_Type)cliopt_getformat(), id, cmd, *src, length);
+                rc = hbuilder_snfmtalp(dst, dst_accum, 2048, hbfmt_convert[fmt], id, cmd, *src, length);
                 if (rc >= 0) {
                     *src += length;
                 }
@@ -809,8 +827,9 @@ int fmt_fprintalp(uint8_t* dst, size_t* dst_accum, uint8_t** src, size_t srcsz) 
                 /// Anything that falls through the cracks gets crapped-out as hex
                 if (rc < 0) {
                     size_t output_bytes = (size_t)length;
-                    switch (cliopt_getformat()) {
-                        case FORMAT_Json:
+                    switch (fmt) {
+                        case FORMAT_Json:   ///@todo JSON output method
+                        case FORMAT_JsonHex:
                             dcurs = stpcpy(dcurs, "\"fmt\":\"hex\", \"dat\":");
                             break;
                         case FORMAT_Bintex:
@@ -819,14 +838,15 @@ int fmt_fprintalp(uint8_t* dst, size_t* dst_accum, uint8_t** src, size_t srcsz) 
                             output_bytes += 4;
                             break;
                     }
-                    dcurs += sub_printhex((uint8_t*)dcurs, dst_accum, src, output_bytes, 16);
+                    dcurs += sub_printhex(fmt, (uint8_t*)dcurs, dst_accum, src, output_bytes, 16);
                 }
             } break;
         }
         
         /// End Framing
-        switch (cliopt_getformat()) {
+        switch (fmt) {
             case FORMAT_Json:
+            case FORMAT_JsonHex:
                 dcurs = stpcpy(dcurs, "}");
                 break;
             
@@ -847,6 +867,7 @@ int fmt_fprintalp(uint8_t* dst, size_t* dst_accum, uint8_t** src, size_t srcsz) 
 
 int fmt_printtext(uint8_t* dst, size_t* dst_accum, uint8_t** src, size_t srcsz, size_t cols) {
     int rc;
+    FORMAT_Type fmt = cliopt_getformat();
     
     if ((dst == NULL) || (src == NULL)) {
         return -1;
@@ -855,7 +876,7 @@ int fmt_printtext(uint8_t* dst, size_t* dst_accum, uint8_t** src, size_t srcsz, 
         return 0;
     }
     
-    rc = sub_printtext(dst, dst_accum, src, srcsz, cols);
+    rc = sub_printtext(fmt, dst, dst_accum, src, srcsz, cols);
     
     ///@todo could possibly do something here
     return rc;
@@ -867,6 +888,7 @@ int fmt_printtext(uint8_t* dst, size_t* dst_accum, uint8_t** src, size_t srcsz, 
 
 int fmt_printhex(uint8_t* dst, size_t* dst_accum, uint8_t** src, size_t srcsz, size_t cols) {
     int rc;
+    FORMAT_Type fmt = cliopt_getformat();
 
     if ((dst == NULL) || (src == NULL)) {
         return -1;
@@ -875,7 +897,7 @@ int fmt_printhex(uint8_t* dst, size_t* dst_accum, uint8_t** src, size_t srcsz, s
         return 0;
     }
     
-    rc = sub_printhex(dst, dst_accum, src, srcsz, cols);
+    rc = sub_printhex(fmt, dst, dst_accum, src, srcsz, cols);
     
     ///@todo could possibly do something here
     return rc;
