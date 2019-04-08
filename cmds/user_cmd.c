@@ -166,11 +166,11 @@ int cmd_whoami(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, si
     appdata = dth->ext;
     
     if (*inbytes != 0) {
-        dterm_send_error(dth, "whoami", -1, 0, "Usage: whoami [no parameters], Indicates the current user and address");
+        strcpy((char*)dst, "Usage: whoami [no parameters], Indicates the current user and address");
+        rc = -1;
     }
     else if (appdata->endpoint.node == NULL) {
-        rc = -1;
-        goto cmd_whoami_END;
+        rc = -2;
     }
     else {
         char output[80];

@@ -67,19 +67,18 @@ int cmd_sethome(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, s
     INPUT_SANITIZE();
     
     if (*inbytes >= 1023) {
-        dterm_send_error(dth, "sethome", -1, 0, "supplied home-path is too long, must be < 1023 chars.");
+        strcpy((char*)dst, "supplied home-path is too long, must be < 1023 chars.");
+        return -1;
     }
-    else {
-        ///@todo just make this call "set HOME"
     
+    ///@todo just make this call "set HOME"
 //        strcpy(home_path, (char*)src);
 //        if (home_path[*inbytes]  != '/') {
 //            home_path[*inbytes]   = '/';
 //            home_path[*inbytes+1] = 0;
 //        }
 //        home_path_len = *inbytes+1;
-    }
-    
+
     return 0;
 }
 

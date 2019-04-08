@@ -460,7 +460,8 @@ int cmd_xloop(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, siz
             rc = sub_cmdrun(dth, cmdptr, xloop_cmd, dst, dstmax);
             if (rc < 0) {
                 rc += -256;
-                dterm_force_error(fd_out, "xloop", rc, 0, "Runtime Error");
+                strcpy((char*)dst, "Runtime Error");
+                //dterm_force_error(fd_out, "xloop", rc, 0, "Runtime Error");
                 break;
             }
 
@@ -475,7 +476,7 @@ int cmd_xloop(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, siz
                 
                 printsz = sprintf(printbuf, "Status %i/%i (%i%%)", dat_i, loop.data_size, (int)((100*dat_i)/loop.data_size));
                 
-                if (cliopt_getintf() == INTF_interactive) {
+                if (dth->intf->type == INTF_interactive) {
                     write(fd_out, VT100_CLEAR_LN, sizeof(VT100_CLEAR_LN));
                     write(fd_out, printbuf, printsz);
                 }
@@ -487,17 +488,20 @@ int cmd_xloop(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, siz
             }
             else if (rc == ETIMEDOUT) {
                 if (--loop.retries_cnt <= 0) {
-                    dterm_force_error(fd_out, "xloop", -13, 0, "Command Timeout Error");
+                    strcpy((char*)dst, "Command Timeout Error");
+                    //dterm_force_error(fd_out, "xloop", -13, 0, "Command Timeout Error");
                     rc = -13;
                     break;
                 }
             }
             else {
-                dterm_force_error(fd_out, "xloop", rc, 0, "Internal Error");
+                strcpy((char*)dst, "Subscriber Error");
+                //dterm_force_error(fd_out, "xloop", rc, 0, "Internal Error");
+                rc = -14;
                 break;
             }
         }
-        if (cliopt_getintf() == INTF_interactive) {
+        if (dth->intf->type == INTF_interactive) {
             write(fd_out, "\n", 1);
         }
 
@@ -555,7 +559,7 @@ int cmd_sendhex(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, s
         }
         
         if (strcmp(hexfile->extension[0], ".hex") != 0) {
-            dterm_send_error(dth, "sendhex", -2, 0, "Input Error, file not with .hex");
+            strcpy((char*)dst, "Input Error, file not with .hex");
             rc = -2;
             goto cmd_sendhex_EXEC;
         }

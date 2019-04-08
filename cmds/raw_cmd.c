@@ -87,7 +87,7 @@ int cmd_raw(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, size_
     if (bytesout < 0) {
         dprintf(dth->fd.out, "Bintex error on character %d.\n", -bytesout);
     }
-    else if ((bytesout > 0) && cliopt_isverbose() && (cliopt_getintf() == INTF_interactive)) {
+    else if ((bytesout > 0) && cliopt_isverbose() && (dth->intf->type == INTF_interactive)) {
         char printbuf[80];
         snprintf(printbuf, 80, "packetizing %d bytes (max=%zu)", bytesout, dstmax);
         dterm_send_cmdmsg(dth, "raw", printbuf);

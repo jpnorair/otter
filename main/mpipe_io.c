@@ -499,7 +499,7 @@ void* mpipe_parser(void* args) {
                 /// 3. If packet is not valid, dump its hex
                 ///@note: ALP formatters should deal internally with protocol variations
                 if (payload_bytes > rpkt->size) {
-                    dterm_send_error(dth, "rxstat", -1, 0, "Reported Payload Length is larger than buffer");
+                    //dterm_send_error(dth, "rxstat", -1, 0, "Reported Payload Length is larger than buffer");
                 }
                 else if (rpkt_is_valid) {
                     while (payload_bytes > 0) {

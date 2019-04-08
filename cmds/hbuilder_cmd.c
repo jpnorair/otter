@@ -40,7 +40,6 @@ int cmdext_hbuilder(void* hb_handle, void* cmd_handle, dterm_handle_t* dth, uint
     bool is_eos     = false;
     size_t bytesout = 0;
     char printbuf[80];
-    char* errdesc;
     int rc;
     
     INPUT_SANITIZE_FLAG_EOS(is_eos);
@@ -51,16 +50,13 @@ int cmdext_hbuilder(void* hb_handle, void* cmd_handle, dterm_handle_t* dth, uint
     
     if (rc <= 0) {
         if (rc == -2) {
-            sprintf(printbuf, "input error on character %zu\n", bytesout);
-            errdesc = printbuf;
+            sprintf((char*)dst, "input error on character %zu", bytesout);
         }
-        else {
-            errdesc = NULL;
-        }
-        dterm_send_error(dth, "hbuilder", rc, 0, errdesc);
+        return rc;
     }
-    else if (cliopt_isverbose()){
-        sprintf(printbuf, "packetized %zu bytes\n", bytesout);
+    
+    if (cliopt_isverbose()) {
+        sprintf(printbuf, "packetized %zu bytes", bytesout);
         dterm_send_cmdmsg(dth, "hbuilder", printbuf);
     }
 
