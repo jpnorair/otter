@@ -26,6 +26,7 @@
 
 
 /// Color codes for terminal output coloring
+///@todo move this and printer macros to a debug.h
 #define _E_NRM  "\033[0m"
 #define _E_BLK  "\033[30;40m"
 #define _E_RED  "\033[31;40m"
@@ -44,6 +45,14 @@
 #define _E_BMAG "\033[1;35;40m"
 #define _E_BCYN "\033[1;36;40m"
 #define _E_BWHT "\033[1;37;40m"
+
+#define ERRMARK                 _E_RED"ERR: "_E_NRM
+#define VERBOSE_PRINTF(...)     do { if (cliopt_isverbose()) { fprintf(stdout, _E_CYN "MSG: " _E_NRM __VA_ARGS__); fflush(stdout); }} while(0)
+#define VDSRC_PRINTF(...)       do { if (cliopt_isverbose()) { fprintf(stdout, _E_GRN "DSRC: " _E_NRM __VA_ARGS__); fflush(stdout); }} while(0)
+#define VCLIENT_PRINTF(...)     do { if (cliopt_isverbose()) { fprintf(stdout, _E_MAG "CLIENT: " _E_NRM __VA_ARGS__); fflush(stdout); }} while(0)
+
+
+
 
 
 /// Default feature configurations
@@ -116,5 +125,10 @@
 #if !((OTTER_PARAM_ENCALIGN == 1) || (OTTER_PARAM_ENCALIGN == 2) || (OTTER_PARAM_ENCALIGN == 4))
 #   error "OTTER_PARAM_ENCALIGN must be 1, 2, or 4.  Default=1"
 #endif
+
+
+
+
+
 
 #endif
