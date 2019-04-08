@@ -29,8 +29,8 @@ int fmt_fprintalp(uint8_t* dst, size_t* dst_accum, uint8_t** src, size_t src_byt
 int fmt_hexdump_raw(uint8_t* dst, size_t* dst_accum, uint8_t** src, size_t src_bytes);
 
 const char* fmt_hexdump_header(uint8_t* data);
-const char* fmt_crc(int crcqual);
-const char* fmt_time(time_t* tstamp);
+const char* fmt_crc(int crcqual, char* buf);
+const char* fmt_time(time_t* tstamp, char* buf);
 
 void fmt_print_usage(const char* program_name);
 int fmt_fprint_external(mpipe_printer_t puts_fn, const char* msgname, cJSON* msgcall, uint8_t* src, size_t size);

@@ -244,13 +244,13 @@ static int sub_passhex(FORMAT_Type fmt, uint8_t* dst, size_t* dst_accum, uint8_t
     // The column printing feature is only available in Default (text) printing
     // to interactive console.
     switch (fmt) {
+        case FORMAT_JsonHex:
         case FORMAT_Hex:
             cols = 0;
             strterm = NULL;
             break;
             
         case FORMAT_Json:
-        case FORMAT_JsonHex:
             cols = 0;
             dcurs = stpcpy(dcurs, "\"");
             strterm = term_json;
@@ -304,13 +304,13 @@ static int sub_printhex(FORMAT_Type fmt, uint8_t* dst, size_t* dst_accum, uint8_
     // The column printing feature is only available in Default (text) printing
     // to interactive console.
     switch (fmt) {
+        case FORMAT_JsonHex:
         case FORMAT_Hex:
             cols = 0;
             strterm = NULL;
             break;
             
         case FORMAT_Json:
-        case FORMAT_JsonHex:
             cols = 0;
             dcurs = stpcpy(dcurs, "\"");
             strterm = term_json;
@@ -376,11 +376,11 @@ static int sub_printtext(FORMAT_Type fmt, uint8_t* dst, size_t* dst_accum, uint8
     // The column printing feature is only available in Default (text) printing
     // to interactive console.
     switch (fmt) {
+        case FORMAT_JsonHex:
         case FORMAT_Hex:
             return sub_printhex(fmt, dst, dst_accum, src, srcsz, cols/3);
             
         case FORMAT_Json:
-        case FORMAT_JsonHex:
         case FORMAT_Bintex:
             cols = 0;
             dcurs = stpcpy(dcurs, "\"");
@@ -403,7 +403,6 @@ static int sub_printtext(FORMAT_Type fmt, uint8_t* dst, size_t* dst_accum, uint8
     // Terminator
     switch (fmt) {
         case FORMAT_Json:
-        case FORMAT_JsonHex:
         case FORMAT_Bintex:
             dcurs = stpcpy(dcurs, "\"");
             break;
@@ -451,9 +450,11 @@ static int sub_log_binmsg(FORMAT_Type fmt, uint8_t* dst, size_t* dst_accum, uint
         use_delim = false;
         use_newline = (cliopt_getintf() == INTF_interactive);
         switch (fmt) {
-            //case FORMAT_Hex:  // Hex format handled in top-level formatter func
+            // Hex & JsonHex format handled in top-level formatter func
+            //case FORMAT_Hex:
+            //case FORMAT_JsonHex:
+            
             case FORMAT_Json:
-            case FORMAT_JsonHex:
                 use_delim = true;
                 use_newline = false;
                 
@@ -520,9 +521,11 @@ static int sub_log_hexmsg(FORMAT_Type fmt, uint8_t* dst, size_t* dst_accum, uint
         use_delim = false;
         use_newline = (cliopt_getintf() == INTF_interactive);
         switch (fmt) {
-            //case FORMAT_Hex:  // Hex format handled in top-level formatter func
+            // Hex & JsonHex format handled in top-level formatter func
+            //case FORMAT_Hex:
+            //case FORMAT_JsonHex:
+            
             case FORMAT_Json:
-            case FORMAT_JsonHex:
                 use_delim = true;
                 use_newline = false;
                 
@@ -586,9 +589,11 @@ static int sub_log_textmsg(FORMAT_Type fmt, uint8_t* dst, size_t* dst_accum, uin
         use_delim = false;
         use_newline = (cliopt_getintf() == INTF_interactive);
         switch (fmt) {
-            //case FORMAT_Hex:  // Hex format handled in top-level formatter func
+            // Hex & JsonHex format handled in top-level formatter func
+            //case FORMAT_Hex:
+            //case FORMAT_JsonHex:
+            
             case FORMAT_Json:
-            case FORMAT_JsonHex:        ///@todo convert text to Hex
                 use_delim = true;
                 use_newline = false;
                 
@@ -629,7 +634,7 @@ static int sub_log_textmsg(FORMAT_Type fmt, uint8_t* dst, size_t* dst_accum, uin
 static int sub_printlog(FORMAT_Type fmt, uint8_t* dst, size_t* dst_accum, uint8_t** src, size_t length, uint8_t cmd) {
     char* dcurs = (char*)dst;
     
-    if ((fmt == FORMAT_Json) || (fmt == FORMAT_JsonHex)) {
+    if (fmt == FORMAT_Json) {
         if ((cmd == 1) || (cmd == 4) || (cmd == 5) || (cmd == 7)) {
             dcurs = stpcpy(dcurs, "\"fmt\":\"text\", \"dat\":");
         }
@@ -753,7 +758,6 @@ int fmt_fprintalp(uint8_t* dst, size_t* dst_accum, uint8_t** src, size_t srcsz) 
             break;
             
         case FORMAT_Json:
-        case FORMAT_JsonHex:
             (*src) += 4;
             dcurs += sprintf(dcurs, "\"alp\":{\"id\":%u, \"cmd\":%u, \"len\":%u, ", id, cmd, length);
             break;
@@ -762,7 +766,8 @@ int fmt_fprintalp(uint8_t* dst, size_t* dst_accum, uint8_t** src, size_t srcsz) 
             ///@note No checks return code, because all error cases are already checked
             dcurs += sub_printhex(fmt, (uint8_t*)dcurs, dst_accum, src, 4, 0);
             break;
-        
+            
+        case FORMAT_JsonHex:
         case FORMAT_Hex:
             rc = sub_hexdump_raw(dst, dst_accum, src, srcsz);
             goto fmt_fprintalp_END;
@@ -778,7 +783,6 @@ int fmt_fprintalp(uint8_t* dst, size_t* dst_accum, uint8_t** src, size_t srcsz) 
     if ((length == 0) || (id == 0)) {
         switch (fmt) {
             case FORMAT_Json:
-            case FORMAT_JsonHex:
                 // -2 is to eat the trailing ", " delimeter
                 dcurs = stpcpy(dcurs-2, "}");
                 break;
@@ -817,8 +821,9 @@ int fmt_fprintalp(uint8_t* dst, size_t* dst_accum, uint8_t** src, size_t srcsz) 
                     HBFMT_Hex,      //FORMAT_Hex
                 };
                 //rc = hbuilder_fmtalp(puts_fn, (HBFMT_Type)cliopt_getformat(), id, cmd, scurs, length);
-                rc = hbuilder_snfmtalp(dst, dst_accum, 2048, hbfmt_convert[fmt], id, cmd, *src, length);
+                rc = hbuilder_snfmtalp((uint8_t*)dcurs, dst_accum, 2048, hbfmt_convert[fmt], id, cmd, scurs, length);
                 if (rc >= 0) {
+                    dcurs += rc;
                     *src += length;
                 }
 #           else
@@ -829,7 +834,6 @@ int fmt_fprintalp(uint8_t* dst, size_t* dst_accum, uint8_t** src, size_t srcsz) 
                     size_t output_bytes = (size_t)length;
                     switch (fmt) {
                         case FORMAT_Json:   ///@todo JSON output method
-                        case FORMAT_JsonHex:
                             dcurs = stpcpy(dcurs, "\"fmt\":\"hex\", \"dat\":");
                             break;
                         case FORMAT_Bintex:
@@ -846,13 +850,17 @@ int fmt_fprintalp(uint8_t* dst, size_t* dst_accum, uint8_t** src, size_t srcsz) 
         /// End Framing
         switch (fmt) {
             case FORMAT_Json:
-            case FORMAT_JsonHex:
                 dcurs = stpcpy(dcurs, "}");
                 break;
             
             default:
                 break;
         }
+    }
+    
+    ///@todo probably can take dst_accum out of most internal args.
+    if (dst_accum != NULL) {
+        *dst_accum = (size_t)((uint8_t*)dcurs - dst);
     }
     
     fmt_fprintalp_END:
@@ -931,32 +939,34 @@ const char* fmt_hexdump_header(uint8_t* data) {
 }
 
 
-const char* fmt_crc(int crcqual) {
+const char* fmt_crc(int crcqual, char* buf) {
     static const char invalid_CRC[] = "invalid CRC";
     static const char valid_CRC[] = "valid CRC";
     static const char decrypt_err[] = "Decryption Err";
-    const char* retval;
+    const char* buf_select;
     
-    if (crcqual < 0) {
-        retval = decrypt_err;
+    if (crcqual < 0)        buf_select = decrypt_err;
+    else if (crcqual != 0)  buf_select = invalid_CRC;
+    else                    buf_select = valid_CRC;
+    
+    if (buf != NULL) {
+        buf_select = strcpy(buf, buf_select);
     }
-    else if (crcqual != 0) {
-        retval = invalid_CRC;
-    }
-    else {
-        retval = valid_CRC;
-    }
-    return retval;
+
+    return buf_select;
 }
 
 
-const char* fmt_time(time_t* tstamp) {
-    static char time_buf[24];
+const char* fmt_time(time_t* tstamp, char* buf) {
+    static char time_buf[28];
+    char* buf_select;
+    
+    buf_select = (buf == NULL) ? time_buf : buf;
     
     // convert to time using time.h library functions
-    strftime(time_buf, 24, "%T", localtime(tstamp) );
+    strftime(buf_select, 28, "%T", localtime(tstamp) );
     
-    return time_buf;
+    return buf_select;
 }
 
 
