@@ -418,12 +418,14 @@ void* modbus_parser(void* args) {
             int         msgbytes;
             bool        rpkt_is_resp;
             pkt_t*      rpkt;
-
+            uint64_t    rxaddr;
+            
             /// For a Modbus master (like this), all received packets are 
             /// responses.  In some type of peer-peer modbus system, this would
             /// need to be intelligently managed.
             rpkt_is_resp    = true;
             rpkt            = appdata->rlist->cursor;
+            rxaddr          = devtab_lookup_uid(appdata->endpoint.devtab, rpkt->buffer[2]);
 
             /// If CRC is bad, discard packet now, and rxstat an error
             /// CRC is good, so send packet to Modbus processor.
@@ -443,6 +445,7 @@ void* modbus_parser(void* args) {
                     int subsig;
                     size_t putsbytes = 0;
                     uint8_t* lastmsg = msg;
+                    
                 
                     if ((proc_result == 0) && (msgtype == 0)) {
                         /// ALP message:
@@ -463,8 +466,7 @@ void* modbus_parser(void* args) {
                         rxstat_fmt  = DFMT_Text;
                     }
 
-                    ///@todo add rx address of input packet (set to 0)
-                    dterm_send_rxstat(dth, rxstat_fmt, putsbuf, putsbytes, 0, rpkt->sequence, rpkt->tstamp, rpkt->crcqual);
+                    dterm_publish_rxstat(dth, rxstat_fmt, putsbuf, putsbytes, rxaddr, rpkt->sequence, rpkt->tstamp, rpkt->crcqual);
                     
                     // Recalculate message size following the treatment of the last segment
                     msgbytes -= (msg - lastmsg);
