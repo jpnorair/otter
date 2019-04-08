@@ -219,9 +219,8 @@ static void sub_writeframe_mpipe(user_endpoint_t* endpoint, pkt_t* newpkt, uint8
     newpkt->buffer[3] = 0;
     newpkt->buffer[4] = (datalen >> 8) & 0xff;
     newpkt->buffer[5] = datalen & 0xff;
-    newpkt->buffer[6] = 0;
+    newpkt->buffer[6] = 255 & newpkt->sequence;
     newpkt->buffer[7] = 0;      ///@todo Set Control Field here based on Cli
-    
     newpkt->size     += 8;      // Header is 8 bytes, need to add this to size value.
     
     memcpy(&newpkt->buffer[8], data, datalen);
@@ -235,7 +234,7 @@ static void sub_footer_null(pkt_t* newpkt) {
 static void sub_writefooter_mpipe(pkt_t* newpkt) {
 /// Adds no bytes to packet
     uint16_t crcval;
-    newpkt->buffer[6]   = 255 & newpkt->sequence;
+    //newpkt->buffer[6]   = 255 & newpkt->sequence;
     crcval              = crc_calc_block(&newpkt->buffer[4], newpkt->size - 4);
     newpkt->buffer[2]   = (crcval >> 8) & 0xff;
     newpkt->buffer[3]   = crcval & 0xff;
@@ -266,6 +265,10 @@ static int sub_pktlist_add(user_endpoint_t* endpoint, void* intf, pktlist_t* pli
     if (newpkt == NULL) {
         return -2;
     }
+    
+    // Sequence is written first, using the incrementer.  Protocol functions
+    // may or may overwrite sequence with their own values.
+    newpkt->sequence = plist->txnonce++;
     
     // Offset is dependent if we are writing a header (8 bytes) or not.
     ///@todo this code can be optimized quite a lot
@@ -307,10 +310,6 @@ static int sub_pktlist_add(user_endpoint_t* endpoint, void* intf, pktlist_t* pli
         put_footer  = &sub_footer_null;
         max_overhead= 0;
     }
-    
-    // Sequence is written first, because it may be overwritten if there's
-    // frame encryption
-    newpkt->sequence    = plist->txnonce++;
     
     // Setup list connections for the new packet
     // Also allocate the buffer of the new packet
@@ -354,7 +353,7 @@ static int sub_pktlist_add(user_endpoint_t* endpoint, void* intf, pktlist_t* pli
     
     // List is empty, so start the list
     if (plist->last == NULL) {
-        newpkt->sequence    = 0;
+        //newpkt->sequence    = 0;
         plist->size         = 0;
         plist->front        = newpkt;
         plist->last         = newpkt;
@@ -364,8 +363,7 @@ static int sub_pktlist_add(user_endpoint_t* endpoint, void* intf, pktlist_t* pli
     // List is not empty, so simply extend the list.
     // set the cursor to the new packet if it points to NULL (end)
     else {
-        //fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
-        newpkt->sequence    = plist->last->sequence + 1;
+        //newpkt->sequence    = plist->last->sequence + 1;
         newpkt->prev->next  = newpkt;
         plist->last         = newpkt;
         
