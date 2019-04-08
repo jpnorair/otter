@@ -190,13 +190,22 @@ void dterm_unsquelch(dterm_handle_t* dt);
 
 
 int dterm_send_error(dterm_handle_t* dth, const char* cmdname, int errcode, uint32_t sid, const char* desc);
+
 int dterm_send_cmdmsg(dterm_handle_t* dth, const char* cmdname, const char* msg);
-int dterm_send_rxstat(dterm_handle_t* dth, DFMT_Type dfmt, void* rxdata, size_t rxsize, uint64_t rxaddr, uint32_t sid, time_t tstamp, int crcqual);
+
+int dterm_send_rxstat(  dterm_handle_t* dth, DFMT_Type dfmt,
+                        void* rxdata, size_t rxsize,
+                        uint64_t rxaddr, uint32_t sid, time_t tstamp, int crcqual);
 
 int dterm_force_error(int fd_out, const char* cmdname, int errcode, uint32_t sid, const char* desc);
-int dterm_force_cmdmsg(int fd_out, const char* cmdname, const char* msg);
-int dterm_force_rxstat(int fd_out, DFMT_Type dfmt, void* rxdata, size_t rxsize, uint64_t rxaddr, uint32_t sid, time_t tstamp, int crcqual);
 
+int dterm_force_cmdmsg(int fd_out, const char* cmdname, const char* msg);
+
+//int dterm_force_rxstat(int fd_out, DFMT_Type dfmt, void* rxdata, size_t rxsize, uint64_t rxaddr, uint32_t sid, time_t tstamp, int crcqual);
+
+int dterm_publish_rxstat(   dterm_handle_t* dth, DFMT_Type dfmt,
+                            void* rxdata, size_t rxsize, uint64_t rxaddr,
+                            uint32_t sid, time_t tstamp, int crcqual);
 
 /** @note All of these dterm output functions are deprecated and in danger of
   * being removed from the code base in favor of direct utilization of dterm

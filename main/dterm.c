@@ -105,6 +105,12 @@ void* dterm_prompter(void* args);
 void* dterm_socketer(void* args);
 
 
+
+static int sub_rxstat(  char* dst, int dstlimit, DFMT_Type dfmt,
+                        void* rxdata, size_t rxsize,
+                        uint64_t rxaddr, uint32_t sid, time_t tstamp, int crcqual   );
+
+
 static void sub_str_sanitize(char* str, size_t max) {
     while ((*str != 0) && (max != 0)) {
         if (*str == '\r') {
@@ -126,13 +132,19 @@ static size_t sub_str_mark(char* str, size_t max) {
     return (str - s1);
 }
 
-
 static int sub_hexwrite(int fd, const uint8_t byte) {
     static const char convert[] = "0123456789ABCDEF";
     char dst[2];
     dst[0]  = convert[byte >> 4];
     dst[1]  = convert[byte & 0x0f];
     write(fd, dst, 2);
+    return 2;
+}
+
+static int sub_hexswrite(char* dst, const uint8_t byte) {
+    static const char convert[] = "0123456789ABCDEF";
+    *dst++ = convert[byte >> 4];
+    *dst++ = convert[byte & 0x0f];
     return 2;
 }
 
@@ -147,22 +159,14 @@ static int sub_hexstream(int fd, const uint8_t* src, size_t src_bytes) {
     return bytesout;
 }
 
-static const char* sub_crcfmt(int crcqual) {
-    static const char invalid_CRC[] = "invalid CRC";
-    static const char valid_CRC[] = "valid CRC";
-    static const char decrypt_err[] = "Decryption Err";
-    const char* retval;
+static int sub_hexsnstream(char* dst, size_t lim, uint8_t* src, size_t srcsz) {
+    char* start = dst;
+    lim >>= 1;
     
-    if (crcqual < 0) {
-        retval = decrypt_err;
+    while ((srcsz--) && (lim--)) {
+        dst += sub_hexswrite(dst, *src++);
     }
-    else if (crcqual != 0) {
-        retval = invalid_CRC;
-    }
-    else {
-        retval = valid_CRC;
-    }
-    return retval;
+    return (int)(dst - start);
 }
 
 
@@ -255,12 +259,8 @@ int dterm_init(dterm_handle_t* dth, void* ext_data, INTF_Type intf) {
     dterm_init_TERM:
     clithread_deinit(dth->clithread);
     
-    //if (dth->intf != NULL) {
-        free(dth->intf);
-    //}
-    //if (dth->ch != NULL) {
-        free(dth->ch);
-    //}
+    free(dth->intf);
+    free(dth->ch);
     
     return rc;
 }
@@ -444,34 +444,111 @@ int dterm_send_error(dterm_handle_t* dth, const char* cmdname, int errcode, uint
 }
 
 int dterm_send_rxstat(dterm_handle_t* dth, DFMT_Type dfmt, void* rxdata, size_t rxsize, uint64_t rxaddr, uint32_t sid, time_t tstamp, int crcqual) {
+    char output[1024];
+    int datasize = 0;
+    
     if (dth != NULL) {
         if (dth->fd.out >= 0) {
-            return dterm_force_rxstat(dth->fd.out, dfmt, rxdata, rxsize, rxaddr, sid, tstamp, crcqual);
+            datasize = sub_rxstat(output, 1024, dfmt, rxdata, rxsize, rxaddr, sid, tstamp, crcqual);
+            if (datasize > 0) {
+                write(dth->fd.out, output, datasize);
+            }
         }
     }
-    return -1;
+    return datasize;
+}
+
+int dterm_publish_rxstat(dterm_handle_t* dth, DFMT_Type dfmt, void* rxdata, size_t rxsize, uint64_t rxaddr, uint32_t sid, time_t tstamp, int crcqual) {
+    char output[1024];
+    int datasize = 0;
+
+    if (dth != NULL) {
+        datasize = sub_rxstat(output, 1024, dfmt, rxdata, rxsize, rxaddr, sid, tstamp, crcqual);
+        if (datasize > 0) {
+            if (dth->intf->type == INTF_socket) {
+                clithread_publish(dth->clithread, sid, (uint8_t*)output, datasize);
+            }
+            else if (dth->fd.out >= 0) {
+                write(dth->fd.out, output, datasize);
+            }
+        }
+    }
+    return datasize;
 }
 
 
 
-
-///@todo finish this, and add dfmt selective output
-int dterm_force_rxstat(int fd_out, DFMT_Type dfmt, void* rxdata, size_t rxsize, uint64_t rxaddr, uint32_t sid, time_t tstamp, int crcqual) {
+///@todo Add dfmt selective output
+///@todo broadcast this message to all active clithreads
+static int sub_rxstat(  char* dst, int dstlimit, DFMT_Type dfmt,
+                        void* rxdata, size_t rxsize,
+                        uint64_t rxaddr, uint32_t sid, time_t tstamp, int crcqual) {
     int bytesout;
+    
+    // exit if parameters are incorrect
+    if (dstlimit <= 0) {
+        return 0;
+    }
+    
+    // Save one char for \n
+    dstlimit--;
 
     ///@todo getformat and isverbose calls should reference dterm data
     switch (cliopt_getformat()) {
         case FORMAT_Hex: {
-            bytesout = sub_hexwrite(fd_out, (crcqual != 0));
+            bytesout = sub_hexswrite(dst, (crcqual != 0));
+            dst += 2;
         } break;
         
-        case FORMAT_Json: ///@todo FORMAT_Json will use a slightly different handling of interface data (not rxbytes)
+        case FORMAT_Json: {
+            bytesout = snprintf(dst, dstlimit,
+                                "{\"type\":\"rxstat\", "\
+                                "\"data\":{\"sid\":%u, \"addr\":\"%llx\", \"qual\":%i, \"time\":%li, ",
+                                sid, rxaddr, crcqual, tstamp);
+            dstlimit -= bytesout;
+            dst      += bytesout;
+            if (dstlimit <= 0) break;
+
+            dstlimit -= rxsize;
+            if (dstlimit <= 0) break;
+            memcpy(dst, rxdata, rxsize);
+            dst      += rxsize;
+            bytesout += rxsize;
+            
+            dstlimit -= 2;
+            if (dstlimit <= 0) break;
+            dst       = stpcpy(dst, "}}");
+            bytesout += 2;
+        } break;
+        
         case FORMAT_JsonHex: {
-            bytesout = dprintf(fd_out, "{\"type\":\"rxstat\", "\
-                                "\"data\":{\"sid\":%u, \"addr\":\"%llx\", \"qual\":%i, \"time\":%li, \"rxbytes\":%zu, \"\":\"",
-                                sid, rxaddr, crcqual, tstamp, rxsize);
-            bytesout += sub_hexstream(fd_out, rxdata, rxsize);
-            bytesout += dprintf(fd_out, "\"}}");
+            bytesout = snprintf(dst, dstlimit,
+                                "{\"type\":\"rxstat\", "\
+                                "\"data\":{\"sid\":%u, \"addr\":\"%llx\", \"qual\":%i, \"time\":%li, \"frame\":\"",
+                                sid, rxaddr, crcqual, tstamp);
+            dstlimit -= bytesout;
+            dst      += bytesout;
+            if (dstlimit <= 0) break;
+            
+            if (dfmt == DFMT_Binary) {
+                int a = sub_hexsnstream(dst, dstlimit, rxdata, rxsize);
+                bytesout += a;
+                dstlimit -= a;
+                dst      += a;
+                if (dstlimit <= 0) break;
+            }
+            else {
+                dstlimit -= rxsize;
+                if (dstlimit <= 0) break;
+                memcpy(dst, rxdata, rxsize);
+                dst      += rxsize;
+                bytesout += rxsize;
+            }
+            
+            dstlimit -= 3;
+            if (dstlimit <= 0) break;
+            dst       = stpcpy(dst, "\"}}");
+            bytesout += 3;
         } break;
         
         case FORMAT_Bintex: {
@@ -481,28 +558,93 @@ int dterm_force_rxstat(int fd_out, DFMT_Type dfmt, void* rxdata, size_t rxsize, 
         
         default: {
             if (cliopt_isverbose()) {
-                static char time_buf[26];
-                //strftime(time_buf, 26, "%T", localtime(tstamp) );
-                bytesout = dprintf(fd_out, _E_BBLK"RX.%u: %zu bytes at %s, %s"_E_NRM" ",
-                                    sid, rxsize, ctime_r(&tstamp, time_buf), sub_crcfmt(crcqual));
+                bytesout = snprintf(dst, dstlimit,
+                                    _E_YEL"RX.%u: from %llx at %s, %s"_E_NRM"\n",
+                                    sid, rxaddr, fmt_time(&tstamp, NULL), fmt_crc(crcqual, NULL));
+            }
+            else {
+                const char* valid_sym = _E_GRN"v";
+                const char* error_sym = _E_RED"x";
+                const char* crc_sym   = (crcqual==0) ? valid_sym : error_sym;
+                bytesout = snprintf(dst, dstlimit,
+                                    _E_WHT"[%u][%llx][%s"_E_WHT"]"_E_NRM" ",
+                                    sid, rxaddr, crc_sym);
+            }
+            dstlimit -= bytesout;
+            dst      += bytesout;
+            if (dstlimit <= 0) break;
+        } break;
+    }
+    
+    *dst++ = '\n';
+    bytesout++;
+    
+    return bytesout;
+}
+
+
+/*
+int dterm_force_rxstat(int fd_out, DFMT_Type dfmt, void* rxdata, size_t rxsize, uint64_t rxaddr, uint32_t sid, time_t tstamp, int crcqual) {
+    int bytesout;
+
+fprintf(stderr, "rxstat %zu bytes onto fd=%i\n", rxsize, fd_out);
+
+    ///@todo getformat and isverbose calls should reference dterm data
+    switch (cliopt_getformat()) {
+        case FORMAT_Hex: {
+            bytesout = sub_hexwrite(fd_out, (crcqual != 0));
+        } break;
+        
+        case FORMAT_Json: {
+            bytesout = dprintf(fd_out, "{\"type\":\"rxstat\", "\
+                                "\"data\":{\"sid\":%u, \"addr\":\"%llx\", \"qual\":%i, \"time\":%li, ",
+                                sid, rxaddr, crcqual, tstamp);
+            bytesout += write(fd_out, rxdata, rxsize);
+            bytesout += write(fd_out, "}}", 2);
+        } break;
+        
+        case FORMAT_JsonHex: {
+            bytesout = dprintf(fd_out, "{\"type\":\"rxstat\", "\
+                                "\"data\":{\"sid\":%u, \"addr\":\"%llx\", \"qual\":%i, \"time\":%li, \"frame\":\"",
+                                sid, rxaddr, crcqual, tstamp);
+            if (dfmt == DFMT_Binary) {
                 bytesout += sub_hexstream(fd_out, rxdata, rxsize);
+            }
+            else {
+                bytesout += write(fd_out, rxdata, rxsize);
+            }
+            bytesout += write(fd_out, "\"}}", 3);
+        } break;
+        
+        case FORMAT_Bintex: {
+            ///@todo this
+            bytesout = 0;
+        } break;
+        
+        default: {
+            if (cliopt_isverbose()) {
+                //static char pbuf[26];
+                bytesout = dprintf(fd_out, _E_YEL"RX.%u: from %llx at %s, %s"_E_NRM"\n",
+                                    sid, rxaddr, fmt_time(&tstamp, NULL), fmt_crc(crcqual, NULL));
             }
             else {
                 const char* valid_sym = _E_GRN"v";
                 const char* error_sym = _E_RED"x";
                 const char* crc_sym   = (crcqual==0) ? valid_sym : error_sym;
                 bytesout = dprintf(fd_out, _E_WHT"[%u][%llx][%s"_E_WHT"]"_E_NRM" ", sid, rxaddr, crc_sym);
-                bytesout += sub_hexstream(fd_out, rxdata, 6);
             }
             
+            bytesout += write(fd_out, rxdata, rxsize);
         } break;
     }
     
+    bytesout += write(fd_out, "\n", 1);
+    
     return bytesout;
 }
+*/
 
-
-
+///@todo integrate this implementation using fmt_printtext, if possible.
 int dterm_force_cmdmsg(int fd_out, const char* cmdname, const char* msg) {
     int bytesout = 0;
 
@@ -544,6 +686,9 @@ int dterm_force_cmdmsg(int fd_out, const char* cmdname, const char* msg) {
                     
                     // Deal with quote marks and non-printable characters
                     if (linesize > 0) {
+                        write(fd_out, "\"", 1);
+                        bytesout += 1;
+                        
                         while (linefront < lineback) {
                             if ((linefront[0] == '\"') && (linefront[-1] != '\\')) {
                                 write(fd_out, "\\\"", 2);
@@ -557,7 +702,12 @@ int dterm_force_cmdmsg(int fd_out, const char* cmdname, const char* msg) {
                         }
                     
                         if (lineend[0] != 0) {
-                            write(fd_out, ", ", 2);
+                            write(fd_out, "\", ", 3);
+                            bytesout += 3;
+                        }
+                        else {
+                            write(fd_out, "\"", 1);
+                            bytesout += 1;
                         }
                     }
 
@@ -565,15 +715,14 @@ int dterm_force_cmdmsg(int fd_out, const char* cmdname, const char* msg) {
                 }
             }
             
-            bytesout += dprintf(fd_out, "]}}");
+            bytesout += dprintf(fd_out, "]}}\n");
         } break;
         
         case FORMAT_Bintex: ///@todo
             break;
         
         default: {
-            bytesout = (int)strlen(msg);
-            write(fd_out, msg, bytesout);
+            bytesout = dprintf(fd_out, _E_CYN"MSG: "_E_NRM"%s %s\n", cmdname, msg);
         } break;
     }
     
@@ -612,13 +761,13 @@ int dterm_force_error(int fd_out, const char* cmdname, int errcode, uint32_t sid
         
         default: {
             if (errcode == 0) {
-                bytesout += dprintf(fd_out, "ACK: %s", cmdname);
+                bytesout += dprintf(fd_out, _E_GRN"ACK: "_E_NRM"%s", cmdname);
                 if (sid != 0) {
                     bytesout += dprintf(fd_out, " [%u]", sid);
                 }
             }
             else {
-                bytesout += dprintf(fd_out, "ERR: %s (%i)", cmdname, errcode);
+                bytesout += dprintf(fd_out, _E_RED"ERR: "_E_NRM"%s (%i)", cmdname, errcode);
                 if (desc != NULL) {
                     bytesout += dprintf(fd_out, ": %s", desc);
                 }
@@ -630,19 +779,6 @@ int dterm_force_error(int fd_out, const char* cmdname, int errcode, uint32_t sid
 }
 
 
-
-static int sub_output_ack(dterm_handle_t* dth, const char* cmdname, int sid) {
-    int bytesout;
-    
-    if (dth->intf->type != INTF_interactive) {
-        bytesout = dterm_send_error(dth, cmdname, 0, sid, NULL);
-    }
-    else {
-        bytesout = 0;
-    }
-    
-    return bytesout;
-}
 
 
 
@@ -665,6 +801,8 @@ static int sub_proc_lineinput(dterm_handle_t* dth, int* cmdrc, char* loadbuf, in
     uint8_t*    cursor  = protocol_buf;
     int         bufmax  = sizeof(protocol_buf);
     int         bytesout = 0;
+    uint32_t    output_sid = 0;
+    int         output_err = 0;
     otter_app_t* appdata = dth->ext;
     const cmdtab_item_t* cmdptr;
     
@@ -716,59 +854,54 @@ static int sub_proc_lineinput(dterm_handle_t* dth, int* cmdrc, char* loadbuf, in
     }
     else {
         int bytesin = linelen;
-
+        
+        // Null terminate the cursor: errors may report a string.
+        *cursor = 0;
+        
         bytesout = cmd_run(cmdptr, dth, cursor, &bytesin, (uint8_t*)(loadbuf+cmdlen), bufmax);
         if (cmdrc != NULL) {
             *cmdrc = bytesout;
         }
         if (bytesout < 0) {
-            ///@todo better error reporting.  Have a callback provided by the
-            /// user of DTerm that looks-up error message strings.
-            bytesout = dterm_send_error(dth, cmdname, bytesout, 0, "command execution error");
-        }
-        else if (bytesout == 0) {
-            // do nothing here: command has written its own response
+            bytesout = dterm_send_error(dth, cmdname, bytesout, 0, (char*)cursor);
+            
         }
         else {
-            ///@todo what's between these lines should be a callback provided
-            /// by the user of DTerm into DTerm
-            // ---------------------------------------------------------------
-            uint32_t sid = 0;
-            int err = 0;
-            
-            // There are bytes to send out via MPipe IO
-            ///@todo This "cliopt_isdummy()" call must be changed to a dterm
-            ///      state/parameter check.
-            if (cliopt_isdummy()) {
-                test_dumpbytes(protocol_buf, bytesout, "TX Packet Add");
-            }
-            else {
-                int list_size;
-                pthread_mutex_lock(appdata->tlist_mutex);
-                list_size   = pktlist_add_tx(&appdata->endpoint, NULL, appdata->tlist, protocol_buf, bytesout);
-                sid         = appdata->tlist->cursor->sequence;
-                pthread_mutex_unlock(appdata->tlist_mutex);
-                if (list_size > 0) {
-                    pthread_cond_signal(appdata->tlist_cond);
+            if (bytesout > 0) {
+                ///@todo what's between these lines should be a callback provided
+                /// by the user of DTerm into DTerm
+                // ---------------------------------------------------------------
+                
+                // There are bytes to send out via MPipe IO
+                ///@todo This "cliopt_isdummy()" call must be changed to a dterm
+                ///      state/parameter check.
+                if (cliopt_isdummy()) {
+                    test_dumpbytes(protocol_buf, bytesout, "TX Packet Add");
                 }
                 else {
-                    err = -32;  ///@todo come up with a better error code
+                    int list_size;
+                    pthread_mutex_lock(appdata->tlist_mutex);
+                    list_size   = pktlist_add_tx(&appdata->endpoint, NULL, appdata->tlist, protocol_buf, bytesout);
+                    output_sid  = appdata->tlist->cursor->sequence;
+                    
+                    pthread_mutex_unlock(appdata->tlist_mutex);
+                    if (list_size > 0) {
+                        pthread_cond_signal(appdata->tlist_cond);
+                    }
+                    else {
+                        output_err = -32;  ///@todo come up with a better error code
+                    }
                 }
+                // ---------------------------------------------------------------
             }
-            
-            // ---------------------------------------------------------------
-            
-            ///@todo callback function from above should provide a return value
-            /// that gates the runtime of this section.  Granted, it only does
-            /// anything in pipe or socket mode.
+        
             if (dth->intf->type != INTF_interactive) {
-                bytesout = dterm_send_error(dth, cmdname, err, sid, NULL);
+                bytesout = dterm_send_error(dth, cmdname, output_err, output_sid, NULL);
             }
             else {
                 bytesout = 0;
             }
         }
-
     }
     
     sub_proc_lineinput_FREE:
@@ -783,11 +916,85 @@ static int sub_proc_lineinput(dterm_handle_t* dth, int* cmdrc, char* loadbuf, in
         write(dth->fd.out, "\n", 1);
     }
     
-    return bytesout;
+    return output_sid;
 }
 
 
 
+
+/*
+static int sub_readline(size_t* bytesread, int fd, uint8_t* buf_a, uint8_t* buf_b, int max) {
+    uint8_t* start = buf_a;
+    size_t readlen;
+    int newbytes;
+    
+    while (max > 0) {
+        char* marker;
+    
+        newbytes = (int)read(fd, buf_a, max);
+        if (newbytes < 0) {
+            return newbytes;
+        }
+        if (newbytes == 0) {
+            //
+            break;
+        }
+        
+        
+        
+        marker = strchr((const char*)buf_a, '\n');
+        if (marker != NULL) {
+            
+        
+            newbytes = (int)(marker - (char*)buf_a);
+        }
+        
+        
+        buf[newbytes] = 0;
+        
+        
+        
+        rc += newbytes;
+        buf += newbytes;
+        max -= newbytes;
+        
+        
+    }
+    
+    
+    
+    return (int)(buf-start);
+}*/
+
+
+static int sub_readline(size_t* bytesread, int fd, char* buf_a, char* buf_b, int max) {
+    size_t bytesin;
+    char* start = buf_a;
+    int rc = 0;
+    
+    while (max > 0) {
+        rc = (int)read(fd, buf_a, 1);
+        if (rc != 1) {
+            break;
+        }
+        max--;
+        if (*buf_a++ == '\n') {
+            break;
+        }
+    }
+    
+    bytesin = (buf_a - start);
+    
+    if (bytesread != NULL) {
+        *bytesread = bytesin;
+    }
+    
+    if (rc >= 0) {
+        rc = (int)bytesin;
+    }
+    
+    return rc;
+}
 
 
 void* dterm_socket_clithread(void* args) {
@@ -826,9 +1033,10 @@ void* dterm_socket_clithread(void* args) {
         char* loadbuf = databuf;
         
         bzero(databuf, sizeof(databuf));
-        
+
         VERBOSE_PRINTF("Waiting for read on socket:fd=%i\n", dts.fd.out);
-        loadlen = (int)read(dts.fd.out, loadbuf, LINESIZE);
+        //loadlen = (int)read(dts.fd.out, loadbuf, LINESIZE);
+        loadlen = sub_readline(NULL, dts.fd.out, loadbuf, NULL, LINESIZE);
         if (loadlen > 0) {
             sub_str_sanitize(loadbuf, (size_t)loadlen);
             
@@ -836,15 +1044,16 @@ void* dterm_socket_clithread(void* args) {
             dts.intf->state = prompt_off;
             
             do {
-                int response_bytes;
+                int output_sid;
 
                 // Burn whitespace ahead of command.
                 while (isspace(*loadbuf)) { loadbuf++; loadlen--; }
                 linelen = (int)sub_str_mark(loadbuf, (size_t)loadlen);
 
                 // Process the line-input command
-                response_bytes = sub_proc_lineinput(&dts, NULL, loadbuf, linelen);
-
+                output_sid = sub_proc_lineinput(&dts, NULL, loadbuf, linelen);
+                clithread_chxid(ct_args->clithread_self, output_sid);
+                
                 // +1 eats the terminator
                 loadlen -= (linelen + 1);
                 loadbuf += (linelen + 1);
@@ -1013,7 +1222,6 @@ void* dterm_piper(void* args) {
     /// Get each line from the pipe.
     while (dth->thread_active) {
         int linelen;
-        int response_bytes;
         
         if (loadlen <= 0) {
             dterm_reset(dth->intf);
@@ -1029,7 +1237,7 @@ void* dterm_piper(void* args) {
         dth->tctx = talloc_pool(NULL, cliopt_getpoolsize());
 
         // Process the line-input command
-        response_bytes = sub_proc_lineinput(dth, NULL, loadbuf, linelen);
+        sub_proc_lineinput(dth, NULL, loadbuf, linelen);
         
         // Free temporary memory pool context
         talloc_free(dth->tctx);
@@ -1063,14 +1271,14 @@ int dterm_cmdfile(dterm_handle_t* dth, const char* filename) {
     
     // Initial state = off
     dth->intf->state = prompt_off;
-    
+
     // Open the file, Load the contents into filebuf
     fp = fopen(filename, "r");
     if (fp == NULL) {
         //perror(ERRMARK"cmdfile couldn't be opened");
         return -1;
     }
-    
+
     fseek(fp, 0L, SEEK_END);
     filebuf_sz = (int)ftell(fp);
     rewind(fp);
@@ -1080,37 +1288,35 @@ int dterm_cmdfile(dterm_handle_t* dth, const char* filename) {
         rc = -2;
         goto dterm_cmdfile_END;
     }
-    
+
     rc = !(fread(filebuf, filebuf_sz, 1, fp) == 1);
     if (rc != 0) {
         //perror(ERRMARK"cmdfile couldn't be read");
         rc = -3;
         goto dterm_cmdfile_END;
     }
-    
+
     // File stream no longer required
     fclose(fp);
     fp = NULL;
-    
+
     // Preprocess the command inputs strings
     sub_str_sanitize(filebuf, (size_t)filebuf_sz);
-    
+
     // Reset the terminal to default state
     dterm_reset(dth->intf);
-    
+
     pthread_mutex_lock(dth->iso_mutex);
     local.in    = STDIN_FILENO;
     local.out   = STDOUT_FILENO;
     saved       = dth->fd;
     dth->fd     = local;
-    pthread_mutex_lock(dth->iso_mutex);
-    
+
     // Run the command on each line
     filecursor = filebuf;
     while (filebuf_sz > 0) {
         int linelen;
         int cmdrc;
-        int response_bytes;
         
         // Burn whitespace ahead of command.
         while (isspace(*filecursor)) { filecursor++; filebuf_sz--; }
@@ -1123,7 +1329,7 @@ int dterm_cmdfile(dterm_handle_t* dth, const char* filename) {
         dprintf(dth->fd.out, _E_MAG"%s"_E_NRM"%s\n", prompt_root, filecursor);
         
         // Process the line-input command
-        response_bytes = sub_proc_lineinput(dth, &cmdrc, filecursor, linelen);
+        sub_proc_lineinput(dth, &cmdrc, filecursor, linelen);
         
         // Free temporary memory pool context
         talloc_free(dth->tctx);
@@ -1327,7 +1533,7 @@ void* dterm_prompter(void* args) {
                         dth->intf->state = prompt_off;
                     }
                     else {
-                        dterm_puts(&dth->fd, (char*)prompt_str[appdata->endpoint.usertype]);
+                        dprintf(dth->fd.out, _E_MAG"%s"_E_NRM, (char*)prompt_str[appdata->endpoint.usertype]);
                         dth->intf->state = prompt_on;
                     }
                 } break;
@@ -1341,7 +1547,6 @@ void* dterm_prompter(void* args) {
                 // 3. Search and try to execute cmd
                 // 4. Reset prompt, change to OFF State, unlock mutex on dterm
                 case ct_enter: {
-                    int bytesout;
                     dterm_putc(&dth->fd, '\n');
 
                     if (!ch_contains(dth->ch, dth->intf->linebuf)) {
@@ -1352,7 +1557,7 @@ void* dterm_prompter(void* args) {
                     dth->tctx = talloc_pool(NULL, cliopt_getpoolsize());
 
                     // Run command(s) from line input
-                    bytesout = sub_proc_lineinput( dth, NULL,
+                    sub_proc_lineinput( dth, NULL,
                                         (char*)dth->intf->linebuf,
                                         (int)sub_str_mark((char*)dth->intf->linebuf, 1024)
                                     );
@@ -1371,7 +1576,7 @@ void* dterm_prompter(void* args) {
                     cmdptr = cmd_subsearch(appdata->cmdtab, (char*)cmdname);
                     if ((cmdptr != NULL) && (dth->intf->linebuf[cmdlen] == 0)) {
                         dterm_remln(dth->intf, &dth->fd);
-                        dterm_puts(&dth->fd, (char*)prompt_str[appdata->endpoint.usertype]);
+                        dprintf(dth->fd.out, _E_MAG"%s"_E_NRM, (char*)prompt_str[appdata->endpoint.usertype]);
                         dterm_putsc(dth->intf, (char*)cmdptr->name);
                         dterm_puts(&dth->fd, (char*)cmdptr->name);
                     }
@@ -1386,7 +1591,7 @@ void* dterm_prompter(void* args) {
                     cmdstr = ch_next(dth->ch);
                     if (dth->ch->count && cmdstr) {
                         dterm_remln(dth->intf, &dth->fd);
-                        dterm_puts(&dth->fd, (char*)prompt_str[appdata->endpoint.usertype]);
+                        dprintf(dth->fd.out, _E_MAG"%s"_E_NRM, (char*)prompt_str[appdata->endpoint.usertype]);
                         dterm_putsc(dth->intf, cmdstr);
                         dterm_puts(&dth->fd, cmdstr);
                     }
@@ -1398,7 +1603,7 @@ void* dterm_prompter(void* args) {
                     cmdstr = ch_prev(dth->ch);
                     if (dth->ch->count && cmdstr) {
                         dterm_remln(dth->intf, &dth->fd);
-                        dterm_puts(&dth->fd, (char*)prompt_str[appdata->endpoint.usertype]);
+                        dprintf(dth->fd.out, _E_MAG"%s"_E_NRM, (char*)prompt_str[appdata->endpoint.usertype]);
                         dterm_putsc(dth->intf, cmdstr);
                         dterm_puts(&dth->fd, cmdstr);
                     }
