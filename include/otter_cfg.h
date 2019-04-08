@@ -27,16 +27,29 @@
 
 /// Color codes for terminal output coloring
 ///@todo move this and printer macros to a debug.h
-#define _E_NRM  "\033[0m"
-#define _E_BLK  "\033[30;40m"
-#define _E_RED  "\033[31;40m"
-#define _E_GRN  "\033[32;40m"
-#define _E_YEL  "\033[33;40m"
-#define _E_BLU  "\033[34;40m"
-#define _E_MAG  "\033[35;40m"
-#define _E_CYN  "\033[36;40m"
-#define _E_WHT  "\033[37;40m"
 
+#define _E_NRM  "\033[0m"
+
+// Normal colors
+#define _E_RED  "\033[31m"
+#define _E_GRN  "\033[32m"
+#define _E_YEL  "\033[33m"
+#define _E_BLU  "\033[34m"
+#define _E_MAG  "\033[35m"
+#define _E_CYN  "\033[36m"
+#define _E_WHT  "\033[37m"
+
+// Overlay color on black
+#define _E_OBLK  "\033[30;40m"
+#define _E_ORED  "\033[31;40m"
+#define _E_OGRN  "\033[32;40m"
+#define _E_OYEL  "\033[33;40m"
+#define _E_OBLU  "\033[34;40m"
+#define _E_OMAG  "\033[35;40m"
+#define _E_OCYN  "\033[36;40m"
+#define _E_OWHT  "\033[37;40m"
+
+// Bright
 #define _E_BBLK "\033[1;30;40m"
 #define _E_BRED "\033[1;31;40m"
 #define _E_BGRN "\033[1;32;40m"
@@ -47,9 +60,12 @@
 #define _E_BWHT "\033[1;37;40m"
 
 #define ERRMARK                 _E_RED"ERR: "_E_NRM
+#define ERR_PRINTF(...)         do { if (cliopt_isverbose()) { fprintf(stdout, _E_RED "ERR: " _E_NRM __VA_ARGS__); fflush(stdout); }} while(0)
 #define VERBOSE_PRINTF(...)     do { if (cliopt_isverbose()) { fprintf(stdout, _E_CYN "MSG: " _E_NRM __VA_ARGS__); fflush(stdout); }} while(0)
 #define VDSRC_PRINTF(...)       do { if (cliopt_isverbose()) { fprintf(stdout, _E_GRN "DSRC: " _E_NRM __VA_ARGS__); fflush(stdout); }} while(0)
 #define VCLIENT_PRINTF(...)     do { if (cliopt_isverbose()) { fprintf(stdout, _E_MAG "CLIENT: " _E_NRM __VA_ARGS__); fflush(stdout); }} while(0)
+
+
 
 
 

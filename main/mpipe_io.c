@@ -146,7 +146,7 @@ void* mpipe_reader(void* args) {
             if (syncinput != 0xFF) {
                 goto mpipe_reader_SYNC0;
             }
-            TTY_PRINTF("TTY: Sync FF Received\n");
+            TTY_PRINTF("Sync FF Received\n");
             
             // Now wait for a 55, ignoring FFs
             mpipe_reader_SYNC1:
@@ -171,7 +171,7 @@ void* mpipe_reader(void* args) {
             if (syncinput != 0x55) {
                 goto mpipe_reader_SYNC0;
             }
-            TTY_PRINTF("TTY: Sync 55 Received\n");
+            TTY_PRINTF("Sync 55 Received\n");
             
             // At this point, FF55 was detected.  We get the next 6 bytes of the
             // header, which is the rest of the header.
@@ -236,7 +236,7 @@ void* mpipe_reader(void* args) {
             
                 new_bytes       = (int)read(fds[i].fd, rbuf_cursor, payload_left);
                 // Debugging output
-                TTY_PRINTF(stderr, "payload new_bytes = %d\n", new_bytes);
+                TTY_PRINTF("payload new_bytes = %d\n", new_bytes);
                 HEX_DUMP(rbuf_cursor, new_bytes, "read(): ");
                 
                 rbuf_cursor    += new_bytes;
@@ -255,19 +255,19 @@ void* mpipe_reader(void* args) {
             /// @todo supply estimated bytes remaining into mpipe_flush()
             mpipe_reader_ERR:
             switch (errcode) {
-                case 0: TTY_PRINTF(stderr, "Sending packet rx signal\n");
+                case 0: TTY_PRINTF("Sending packet rx signal\n");
                         pthread_cond_signal(appdata->pktrx_cond);
                         break;
                 
-                case 1: TTY_PRINTF(stderr, "MPipe Packet Sync could not be retrieved.\n");
+                case 1: TTY_PRINTF("MPipe Packet Sync could not be retrieved.\n");
                         mpipe_flush(mph, i, 0, TCIFLUSH);
                         break;
                 
-                case 2: TTY_PRINTF(stderr, "Mpipe Packet Payload Length is out of bounds.\n");
+                case 2: TTY_PRINTF("Mpipe Packet Payload Length is out of bounds.\n");
                         mpipe_flush(mph, i, 0, TCIFLUSH);
                         break;
                     
-                case 3: TTY_PRINTF(stderr, "Mpipe Packet RX timed-out\n");
+                case 3: TTY_PRINTF("Mpipe Packet RX timed-out\n");
                         mpipe_flush(mph, i, 0, TCIFLUSH);
                         break;
                     

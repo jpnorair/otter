@@ -38,10 +38,11 @@
 
 
 #if defined(__DEBUG__)
-#   define DEBUG_PRINTF(...)    do { if (cliopt_isdebug()) fprintf(stderr, _E_YEL"DEBUG: "_E_NRM __VA_ARGS__); } while(0)
-#   define TTY_PRINTF(...)      do { if (cliopt_isdebug()) fprintf(stderr, _E_YEL"TTY: "_E_NRM __VA_ARGS__); } while(0)
-#   define TTY_TX_PRINTF(...)   do { if (cliopt_isdebug()) fprintf(stderr, _E_YEL"TTY_TX: "_E_NRM __VA_ARGS__); } while(0)
-#   define TTY_RX_PRINTF(...)   do { if (cliopt_isdebug()) fprintf(stderr, _E_YEL"TTY_RX: "_E_NRM __VA_ARGS__); } while(0)
+#   define DEBUG_RUN(CODE)      do { CODE } while(0)
+#   define DEBUG_PRINTF(...)    do { if (cliopt_isdebug()) {fprintf(stderr, _E_YEL"DEBUG: " __VA_ARGS__); fprintf(stderr, _E_NRM);}} while(0)
+#   define TTY_PRINTF(...)      do { if (cliopt_isdebug()) {fprintf(stderr, _E_YEL"TTY: " __VA_ARGS__); fprintf(stderr, _E_NRM);}} while(0)
+#   define TTY_TX_PRINTF(...)   do { if (cliopt_isdebug()) {fprintf(stderr, _E_YEL"TTY_TX: " __VA_ARGS__); fprintf(stderr, _E_NRM);}} while(0)
+#   define TTY_RX_PRINTF(...)   do { if (cliopt_isdebug()) {fprintf(stderr, _E_YEL"TTY_RX: " __VA_ARGS__); fprintf(stderr, _E_NRM);}} while(0)
 #   define HEX_DUMP(HEX, SIZE, ...) do { if (cliopt_isdebug()) { _HEX_(HEX, SIZE, __VA_ARGS__); } } while(0)
 
 #else
@@ -57,4 +58,4 @@
 
 
 
-#endif /* cliopt_h */
+#endif /* debug_h */
