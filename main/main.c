@@ -461,6 +461,7 @@ int main(int argc, char* argv[]) {
 
     /// Client Options.  These are read-only from internal modules
     cliopts.io          = io_val;
+    cliopts.intf        = intf_val;
     cliopts.format      = fmt_val;
     cliopts.verbose_on  = verbose_val;
     cliopts.debug_on    = (debug->count != 0) ? true : false;
@@ -788,15 +789,6 @@ int otter_main( ttyspec_t* ttylist,
         }
     }
     
-    /// Initialize the signal handlers for this process.
-    /// These are activated by Ctl+C (SIGINT) and Ctl+\ (SIGQUIT) as is
-    /// typical in POSIX apps.  When activated, the threads are halted and
-    /// Otter is shutdown.
-    DEBUG_PRINTF("Assign Kill Signals\n");
-    _assign_signal(SIGINT, &sigint_handler);
-    _assign_signal(SIGQUIT, &sigquit_handler);
-    DEBUG_PRINTF("--> done\n");
-    
     /// Before doing any interactions, run a command file if it exists.
     DEBUG_PRINTF("Running Initialization Command File\n");
     if (initfile != NULL) {
@@ -809,6 +801,15 @@ int otter_main( ttyspec_t* ttylist,
             //VERBOSE_PRINTF("Init file finished successfully\n");
         }
     }
+    DEBUG_PRINTF("--> done\n");
+    
+    /// Initialize the signal handlers for this process.
+    /// These are activated by Ctl+C (SIGINT) and Ctl+\ (SIGQUIT) as is
+    /// typical in POSIX apps.  When activated, the threads are halted and
+    /// Otter is shutdown.
+    DEBUG_PRINTF("Assign Kill Signals\n");
+    _assign_signal(SIGINT, &sigint_handler);
+    _assign_signal(SIGQUIT, &sigquit_handler);
     DEBUG_PRINTF("--> done\n");
     
     DEBUG_PRINTF("Creating Dterm theads\n");
