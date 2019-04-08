@@ -4,15 +4,24 @@ THISMACHINE := $(shell uname -srm | sed -e 's/ /-/g')
 THISSYSTEM	:= $(shell uname -s)
 
 APP         ?= otter
-APPDIR      := bin/$(THISMACHINE)
-BUILDDIR    := build/$(THISMACHINE)
 PKGDIR      := ../_hbpkg/$(THISMACHINE)
 SYSDIR      := ../_hbsys/$(THISMACHINE)
 EXT_DEF     ?= 
 EXT_INC     ?= 
 EXT_LIBFLAGS ?= 
 EXT_LIBS    ?= 
-VERSION     ?= 0.9.0
+VERSION     ?= 1.0.a
+
+ifeq ($(MAKECMDGOALS),debug)
+	APPDIR      := bin/$(THISMACHINE)
+	BUILDDIR    := build/$(THISMACHINE)_debug
+	DEBUG_MODE  := 1
+else
+	APPDIR      := bin/$(THISMACHINE)
+	BUILDDIR    := build/$(THISMACHINE)
+	DEBUG_MODE  := 0
+endif
+
 
 # Make sure the LD_LIBRARY_PATH includes the _hbsys directory
 ifneq ($(findstring $(SYSDIR)/lib,$(LD_LIBRARY_PATH)),)
@@ -52,8 +61,6 @@ OTTER_LIB   := $(EXT_LIBFLAGS) $(LIB)
 OTTER_BLD   := $(BUILDDIR)
 OTTER_APP   := $(APPDIR)
 
-#OBJECTS     := $(shell find $(BUILDDIR) -type f -name "*.$(OBJEXT)")
-#MODULES     := $(SUBMODULES) $(LIBMODULES)
 
 # Export the following variables to the shell: will affect submodules
 export OTTER_PKG
@@ -65,7 +72,8 @@ export OTTER_BLD
 export OTTER_APP
 
 deps: $(LIBMODULES)
-all: directories $(APP)
+all: release
+release: directories $(APP)
 debug: directories $(APP).debug
 obj: $(SUBMODULES)
 pkg: deps all install
@@ -100,8 +108,8 @@ $(APP): $(SUBMODULES)
 	$(CC) $(CFLAGS) $(OTTER_DEF) $(OTTER_INC) $(OTTER_LIBINC) -o $(APPDIR)/$(APP) $(OBJECTS) $(OTTER_LIB)
 
 $(APP).debug: $(SUBMODULES)
-	$(eval OBJECTS := $(shell find $(BUILDDIR) -type f -name "*.$(OBJEXT)"))
-	$(CC) $(CFLAGS_DEBUG) $(OTTER_DEF) -D__DEBUG__ $(OTTER_INC) $(OTTER_LIBINC) -o $(APPDIR)/$(APP).debug $(OBJECTS) $(OTTER_LIB)
+	$(eval OBJECTS_D := $(shell find $(BUILDDIR) -type f -name "*.$(OBJEXT)"))
+	$(CC) $(CFLAGS_DEBUG) $(OTTER_DEF) -D__DEBUG__ $(OTTER_INC) $(OTTER_LIBINC) -o $(APPDIR)/$(APP).debug $(OBJECTS_D) $(OTTER_LIB)
 
 #Library dependencies (not in otter sources)
 $(LIBMODULES): %: 
@@ -110,8 +118,8 @@ $(LIBMODULES): %:
 
 #otter submodules
 $(SUBMODULES): %: directories
-	cd ./$@ && $(MAKE) -f $@.mk obj
+	cd ./$@ && $(MAKE) -f $@.mk obj EXT_DEBUG=$(DEBUG_MODE)
 
 #Non-File Targets
-.PHONY: all pkg remake clean cleaner
+.PHONY: deps all release debug obj pkg remake install directories clean cleaner
 

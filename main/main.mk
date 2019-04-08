@@ -6,8 +6,21 @@ OTTER_DEF   ?= -D__HBUILDER__
 OTTER_INC   ?=
 OTTER_LIB   ?= 
 
-#CFLAGS      := -std=gnu99 -O -g -Wall -pthread 
-CFLAGS      := -std=gnu99 -O3 -pthread
+ifneq ($(EXT_DEBUG),0)
+	ifeq ($(EXT_DEBUG),1)
+		CFLAGS  := -std=gnu99 -O2 -Wall -pthread -D__DEBUG__
+	else
+		CFLAGS  := -std=gnu99 -O -g -Wall -pthread -D__DEBUG__
+	endif
+#	SRCEXT      := c
+#	DEPEXT      := dd
+#	OBJEXT      := do
+else 
+	CFLAGS      := -std=gnu99 -O3 -pthread
+#	SRCEXT      := c
+#	DEPEXT      := d
+#	OBJEXT      := o
+endif
 
 BUILDDIR    := ../$(OTTER_BLD)
 
@@ -63,5 +76,5 @@ $(BUILDDIR)/%.$(OBJEXT): ./%.$(SRCEXT)
 	@rm -f $(BUILDDIR)/$*.$(DEPEXT).tmp
 
 #Non-File Targets
-.PHONY: all remake clean cleaner resources
+.PHONY: all obj remake resources clean cleaner
 
