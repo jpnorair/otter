@@ -224,6 +224,7 @@ int subscriber_wait(subscr_t subscriber, int timeout_ms) {
     
         rc = pthread_cond_timedwait(&node->cond, &node->mutex, (const struct timespec*)&abstime);
     }
+    pthread_mutex_unlock(&node->mutex);
     
     return rc;
 }
