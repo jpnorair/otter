@@ -236,7 +236,7 @@ int dterm_init(dterm_handle_t* dth, void* ext_data, INTF_Type intf) {
         goto dterm_init_TERM;
     }
     
-    dth->pctx = talloc_new(NULL);
+    dth->pctx = talloc_new(NULL); 
     dth->tctx = dth->pctx;
     if (dth->pctx == NULL) {
         rc = -5;
