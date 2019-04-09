@@ -173,7 +173,7 @@ static int sub_check_handle(mpipe_handle_t handle, int id) {
             rc = id;
         }
     }
-    
+
     return rc;
 }
 
@@ -295,12 +295,12 @@ mpipe_fd_t* mpipe_fds_get(mpipe_handle_t handle, int id) {
 const char* mpipe_file_get(mpipe_handle_t handle, int id) {
     mpipe_tab_t* table;
     const char* output = NULL;
-    
+
     if (sub_check_handle(handle, id) >= 0) {
         table = (mpipe_tab_t*)handle;
-        output = mpipe_file_resolve(&table[id].intf);
+        output = mpipe_file_resolve(&table->intf[id]);
     }
-    
+
     return output;
 }
 
