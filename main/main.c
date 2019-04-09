@@ -885,9 +885,12 @@ int otter_main( ttyspec_t* ttylist,
                 cmd_free(appdata.cmdtab);
 
         case 2: // Failure on cmd_init()
+                DEBUG_PRINTF("Deinitializing DTerm\n");
+                ///@todo crashes here when OTDB is quit first
                 dterm_deinit(&dterm_handle);
 
         case 1: // Failure on dterm_init()
+                DEBUG_PRINTF("Deinitializing PPipe\n");
                 ppipelist_deinit();
                 break;
     }

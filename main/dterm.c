@@ -273,9 +273,9 @@ void dterm_deinit(dterm_handle_t* dth) {
     if (dth->ch != NULL) {
         ch_free(dth->ch);
     }
-
-    clithread_deinit(dth->clithread);
     
+    clithread_deinit(dth->clithread);
+
     if (dth->iso_mutex != NULL) {
         pthread_mutex_unlock(dth->iso_mutex);
         pthread_mutex_destroy(dth->iso_mutex);
