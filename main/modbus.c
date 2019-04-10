@@ -81,6 +81,7 @@ void* modbus_reader(void* args) {
     mpipe_handle_t mph      = NULL;
     int num_fds;
     int pollcode;
+    int polltimeout;
     int ready_fds;
     
     uint8_t rbuf[1024];
@@ -110,26 +111,60 @@ void* modbus_reader(void* args) {
     /// Setup for usage of the poll function to flush buffer on read timeouts.
     num_fds = mpipe_pollfd_alloc(mph, &fds, (POLLIN | POLLNVAL | POLLHUP));
     if (num_fds <= 0) {
-        fprintf(stderr, "Modbus polling could not be started (error %i): quitting\n", num_fds);
+        ERR_PRINTF("Modbus polling could not be started (error %i): quitting\n", num_fds);
         goto modbus_reader_TERM;
     }
     
+    // polltimeout starts as -1, and it is assigned ever longer timeouts until
+    // all devices are reconnected
+    polltimeout = -1;
+    
     while (1) {
         errcode = 0;
-        
-        // This will flush all fds, which we definitely don't want to do
-        //mpipe_flush(mph, -1, 0, TCIFLUSH);
-        
         /// Otter Modbus Spec
         /// SOF delay time              1750us
         /// EOF delay time              1750us
         /// Intraframe delay limit      1ms
         
         // Receive the first byte
-        // If returns an error, exit
-        ready_fds = poll(fds, num_fds, -1);
-        if (ready_fds <= 0) {
-            fprintf(stderr, "Polling failure: quitting now\n");
+        
+        // Timeout just gives time for attempt to reconnect
+        ready_fds = poll(fds, num_fds, polltimeout);
+        
+        // Handle timeout (return 0).
+        // Timeouts only occur when there is a job to reconnect to some lost
+        // connections.
+        if (ready_fds == 0) {
+            int num_dc = 0;
+            int connfail;
+            
+            for (int i=0; i<num_fds; i++) {
+                if (fds[i].fd < 0) {
+                    VERBOSE_PRINTF("Attempting to reconnect on %s\n", mpipe_file_get(mph, i));
+                    connfail = (mpipe_reopen(mph, i) != 0);
+                    num_dc  += connfail;
+                    if (connfail == 0) {
+                        fds[i].fd = ((mpipe_tab_t*)mph)->intf[i].fd.in;
+                        fds[i].events = (POLLIN | POLLNVAL | POLLHUP);
+                    }
+                }
+            }
+            if (num_dc == 0) {
+                polltimeout = -1;
+            }
+            else if (polltimeout >= 30000) {
+                polltimeout = 60000;
+            }
+            else {
+                polltimeout *= 2;
+            }
+            continue;
+        }
+        
+        // Handle errors.  The main error is Hang-up or Invalid, which both
+        // indicate a dropped connection.
+        if (ready_fds < 0) {
+            ERR_PRINTF("Polling failure in %s, line %i\n", __FUNCTION__, __LINE__);
             goto modbus_reader_TERM;
         }
     
@@ -143,12 +178,16 @@ void* modbus_reader(void* args) {
                     continue;
                 }
                 else {
-                    errcode = 5;
+                    fds[i].events   = 0;
+                    fds[i].revents  = 0;
+                    fds[i].fd       = -1;
+                    errcode         = 5;
                     goto modbus_reader_ERR;
                 }
             }
             
-            // Verify that POLLIN is high.  This should be implicit, but we check explicitly here
+            // Verify that POLLIN is high.
+            // Generally this should be implicit, but we check explicitly for safety reasons.
             if ((fds[i].revents & POLLIN) == 0) {
                 mpipe_flush(mph, i, 0, TCIFLUSH);
                 continue;
@@ -218,10 +257,12 @@ void* modbus_reader(void* args) {
                 case 4: TTY_RX_PRINTF("Modbus Packet RX timed-out\n");
                         break;
                     
-                case 5: fprintf(stderr, "Dropped %s: quitting now\n", mpipe_file_get(mph, i));
-                        goto modbus_reader_TERM;
+                case 5: VERBOSE_PRINTF("Connection dropped on %s: queuing for reconnect\n", mpipe_file_get(mph, i));
+                        ///@todo initial polltimeout should be an environment variable
+                        polltimeout = 4000;
+                        break;
                     
-               default: fprintf(stderr, "Unknown Error during tty polling: quitting now\n");
+               default: ERR_PRINTF("Fatal error in %s: Quitting\n", __FUNCTION__);
                         goto modbus_reader_TERM;
             }
         }
@@ -335,7 +376,7 @@ void* modbus_writer(void* args) {
     
     /// This code should never occur, given the while(1) loop.
     /// If it does (possibly a stack fuck-up), we print this "chaotic error."
-    fprintf(stderr, "\n--> Chaotic error: modbus_writer() thread broke loop.\n");
+    ERR_PRINTF("\n--> Chaotic error: modbus_writer() thread broke loop.\n");
     raise(SIGINT);
     return NULL;
 }
@@ -368,7 +409,7 @@ void* modbus_parser(void* args) {
 
     dth = appdata->dterm_parent;
     if (dth->ext != appdata) {
-        fprintf(stderr, "Error: dterm handle is not linked to dterm_parent in application data.\n");
+        ERR_PRINTF("Error: dterm handle is not linked to dterm_parent in application data.\n");
         goto modbus_parser_TERM;
     }
     
@@ -406,7 +447,7 @@ void* modbus_parser(void* args) {
         /// internal protocol, and it can result in responses being queued.
         if (pkt_condition > 0) {
             ///@todo some sort of error code
-            fprintf(stderr, "A malformed packet was sent for parsing\n");
+            ERR_PRINTF("A malformed packet was sent for parsing\n");
             pktlist_del(appdata->rlist, appdata->rlist->cursor);
         }
         else {
@@ -491,7 +532,7 @@ void* modbus_parser(void* args) {
     
     /// This code should never occur, given the while(1) loop.
     /// If it does (possibly a stack fuck-up), we print this "chaotic error."
-    fprintf(stderr, "\n--> Chaotic error: modbus_parser() thread broke loop.\n");
+    ERR_PRINTF("\n--> Chaotic error: modbus_parser() thread broke loop.\n");
     raise(SIGINT);
     return NULL;
 }
