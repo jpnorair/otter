@@ -444,18 +444,7 @@ int dterm_send_error(dterm_handle_t* dth, const char* cmdname, int errcode, uint
 }
 
 int dterm_send_rxstat(dterm_handle_t* dth, DFMT_Type dfmt, void* rxdata, size_t rxsize, uint64_t rxaddr, uint32_t sid, time_t tstamp, int crcqual) {
-    char output[1024];
-    int datasize = 0;
-    
-    if (dth != NULL) {
-        if (dth->fd.out >= 0) {
-            datasize = sub_rxstat(output, 1024, dfmt, rxdata, rxsize, rxaddr, sid, tstamp, crcqual);
-            if (datasize > 0) {
-                write(dth->fd.out, output, datasize);
-            }
-        }
-    }
-    return datasize;
+    return dterm_publish_rxstat(dth, dfmt, rxdata, rxsize, rxaddr, sid, tstamp, crcqual);
 }
 
 int dterm_publish_rxstat(dterm_handle_t* dth, DFMT_Type dfmt, void* rxdata, size_t rxsize, uint64_t rxaddr, uint32_t sid, time_t tstamp, int crcqual) {
@@ -478,8 +467,6 @@ int dterm_publish_rxstat(dterm_handle_t* dth, DFMT_Type dfmt, void* rxdata, size
 
 
 
-///@todo Add dfmt selective output
-///@todo broadcast this message to all active clithreads
 static int sub_rxstat(  char* dst, int dstlimit, DFMT_Type dfmt,
                         void* rxdata, size_t rxsize,
                         uint64_t rxaddr, uint32_t sid, time_t tstamp, int crcqual) {
@@ -583,66 +570,6 @@ static int sub_rxstat(  char* dst, int dstlimit, DFMT_Type dfmt,
 }
 
 
-/*
-int dterm_force_rxstat(int fd_out, DFMT_Type dfmt, void* rxdata, size_t rxsize, uint64_t rxaddr, uint32_t sid, time_t tstamp, int crcqual) {
-    int bytesout;
-
-fprintf(stderr, "rxstat %zu bytes onto fd=%i\n", rxsize, fd_out);
-
-    ///@todo getformat and isverbose calls should reference dterm data
-    switch (cliopt_getformat()) {
-        case FORMAT_Hex: {
-            bytesout = sub_hexwrite(fd_out, (crcqual != 0));
-        } break;
-        
-        case FORMAT_Json: {
-            bytesout = dprintf(fd_out, "{\"type\":\"rxstat\", "\
-                                "\"data\":{\"sid\":%u, \"addr\":\"%llx\", \"qual\":%i, \"time\":%li, ",
-                                sid, rxaddr, crcqual, tstamp);
-            bytesout += write(fd_out, rxdata, rxsize);
-            bytesout += write(fd_out, "}}", 2);
-        } break;
-        
-        case FORMAT_JsonHex: {
-            bytesout = dprintf(fd_out, "{\"type\":\"rxstat\", "\
-                                "\"data\":{\"sid\":%u, \"addr\":\"%llx\", \"qual\":%i, \"time\":%li, \"frame\":\"",
-                                sid, rxaddr, crcqual, tstamp);
-            if (dfmt == DFMT_Binary) {
-                bytesout += sub_hexstream(fd_out, rxdata, rxsize);
-            }
-            else {
-                bytesout += write(fd_out, rxdata, rxsize);
-            }
-            bytesout += write(fd_out, "\"}}", 3);
-        } break;
-        
-        case FORMAT_Bintex: {
-            ///@todo this
-            bytesout = 0;
-        } break;
-        
-        default: {
-            if (cliopt_isverbose()) {
-                //static char pbuf[26];
-                bytesout = dprintf(fd_out, _E_YEL"RX.%u: from %llx at %s, %s"_E_NRM"\n",
-                                    sid, rxaddr, fmt_time(&tstamp, NULL), fmt_crc(crcqual, NULL));
-            }
-            else {
-                const char* valid_sym = _E_GRN"v";
-                const char* error_sym = _E_RED"x";
-                const char* crc_sym   = (crcqual==0) ? valid_sym : error_sym;
-                bytesout = dprintf(fd_out, _E_WHT"[%u][%llx][%s"_E_WHT"]"_E_NRM" ", sid, rxaddr, crc_sym);
-            }
-            
-            bytesout += write(fd_out, rxdata, rxsize);
-        } break;
-    }
-    
-    bytesout += write(fd_out, "\n", 1);
-    
-    return bytesout;
-}
-*/
 
 ///@todo integrate this implementation using fmt_printtext, if possible.
 int dterm_force_cmdmsg(int fd_out, const char* cmdname, const char* msg) {
