@@ -43,6 +43,38 @@ typedef struct {
 
 
 
+
+typedef enum {
+    MPINTF_null   = 0,
+    MPINTF_tty,
+    MPINTF_MAX
+} mpipe_intf_enum;
+
+typedef struct {
+    char* path;
+    int baud;
+    int data_bits;
+    int parity;
+    int stop_bits;
+    int flowctl;
+    int dtr;
+    int rts;
+} mpipe_tty_t;
+
+typedef struct {
+    mpipe_intf_enum type;
+    void*           params;
+    mpipe_fd_t      fd;
+} mpipe_intf_t;
+
+typedef struct {
+    mpipe_intf_t*   intf;
+    size_t          size;
+} mpipe_tab_t;
+
+
+
+
 //typedef struct {
 //    mpipe_handle_t  handle;
 //
