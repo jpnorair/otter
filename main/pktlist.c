@@ -9,6 +9,7 @@
 #include "devtable.h"
 #include "pktlist.h"
 #include "cliopt.h"
+#include "debug.h"
 #include "user.h"
 
 #include <stdlib.h>
@@ -395,7 +396,13 @@ int pktlist_add_tx(user_endpoint_t* endpoint, void* intf, pktlist_t* plist, uint
 
 int pktlist_add_rx(user_endpoint_t* endpoint, void* intf,  pktlist_t* plist, uint8_t* data, size_t size) {
     ///@todo endpoint vs. intf NULL check
-    return sub_pktlist_add(endpoint, intf, plist, data, size, false);
+    int rc;
+    
+    rc = sub_pktlist_add(endpoint, intf, plist, data, size, false);
+    
+    HEX_DUMP(plist->cursor->buffer, plist->cursor->size, "%zu Bytes Queued (code: %i)\n", plist->cursor->size, rc);
+
+    return rc;
 }
 
 

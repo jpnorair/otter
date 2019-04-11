@@ -230,6 +230,8 @@ void* modbus_reader(void* args) {
                 goto modbus_reader_ERR;
             }
 
+            //HEX_DUMP(rbuf, frame_length, "Reading %d Bytes on tty\n", frame_length);
+
             /// Copy the packet to the rlist and signal modbus_parser()
             pthread_mutex_lock(appdata->rlist_mutex);
             list_size = pktlist_add_rx(&appdata->endpoint, mpipe_intf_get(mph, i), appdata->rlist, rbuf, (size_t)frame_length);
@@ -244,7 +246,6 @@ void* modbus_reader(void* args) {
             modbus_reader_ERR:
             switch (errcode) {
                 case 0: TTY_RX_PRINTF("Packet Received Successfully (%d bytes).\n", frame_length);
-                        HEX_DUMP(rbuf, frame_length, "Reading %d Bytes on tty\n", frame_length);
                         pthread_cond_signal(appdata->pktrx_cond);
                         break;
                 
@@ -418,6 +419,8 @@ void* modbus_parser(void* args) {
     
         //pthread_mutex_lock(pktrx_mutex);
         pthread_cond_wait(appdata->pktrx_cond, appdata->pktrx_mutex);
+        pthread_mutex_unlock(appdata->pktrx_mutex);
+        
         pthread_mutex_lock(dth->iso_mutex);
         pthread_mutex_lock(appdata->rlist_mutex);
         pthread_mutex_lock(appdata->tlist_mutex);
@@ -441,7 +444,7 @@ void* modbus_parser(void* args) {
             goto modbus_parser_END;
         }
         // =================================================================
-            
+        
         /// If packet has an error of some kind -- delete it and move-on.
         /// Else, print-out the packet.  This can get rich depending on the
         /// internal protocol, and it can result in responses being queued.
@@ -472,7 +475,7 @@ void* modbus_parser(void* args) {
             /// CRC is good, so send packet to Modbus processor.
             if (appdata->rlist->cursor->crcqual != 0) {
                 ///@todo add rx address of input packet (set to 0)
-                dterm_send_rxstat(dth, DFMT_Binary, rpkt->buffer, rpkt->size, 0, rpkt->sequence, rpkt->tstamp, rpkt->crcqual);
+                dterm_publish_rxstat(dth, DFMT_Binary, rpkt->buffer, rpkt->size, 0, rpkt->sequence, rpkt->tstamp, rpkt->crcqual);
             }
             else {
                 proc_result     = smut_resp_proc(putsbuf, rpkt->buffer, &smut_outbytes, rpkt->size, true);
@@ -487,7 +490,6 @@ void* modbus_parser(void* args) {
                     size_t putsbytes = 0;
                     uint8_t* lastmsg = msg;
                     
-                
                     if ((proc_result == 0) && (msgtype == 0)) {
                         /// ALP message:
                         /// proc_result now takes the value from the protocol formatter.
