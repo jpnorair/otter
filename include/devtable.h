@@ -55,6 +55,7 @@ int devtab_unlist(devtab_handle_t handle, uint16_t vid);
 devtab_endpoint_t* devtab_resolve_endpoint(devtab_node_t node);
 int devtab_validate_usertype(devtab_node_t* node, int userindex);
 
+uint64_t devtab_get_uid(devtab_handle_t handle, devtab_node_t node);
 uint16_t devtab_get_vid(devtab_handle_t handle, devtab_node_t node);
 void* devtab_get_intf(devtab_handle_t handle, devtab_node_t node);
 void* devtab_get_rootctx(devtab_handle_t handle, devtab_node_t node);

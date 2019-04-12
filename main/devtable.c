@@ -390,56 +390,62 @@ int devtab_validate_usertype(devtab_node_t* node, int userindex) {
 }
 
 
-uint16_t devtab_get_vid(devtab_handle_t handle, devtab_node_t node) {
-    devtab_t* table = handle;
-    uint16_t vid = OTTER_PARAM_DEFMBSLAVE;
-    
-    if (table != NULL) {
-        if (node != NULL) {
-            if (pthread_mutex_lock(&table->access_mutex) != 0) {
-                return 0;
-            }
-            vid = ((devtab_item_t*)node)->vid;
-            pthread_mutex_unlock(&table->access_mutex);
+
+typedef enum {
+    DEVTAB_Flags,
+    DEVTAB_vid,
+    DEVTAB_uid,
+    DEVTAB_intf,
+    DEVTAB_rootctx,
+    DEVTAB_userctx
+} DEVTAB_Item;
+
+static void* sub_get_item(devtab_t* table, devtab_item_t* node, DEVTAB_Item item) {
+    void* get_item = NULL;
+
+    if ((table != NULL) && (node != NULL)) {
+        if (pthread_mutex_lock(&table->access_mutex) != 0) {
+            return 0;
         }
+        switch (item) {
+        case DEVTAB_Flags:      get_item = &node->flags;    break;
+        case DEVTAB_vid:        get_item = &node->vid;      break;
+        case DEVTAB_uid:        get_item = &node->uid;      break;
+        case DEVTAB_intf:       get_item = &node->intf;     break;
+        case DEVTAB_rootctx:    get_item = &node->rootctx;  break;
+        case DEVTAB_userctx:    get_item = &node->userctx;  break;
+        default:                get_item = NULL;            break;
+        }
+        pthread_mutex_unlock(&table->access_mutex);
     }
-    
-    return vid;
+    return get_item;
 }
 
 
+uint64_t devtab_get_uid(devtab_handle_t handle, devtab_node_t node) {
+    void* uid_item;
+    uid_item = sub_get_item((devtab_t*)handle, (devtab_item_t*)node, DEVTAB_uid);
+    return uid_item ? *(uint64_t*)uid_item : 0;
+}
+
+uint16_t devtab_get_vid(devtab_handle_t handle, devtab_node_t node) {
+    void* vid_item;
+    vid_item = sub_get_item((devtab_t*)handle, (devtab_item_t*)node, DEVTAB_vid);
+    return vid_item ? *(uint16_t*)vid_item : OTTER_PARAM_DEFMBSLAVE;
+}
+
 void* devtab_get_intf(devtab_handle_t handle, devtab_node_t node) {
-    devtab_t* table = handle;
-    void* intf = NULL;
-    
-    if (table != NULL) {
-        if (node != NULL) {
-            if (pthread_mutex_lock(&table->access_mutex) != 0) {
-                return NULL;
-            }
-            intf = ((devtab_item_t*)node)->intf;
-            pthread_mutex_unlock(&table->access_mutex);
-        }
-    }
-    return intf;
+    void* intf_item;
+    intf_item = sub_get_item((devtab_t*)handle, (devtab_item_t*)node, DEVTAB_intf);
+    return intf_item ? *(void**)intf_item : NULL;
 }
 
 
 void* devtab_get_rootctx(devtab_handle_t handle, devtab_node_t node) {
 #if OTTER_FEATURE(SECURITY)
-    devtab_t* table = handle;
-    void* rootkey = NULL;
-    
-    if (table != NULL) {
-        if (node != NULL) {
-            if (pthread_mutex_lock(&table->access_mutex) != 0) {
-                return NULL;
-            }
-            rootkey = ((devtab_item_t*)node)->rootctx;
-            pthread_mutex_unlock(&table->access_mutex);
-        }
-    }
-    return rootkey;
+    void* ctx_item;
+    ctx_item = sub_get_item((devtab_t*)handle, (devtab_item_t*)node, DEVTAB_rootctx);
+    return ctx_item ? *(void**)ctx_item : NULL;
 #else
     return NULL;
 #endif
@@ -448,23 +454,15 @@ void* devtab_get_rootctx(devtab_handle_t handle, devtab_node_t node) {
 
 void* devtab_get_userctx(devtab_handle_t handle, devtab_node_t node) {
 #if OTTER_FEATURE(SECURITY)
-    devtab_t* table = handle;
-    void* userkey = NULL;
-    
-    if (table != NULL) {
-        if (node != NULL) {
-            if (pthread_mutex_lock(&table->access_mutex) != 0) {
-                return NULL;
-            }
-            userkey = ((devtab_item_t*)node)->userctx;
-            pthread_mutex_unlock(&table->access_mutex);
-        }
-    }
-    return userkey;
+    void* ctx_item;
+    ctx_item = sub_get_item((devtab_t*)handle, (devtab_item_t*)node, DEVTAB_userctx);
+    return ctx_item ? *(void**)ctx_item : NULL;
 #else
     return NULL;
 #endif
 }
+
+
 
 
 uint64_t devtab_lookup_uid(devtab_handle_t handle, uint16_t vid) {
