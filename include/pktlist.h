@@ -46,6 +46,8 @@ void pktlist_empty(pktlist_t* plist);
 int pktlist_del(pktlist_t* plist, pkt_t* pkt);
 int pktlist_getnew(pktlist_t* plist);
 
+int pktlist_del_sequence(pktlist_t* plist, uint32_t sequence);
+
 int pktlist_add_tx(user_endpoint_t* endpoint, void* intf, pktlist_t* plist, uint8_t* data, size_t size);
 int pktlist_add_rx(user_endpoint_t* endpoint, void* intf, pktlist_t* plist,uint8_t* data, size_t size);
 

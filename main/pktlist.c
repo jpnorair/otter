@@ -336,9 +336,9 @@ static int sub_pktlist_add(user_endpoint_t* endpoint, void* intf, pktlist_t* pli
     // Save timestamp: this may or may not get used, but it's saved anyway.
     // The default sequence (which is available to frame generation) is
     // from the rotating nonce of the plist.
-    newpkt->prev        = plist->last;
-    newpkt->next        = NULL;
-    newpkt->tstamp      = time(NULL);
+    newpkt->prev    = plist->last;
+    newpkt->next    = NULL;
+    newpkt->tstamp  = time(NULL);
 
     ///@note If no explicit interface, use the interface attached to dterm's
     /// (dterm is the controlling terminal) active endpoint.  "Active endpoint"
@@ -420,14 +420,9 @@ int pktlist_del(pktlist_t* plist, pkt_t* pkt) {
     ref     = pkt;
     copy    = *pkt;
     if (pkt->buffer != NULL) {
-        //fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
         free(pkt->buffer);
-        //fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
     }
-    //fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
     free(pkt);
-    //fprintf(stderr, "%s %d\n", __FUNCTION__, __LINE__);
-    
     
     /// If there's no plist.  It isn't fatal but it's weird
     if (plist == NULL) {
@@ -468,6 +463,24 @@ int pktlist_del(pktlist_t* plist, pkt_t* pkt) {
     }
 
     return 0;
+}
+
+int pktlist_del_sequence(pktlist_t* plist, uint32_t sequence) {
+    int rc = 0;
+
+    if (plist != NULL) {
+        pkt_t* pkt = plist->front;
+    
+        while (pkt != NULL) {
+            pkt_t* next_pkt = pkt->next;
+            if (pkt->sequence == sequence) {
+                rc += (pktlist_del(plist, pkt) == 0);
+            }
+            pkt = next_pkt;
+        }
+    }
+    
+    return rc;
 }
 
 
