@@ -98,12 +98,6 @@ void* modbus_reader(void* args) {
     // Local copy of MPipe Ctl data: it is used in multiple threads without
     // mutexes (it is read-only anyway)
     mph = appdata->mpipe;
-    
-    // The Packet lists are used between threads and thus are Mutexed references
-//    pktlist_t* rlist                = appdata->rlist;
-//    pthread_mutex_t* rlist_mutex    = appdata->rlist_mutex;
-//    pthread_cond_t* pktrx_cond      = appdata->pktrx_cond;
-//    user_endpoint_t* endpoint       = &appdata->endpoint;
 
     // blocking should be in initialization... Here just as a reminder
     //fnctl(dt->fd_in, F_SETFL, 0);  
@@ -161,8 +155,7 @@ void* modbus_reader(void* args) {
             continue;
         }
         
-        // Handle errors.  The main error is Hang-up or Invalid, which both
-        // indicate a dropped connection.
+        // Handle fatal errors
         if (ready_fds < 0) {
             ERR_PRINTF("Polling failure in %s, line %i\n", __FUNCTION__, __LINE__);
             goto modbus_reader_TERM;
@@ -323,8 +316,8 @@ void* modbus_writer(void* args) {
     
     while (1) {
         
-        //pthread_mutex_lock(tlist_cond_mutex);
         pthread_cond_wait(appdata->tlist_cond, appdata->tlist_cond_mutex);
+        pthread_mutex_unlock(appdata->tlist_cond_mutex);
         
         ///@todo this lock may be redundant
         pthread_mutex_lock(appdata->tlist_mutex);
@@ -433,7 +426,6 @@ void* modbus_parser(void* args) {
         // are none remaining.
 
         // ===================LOOP CONDITION LOGIC==========================
-        
         /// pktlist_getnew will validate the packet with CRC:
         /// - It returns 0 if all is well
         /// - It returns -1 if the list is empty
