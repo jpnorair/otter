@@ -78,8 +78,11 @@ void* mpipe_reader(void* args) {
 ///
     otter_app_t* appdata    = args;
     struct pollfd* fds      = NULL;
+    mpipe_handle_t mph      = NULL;
     int num_fds;
     int pollcode;
+    int polltimeout;
+    int list_size;
     int ready_fds;
     
     uint8_t rbuf[1024];
@@ -96,7 +99,7 @@ void* mpipe_reader(void* args) {
     }
     
     // The Packet lists are used between threads and thus are Mutexed references
-    mpipe_handle_t mph = appdata->mpipe;
+    mph = appdata->mpipe;
     
     // blocking should be in initialization... Here just as a reminder
     //fnctl(dt->fd_in, F_SETFL, 0);  
@@ -104,9 +107,13 @@ void* mpipe_reader(void* args) {
     /// Setup for usage of the poll function to flush buffer on read timeouts.
     num_fds = mpipe_pollfd_alloc(mph, &fds, (POLLIN | POLLNVAL | POLLHUP));
     if (num_fds <= 0) {
-        fprintf(stderr, "MPipe polling could not be started (error %i): quitting\n", num_fds);
+        ERR_PRINTF("MPipe polling could not be started (error %i): quitting\n", num_fds);
         goto mpipe_reader_TERM;
     }
+    
+    // polltimeout starts as -1, and it is assigned ever longer timeouts until
+    // all devices are reconnected
+    polltimeout = -1;
     
     mpipe_flush(mph, -1, 0, TCIFLUSH);
     
@@ -115,9 +122,41 @@ void* mpipe_reader(void* args) {
         errcode = 0;
         
         /// Wait until an FF comes
-        ready_fds = poll(fds, num_fds, -1);
-        if (ready_fds <= 0) {
-            fprintf(stderr, "Polling failure: quitting now\n");
+        ready_fds = poll(fds, num_fds, polltimeout);
+        
+        // Handle timeout (return 0).
+        // Timeouts only occur when there is a job to reconnect to some lost
+        // connections.
+        if (ready_fds == 0) {
+            int num_dc = 0;
+            int connfail;
+            
+            for (int i=0; i<num_fds; i++) {
+                if (fds[i].fd < 0) {
+                    VERBOSE_PRINTF("Attempting to reconnect on %s\n", mpipe_file_get(mph, i));
+                    connfail = (mpipe_reopen(mph, i) != 0);
+                    num_dc  += connfail;
+                    if (connfail == 0) {
+                        fds[i].fd = ((mpipe_tab_t*)mph)->intf[i].fd.in;
+                        fds[i].events = (POLLIN | POLLNVAL | POLLHUP);
+                    }
+                }
+            }
+            if (num_dc == 0) {
+                polltimeout = -1;
+            }
+            else if (polltimeout >= 30000) {
+                polltimeout = 60000;
+            }
+            else {
+                polltimeout *= 2;
+            }
+            continue;
+        }
+        
+        // Handle fatal errors
+        if (ready_fds < 0) {
+            ERR_PRINTF("Polling failure in %s, line %i\n", __FUNCTION__, __LINE__);
             goto mpipe_reader_TERM;
         }
         
@@ -126,7 +165,7 @@ void* mpipe_reader(void* args) {
             ///@todo change 100ms fixed wait on hangup to a configurable amount
             if (fds[i].revents & (POLLNVAL|POLLHUP)) {
                 usleep(100 * 1000);
-                errcode = 4;
+                errcode = 5;
                 goto mpipe_reader_ERR;
             }
         
@@ -152,11 +191,11 @@ void* mpipe_reader(void* args) {
             mpipe_reader_SYNC1:
             pollcode = poll(&fds[i], 1, 50);
             if (pollcode <= 0) {
-                errcode = 3;        // flushable
+                errcode = 4;        // flushable
                 goto mpipe_reader_ERR;
             }
             else if (fds[0].revents & (POLLERR | POLLHUP | POLLNVAL)) {
-                errcode = 4;        // flushable
+                errcode = 5;        // flushable
                 goto mpipe_reader_ERR;
             }
             
@@ -183,11 +222,11 @@ void* mpipe_reader(void* args) {
             do {
                 pollcode = poll(fds, 1, 50);
                 if (pollcode <= 0) {
-                    errcode = 3;
+                    errcode = 4;
                     goto mpipe_reader_ERR;
                 }
                 else if (fds[0].revents & (POLLERR | POLLHUP | POLLNVAL)) {
-                    errcode = 4;
+                    errcode = 5;
                     goto mpipe_reader_ERR;
                 }
             
@@ -226,11 +265,11 @@ void* mpipe_reader(void* args) {
             while (payload_left > 0) {
                 pollcode = poll(fds, 1, 50);
                 if (pollcode <= 0) {
-                    errcode = 3;
+                    errcode = 4;
                     goto mpipe_reader_ERR;
                 }
                 else if (fds[0].revents & (POLLERR | POLLHUP | POLLNVAL)) {
-                    errcode = 4;
+                    errcode = 5;
                     goto mpipe_reader_ERR;
                 }
             
@@ -248,38 +287,46 @@ void* mpipe_reader(void* args) {
 
             // Copy the packet to the rlist and signal mpipe_parser()
             pthread_mutex_lock(appdata->rlist_mutex);
-            pktlist_add_rx(&appdata->endpoint, mpipe_intf_get(mph, i), appdata->rlist, rbuf, (size_t)(header_length + payload_length));
+            list_size = pktlist_add_rx(&appdata->endpoint, mpipe_intf_get(mph, i), appdata->rlist, rbuf, (size_t)(header_length + payload_length));
             pthread_mutex_unlock(appdata->rlist_mutex);
+            if (list_size <= 0) {
+                errcode = 3;
+            }
             
             // Error Handler: wait a few milliseconds, then handle the error.
             /// @todo supply estimated bytes remaining into mpipe_flush()
             mpipe_reader_ERR:
             switch (errcode) {
-                case 0: TTY_PRINTF("Sending packet rx signal\n");
-                        pthread_cond_signal(appdata->pktrx_cond);
-                        break;
+            case 0: TTY_RX_PRINTF("Packet Received Successfully (%d bytes).\n", frame_length);
+                    pthread_cond_signal(appdata->pktrx_cond);
+                    break;
+            
+            case 1: TTY_RX_PRINTF("MPipe Packet Sync could not be retrieved.\n");
+                    goto mpipe_reader_ERRFLUSH;
+            
+            case 2: TTY_RX_PRINTF("Mpipe Packet Payload Length (%d bytes) is out of bounds.\n", frame_length);
+                    goto mpipe_reader_ERRFLUSH;
+            
+            case 3: TTY_RX_PRINTF("Mpipe Packet frame has invalid data (bad crypto or CRC).\n");
+                    goto mpipe_reader_ERRFLUSH;
+            
+            case 4: TTY_RX_PRINTF("Mpipe Packet RX timed-out\n");
+            mpipe_reader_ERRFLUSH:
+                    mpipe_flush(mph, i, 0, TCIFLUSH);
+                    break;
                 
-                case 1: TTY_PRINTF("MPipe Packet Sync could not be retrieved.\n");
+            case 5: if (mpipe_reopen(mph, i) == 0) {
                         mpipe_flush(mph, i, 0, TCIFLUSH);
-                        break;
+                    }
+                    else {
+                        VERBOSE_PRINTF("Connection dropped on %s: queuing for reconnect\n", mpipe_file_get(mph, i));
+                        ///@todo initial polltimeout should be an environment variable
+                        polltimeout = 4000;
+                    }
+                    break;
                 
-                case 2: TTY_PRINTF("Mpipe Packet Payload Length is out of bounds.\n");
-                        mpipe_flush(mph, i, 0, TCIFLUSH);
-                        break;
-                    
-                case 3: TTY_PRINTF("Mpipe Packet RX timed-out\n");
-                        mpipe_flush(mph, i, 0, TCIFLUSH);
-                        break;
-                    
-                case 4: if (mpipe_reopen(mph, i) == 0) {
-                            mpipe_flush(mph, i, 0, TCIFLUSH);
-                            break;
-                        }
-                        fprintf(stderr, "Connection dropped, quitting now\n");
-                        goto mpipe_reader_TERM;
-                    
-               default: fprintf(stderr, "Unknown error, quitting now\n");
-                        goto mpipe_reader_TERM;
+            default: ERR_PRINTF("Fatal error in %s: Quitting\n", __FUNCTION__);
+                    goto mpipe_reader_TERM;
             }
         }
     }
@@ -313,8 +360,9 @@ void* mpipe_writer(void* args) {
     }
     
     while (1) {
-        //pthread_mutex_lock(tlist_cond_mutex);
         pthread_cond_wait(appdata->tlist_cond, appdata->tlist_cond_mutex);
+        pthread_mutex_unlock(appdata->tlist_cond_mutex);
+        
         pthread_mutex_lock(appdata->tlist_mutex);
         
         while (appdata->tlist->cursor != NULL) {
@@ -400,6 +448,10 @@ void* mpipe_parser(void* args) {
     }
 
     dth = appdata->dterm_parent;
+    if (dth->ext != appdata) {
+        ERR_PRINTF("Error: dterm handle is not linked to dterm_parent in application data.\n");
+        goto mpipe_parser_TERM;
+    }
 
     // This looks like an infinite loop, but is not.  The pkt_condition
     // variable will break the loop if the rlist has no new packets.
@@ -410,8 +462,9 @@ void* mpipe_parser(void* args) {
         pkt_t*  rpkt;
         pkt_t*  tpkt;
     
-        //pthread_mutex_lock(pktrx_mutex);
         pthread_cond_wait(appdata->pktrx_cond, appdata->pktrx_mutex);
+        pthread_mutex_unlock(appdata->pktrx_mutex);
+        
         pthread_mutex_lock(dth->iso_mutex);
         pthread_mutex_lock(appdata->rlist_mutex);
         pthread_mutex_lock(appdata->tlist_mutex);
@@ -419,34 +472,37 @@ void* mpipe_parser(void* args) {
         mpipe_active_dterm = (dterm_fd_t*)&dth->fd;
         rpkt = appdata->rlist->cursor;
         
-        // pktlist_getnew will validate and decrypt the packet:
-        // - It returns 0 if all is well
-        // - It returns -1 if the list is empty
-        // - It returns a positive error code if there is some packet error
-        // - rlist->cursor points to the working packet
+        // ===================LOOP CONDITION LOGIC==========================
+        /// pktlist_getnew will validate the packet with CRC:
+        /// - It returns 0 if all is well
+        /// - It returns -1 if the list is empty
+        /// - It returns a positive error code if there is some packet error
+        /// - rlist->cursor points to the working packet
         pkt_condition = pktlist_getnew(appdata->rlist);
         if (pkt_condition < 0) {
             goto mpipe_parser_END;
         }
+        // =================================================================
 
-        // If packet has an error of some kind -- delete it and move-on.
-        // Else, print-out the packet.  This can get rich depending on the
-        // internal protocol, and it can result in responses being queued.
+        /// If packet has an error of some kind -- delete it and move-on.
+        /// Else, print-out the packet.  This can get rich depending on the
+        /// internal protocol, and it can result in responses being queued.
         if (pkt_condition > 0) {
             ///@todo some sort of error code
-            fprintf(stderr, "A malformed packet was sent for parsing\n");
+            ERR_PRINTF("A malformed packet was sent for parsing\n");
             pktlist_del(appdata->rlist, rpkt);
         }
         else {
             uint8_t*    payload_front;
             int         payload_bytes;
+            uint64_t    rxaddr;
             bool        clear_rpkt      = true;
             bool        rpkt_is_resp    = false;
             bool        rpkt_is_valid   = false;
             
-            // Response Packets should match to a sequence number of the last Request.
-            // If there is no match, then there is no response processing, we just 
-            // print the damn packet.
+            /// Response Packets should match to a sequence number of the last Request.
+            /// If there is no match, then there is no response processing, we just
+            /// print the damn packet.
             tpkt = appdata->tlist->front;
             while (tpkt != NULL) {
                 if (tpkt->sequence == rpkt->sequence) {
@@ -457,11 +513,14 @@ void* mpipe_parser(void* args) {
                 tpkt = tpkt->next;
             }
             
+            /// For Mpipe, the address is implicit based on the interface vid
+            rxaddr = devtab_get_uid(appdata->endpoint.devtab, rpkt->intf);
+            
             /// If CRC is bad, discard packet now, and rxstat an error
             /// Else, if CRC is good, send packet to processor.
             if (appdata->rlist->cursor->crcqual != 0) {
                 ///@todo add rx address of input packet (set to 0)
-                dterm_send_rxstat(dth, DFMT_Binary, rpkt->buffer, rpkt->size, 0, rpkt->sequence, rpkt->tstamp, rpkt->crcqual);
+                dterm_publish_rxstat(dth, DFMT_Binary, rpkt->buffer, rpkt->size, 0, rpkt->sequence, rpkt->tstamp, rpkt->crcqual);
             }
             else {
                 // -----------------------------------------------------------
@@ -493,18 +552,12 @@ void* mpipe_parser(void* args) {
                 payload_bytes   = rpkt->buffer[2] * 256;
                 payload_bytes  += rpkt->buffer[3];
 
-                /// 1. If payload is too big, send an error
-                /// 2a. If packet is valid, punt it to the ALP output formatter.
-                /// 2b. If ALP formatting is correct, send data to the subscriber
-                /// 3. If packet is not valid, dump its hex
-                ///@note: ALP formatters should deal internally with protocol variations
-                if (payload_bytes > rpkt->size) {
-                    //dterm_send_error(dth, "rxstat", -1, 0, "Reported Payload Length is larger than buffer");
-                }
-                else if (rpkt_is_valid) {
+                /// - If packet is valid and framing correct, process packet.
+                /// - Else, dump the hex
+                if ((rpkt_is_valid) && (payload_bytes <= rpkt->size)) {
                     while (payload_bytes > 0) {
-                        size_t putsbytes = 0;
-                        uint8_t* lastfront = payload_front;
+                        size_t putsbytes    = 0;
+                        uint8_t* lastfront  = payload_front;
                         int subsig;
                         int proc_result;
                     
@@ -520,7 +573,7 @@ void* mpipe_parser(void* args) {
                         subscriber_post(appdata->subscribers, proc_result, subsig, NULL, 0);
                         
                         // Send RXstat message back to control interface.
-                        dterm_send_rxstat(dth, DFMT_Native, putsbuf, putsbytes, 0, rpkt->sequence, rpkt->tstamp, rpkt->crcqual);
+                        dterm_publish_rxstat(dth, DFMT_Native, putsbuf, putsbytes, 0, rpkt->sequence, rpkt->tstamp, rpkt->crcqual);
                         
                         // Recalculate message size following the treatment of the last segment
                         payload_bytes -= (payload_front - lastfront);
@@ -528,28 +581,29 @@ void* mpipe_parser(void* args) {
                 }
                 else {
                     size_t putsbytes = 0;
-                    fmt_printhex((uint8_t*)putsbuf, &putsbytes, &payload_front, payload_bytes, 16);
-                    dterm_send_rxstat(dth, DFMT_Text, putsbuf, putsbytes, 0, rpkt->sequence, rpkt->tstamp, rpkt->crcqual);
+                    clear_rpkt = true;
+                    ///@todo better way to send an error via dterm_publish_rxstat()
+                    fmt_printhex((uint8_t*)putsbuf, &putsbytes, &payload_front, rpkt->size, 16);
+                    dterm_publish_rxstat(dth, DFMT_Text, putsbuf, putsbytes, 0, rpkt->sequence, rpkt->tstamp, rpkt->crcqual);
                 }
+            }
+            
+            // tpkt is already matched to the packet with same sequence of
+            // received packet.
+            if (rpkt_is_resp && (tpkt != NULL)) {
+                pktlist_del(appdata->tlist, tpkt);
+            }
+            else {
+                ///@todo clear the oldest tpkt if its timestamp is of a certain amout.
+                //if (rlist->front->tstamp == 0) {
+                //    tpkt = tlist->front;
+                //    ---> do routine in else if below
+                //}
             }
             
             // Clear the rpkt if required
             if (clear_rpkt) {
                 pktlist_del(appdata->rlist, rpkt);
-            }
-            
-            // Clear the tpkt if it is matched with an rpkt
-            // Also, clear the oldest tpkt if it's timestamp is of a certain amout.
-            ///@todo Change timestamp so that it is not hardcoded
-            if (rpkt_is_resp == false) {
-                ///@todo check if old
-                //if (rlist->front->tstamp == 0) {    
-                //    tpkt = tlist->front;
-                //    ---> do routine in else if below
-                //}
-            }
-            else if (tpkt != NULL) {
-                pktlist_del(appdata->tlist, tpkt);
             }
         } 
         
