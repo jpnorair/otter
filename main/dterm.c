@@ -771,7 +771,6 @@ static int sub_proc_lineinput(dterm_handle_t* dth, int* cmdrc, char* loadbuf, in
     // then search/get command in list.
     cmdlen  = cmd_getname(cmdname, loadbuf, sizeof(cmdname));
     cmdptr  = cmd_search(appdata->cmdtab, cmdname);
-    
     if (cmdptr == NULL) {
         ///@todo build a nicer way to show where the error is,
         ///      possibly by using pi or ci (sign reversing)

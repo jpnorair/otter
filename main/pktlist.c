@@ -25,13 +25,14 @@
 /// mpipe_add():    Adds a packet to the RX List (rlist) or TX List (tlist)
 /// mpipe_del():    Deletes a packet from some place in the rlist or tlist
 
-int pktlist_init(pktlist_t* plist) {
+int pktlist_init(pktlist_t* plist, size_t max) {
     if (plist != NULL) {
         plist->front    = NULL;
         plist->last     = NULL;
         plist->cursor   = NULL;
         plist->marker   = NULL;
         plist->size     = 0;
+        plist->max      = max;
         plist->txnonce  = 0;
         return 0;
     }
@@ -56,8 +57,12 @@ void pktlist_free(pktlist_t* plist) {
 
 
 void pktlist_empty(pktlist_t* plist) {
-    pktlist_free(plist);
-    pktlist_init(plist);
+    size_t max;
+    if (plist != NULL) {
+        max = plist->max;
+        pktlist_free(plist);
+        pktlist_init(plist, max);
+    }
 }
 
 
@@ -375,8 +380,12 @@ static int sub_pktlist_add(user_endpoint_t* endpoint, void* intf, pktlist_t* pli
     
     put_footer(newpkt);
     
-    // Increment the list size to account for new packet
+    // Increment the list size to account for new packet.
+    // If the list is longer than max allowable size, delete oldest packet
     plist->size++;
+    if (plist->size > plist->max) {
+        pktlist_del(plist, plist->front);
+    }
     
     return (int)plist->size;
 }
@@ -424,15 +433,15 @@ int pktlist_del(pktlist_t* plist, pkt_t* pkt) {
     }
     free(pkt);
     
-    /// If there's no plist.  It isn't fatal but it's weird
+    /// plist can be NULL if there is no list, although this is irregular behavior
     if (plist == NULL) {
-        return 1;
+        return 0;
     }
 
     /// Downsize the list.  Re-init list if size == 0;
     plist->size--;
     if (plist->size <= 0) {
-        pktlist_init(plist);
+        pktlist_init(plist, plist->max);
         return 0;
     }
     

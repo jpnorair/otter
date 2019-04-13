@@ -34,13 +34,14 @@ typedef struct {
     pkt_t*  cursor;
     pkt_t*  marker;
     size_t  size;
+    size_t  max;
     int     txnonce;
 } pktlist_t;
 
 
 
 // Packet List Manipulation Functions
-int pktlist_init(pktlist_t* plist);
+int pktlist_init(pktlist_t* plist, size_t max);
 void pktlist_free(pktlist_t* plist);
 void pktlist_empty(pktlist_t* plist);
 int pktlist_del(pktlist_t* plist, pkt_t* pkt);

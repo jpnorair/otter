@@ -557,7 +557,7 @@ int mpipe_opentty( mpipe_handle_t handle, int id,
 }
 
 
-
+///@todo there may be freeze during this function
 int mpipe_reopen(mpipe_handle_t handle, int id) {
     mpipe_tab_t* table = (mpipe_tab_t*)handle;
     int rc = -1;

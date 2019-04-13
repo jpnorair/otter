@@ -359,8 +359,9 @@ void* modbus_writer(void* args) {
             /// Modbus 1.75ms idle EOF
             usleep(1750);
             
-            ///@todo block until RX comes, or some timeout occurs
-            
+            /// Modbus operates in lockstep: TX->RX
+            /// Always delete the packet data after finishing TX
+            pktlist_del(appdata->tlist, txpkt);
         }
         
         pthread_mutex_unlock(appdata->tlist_mutex);

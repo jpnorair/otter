@@ -677,9 +677,10 @@ int otter_main( ttyspec_t* ttylist,
     DEBUG_PRINTF("--> done\n");
 
     /// Initialize packet lists for transmitted packets and received packets
+    ///@todo cliopt for max list size
     DEBUG_PRINTF("Initializing Packet Lists ...\n");
-    if ((pktlist_init(&mpipe_rlist) != 0)
-    ||  (pktlist_init(&mpipe_tlist) != 0)) {
+    if ((pktlist_init(&mpipe_rlist, 256) != 0)
+    ||  (pktlist_init(&mpipe_tlist, 256) != 0)) {
         fprintf(stderr, "Pktlist Initialization Failure (%i)\n", -1);
         cli.exitcode = 7;
         goto otter_main_EXIT;

@@ -365,13 +365,14 @@ void* mpipe_writer(void* args) {
         
         pthread_mutex_lock(appdata->tlist_mutex);
         
+        ///@todo replace cursor/marker system with just cursor.  Packets that
+        /// must be retransmitted will be pushed to the end of the list
         while (appdata->tlist->cursor != NULL) {
             pkt_t* txpkt;
             mpipe_fd_t* intf_fd;
             
-            ///@todo wait also for RX to be off
-            
             txpkt = appdata->tlist->cursor;
+            
             
             // This is a never-before transmitted packet (not a re-transmit)
             // Move to the next in the list.
