@@ -44,11 +44,6 @@
 
 int cmd_xnode(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
     static const char xnode_name[] = "xnode";
-    struct arg_str* nodeuser= arg_str1(NULL,NULL,"user",        "User type");
-    struct arg_str* nodeuid = arg_str1(NULL,NULL,"uid",         "UID of device in bintex");
-    struct arg_str* nodecmd = arg_str1(NULL,NULL,"node cmd",    "Command put in quotes (\"\") to run");
-    struct arg_end* end     = arg_end(5);
-    void* argtable[]        = { nodeuser, nodeuid, nodecmd, end };
     int argc;
     char** argv;
     const cmdtab_item_t* cmdptr;
@@ -70,42 +65,48 @@ int cmd_xnode(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, siz
     appdata = dth->ext;
     
     argc = cmdutils_parsestring(dth->tctx, &argv, xnode_name, (char*)src, (size_t)*inbytes);
-
-    rc = cmdutils_argcheck(argtable, end, argc, argv);
-    if (rc != 0) {
-        rc = -1;
-        goto cmd_xnode_FREEARGS;
+    if (argc <= 0) {
+        rc = -256 + argc;
     }
+    else {
+        struct arg_str* nodeuser= arg_str1(NULL,NULL,"user",        "User type");
+        struct arg_str* nodeuid = arg_str1(NULL,NULL,"uid",         "UID of device in bintex");
+        struct arg_str* nodecmd = arg_str1(NULL,NULL,"node cmd",    "Command put in quotes (\"\") to run");
+        struct arg_end* end     = arg_end(5);
+        void* argtable[]        = { nodeuser, nodeuid, nodecmd, end };
     
-    usertype = user_get_type(nodeuser->sval[0]);
-    
-    bintex_ss(nodeuid->sval[0], (uint8_t*)&uid_val, 8);
-    node = devtab_select(appdata->endpoint.devtab, uid_val);
-    if (node == NULL) {
-        rc = -2;
-        goto cmd_xnode_FREEARGS;
-    }
-    
-    /// Make sure node has the necessary keys
-    ///@todo this code block is used in multiple places
-    usertype = user_get_type(nodeuser->sval[0]);
-    if (devtab_validate_usertype(node, usertype) != 0) {
-        rc = -4;
-        goto cmd_xnode_FREEALL;
-    }
-    appdata->endpoint.usertype  = usertype;
-    appdata->endpoint.node      = node;
-    
-    cmdptr  = cmd_quoteline_resolve((char*)nodecmd->sval[0], dth);
-    rc      = cmd_run(cmdptr, dth, dst, &bytesin, (uint8_t*)nodecmd->sval[0], dstmax);
+        rc = cmdutils_argcheck(argtable, end, argc, argv);
+        if (rc != 0) {
+            rc = -1;
+            goto cmd_xnode_FREEARGS;
+        }
+        
+        usertype = user_get_type(nodeuser->sval[0]);
+        
+        bintex_ss(nodeuid->sval[0], (uint8_t*)&uid_val, 8);
+        node = devtab_select(appdata->endpoint.devtab, uid_val);
+        if (node == NULL) {
+            rc = -2;
+            goto cmd_xnode_FREEARGS;
+        }
+        
+        /// Make sure node has the necessary keys
+        ///@todo this code block is used in multiple places
+        usertype = user_get_type(nodeuser->sval[0]);
+        if (devtab_validate_usertype(node, usertype) != 0) {
+            rc = -4;
+            goto cmd_xnode_FREEARGS;
+        }
+        appdata->endpoint.usertype  = usertype;
+        appdata->endpoint.node      = node;
+        
+        cmdptr  = cmd_quoteline_resolve((char*)nodecmd->sval[0], dth);
+        rc      = cmd_run(cmdptr, dth, dst, &bytesin, (uint8_t*)nodecmd->sval[0], dstmax);
 
-    cmd_xnode_FREEALL:
-    /// Free argtable & argv now that they are not necessary
-    //free(xnode_cmd);
-
-    cmd_xnode_FREEARGS:
-    arg_freetable(argtable, sizeof(argtable)/sizeof(argtable[0]));
-    cmdutils_freeargv(dth->tctx, argv);
+        cmd_xnode_FREEARGS:
+        arg_freetable(argtable, sizeof(argtable)/sizeof(argtable[0]));
+        cmdutils_freeargv(dth->tctx, argv);
+    }
 
     return rc;
 }
