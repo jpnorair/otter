@@ -30,7 +30,6 @@ int pktlist_init(pktlist_t* plist, size_t max) {
         plist->front    = NULL;
         plist->last     = NULL;
         plist->cursor   = NULL;
-        plist->marker   = NULL;
         plist->size     = 0;
         plist->max      = max;
         plist->txnonce  = 0;
@@ -364,7 +363,6 @@ static int sub_pktlist_add(user_endpoint_t* endpoint, void* intf, pktlist_t* pli
         plist->front        = newpkt;
         plist->last         = newpkt;
         plist->cursor       = newpkt;
-        plist->marker       = newpkt;
     }
     // List is not empty, so simply extend the list.
     // set the cursor to the new packet if it points to NULL (end)
@@ -417,6 +415,32 @@ int pktlist_add_rx(user_endpoint_t* endpoint, void* intf,  pktlist_t* plist, uin
 
 
 
+static void sub_removepkt(pktlist_t* plist, pkt_t* ref, pkt_t* copy) {
+    /// If packet was front of list, move front to next,
+    if (plist->front == ref) {
+        plist->front = copy->next;
+    }
+    
+    /// If packet was last of list, move last to prev
+    if (plist->last == ref) {
+        plist->last = copy->prev;
+    }
+    
+    /// Likewise, if the cursor was on the packet, advance it
+    if (plist->cursor == ref) {
+        plist->cursor = copy->next;
+    }
+    
+    /// Stitch the list back together
+    if (copy->next != NULL) {
+        copy->next->prev = copy->prev;
+    }
+    if (copy->prev != NULL) {
+        copy->prev->next = copy->next;
+    }
+}
+
+
 int pktlist_del(pktlist_t* plist, pkt_t* pkt) {
     pkt_t*  ref;
     pkt_t   copy; 
@@ -445,34 +469,30 @@ int pktlist_del(pktlist_t* plist, pkt_t* pkt) {
         return 0;
     }
     
-    /// If packet was front of list, move front to next,
-    if (plist->front == ref) {
-        plist->front = copy.next;
-    }
-    
-    /// If packet was last of list, move last to prev
-    if (plist->last == ref) {
-        plist->last = copy.prev;
-    }
-    
-    /// Likewise, if the cursor and marker were on the packet, advance them
-    if (plist->cursor == pkt) {
-        plist->cursor = copy.next;
-    }
-    if (plist->marker == pkt) {
-        plist->marker = copy.next;
-    }
-    
-    /// Stitch the list back together
-    if (copy.next != NULL) {
-        copy.next->prev = copy.prev;
-    }
-    if (copy.prev != NULL) {
-        copy.prev->next = copy.next;
-    }
+    sub_removepkt(plist, ref, &copy);
 
     return 0;
 }
+
+
+
+int pktlist_punt(pktlist_t* plist, pkt_t* pkt) {
+    if ((plist == NULL) || (pkt == NULL)) {
+        return -1;
+    }
+    
+    sub_removepkt(plist, pkt, pkt);
+    
+    // Move to last
+    plist->last->next   = pkt;
+    pkt->prev           = plist->last;
+    pkt->next           = NULL;
+    plist->last         = pkt;
+    
+    return 0;
+}
+
+
 
 int pktlist_del_sequence(pktlist_t* plist, uint32_t sequence) {
     int rc = 0;

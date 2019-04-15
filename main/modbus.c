@@ -328,20 +328,8 @@ void* modbus_writer(void* args) {
             /// Modbus 1.75ms idle SOF
             usleep(1750);
             
-            txpkt = appdata->tlist->cursor;
-            
-            // This is a never-before transmitted packet (not a re-transmit)
-            // Move to the next in the list.
-            if (appdata->tlist->cursor == appdata->tlist->marker) {
-                pkt_t* next_pkt         = appdata->tlist->marker->next;
-                appdata->tlist->cursor  = next_pkt;
-                appdata->tlist->marker  = next_pkt;
-            }
-            // This is a packet that has just been re-transmitted.  
-            // Move to the marker, which is where the new packets start.
-            else {
-                appdata->tlist->cursor  = appdata->tlist->marker;
-            }
+            txpkt                   = appdata->tlist->cursor;
+            appdata->tlist->cursor  = appdata->tlist->cursor->next;
             
             time(&txpkt->tstamp);
             
