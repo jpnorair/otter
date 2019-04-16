@@ -459,138 +459,109 @@ void* mpipe_parser(void* args) {
         rpkt = appdata->rlist->cursor;
         
         // ===================LOOP CONDITION LOGIC==========================
-        /// pktlist_getnew will validate the packet with CRC:
-        /// - It returns 0 if all is well
-        /// - It returns -1 if the list is empty
-        /// - It returns a positive error code if there is some packet error
+        /// pktlist_getnew will validate the packet and return:
+        /// - 0 if all is well
+        /// - -1 if the list is empty
+        /// - Other negative codes if there's a runtime exception of some type
+        /// - Positive error code if there is some packet error
         /// - rlist->cursor points to the working packet
         pkt_condition = pktlist_getnew(appdata->rlist);
         if (pkt_condition < 0) {
             goto mpipe_parser_END;
         }
         // =================================================================
-
-        /// If packet has an error of some kind -- delete it and move-on.
-        /// Else, print-out the packet.  This can get rich depending on the
-        /// internal protocol, and it can result in responses being queued.
+        
+        /// If received packet has an error of some kind, delete it.
+        /// Queue the oldest orphaned tpkt for retransmission.
         if (pkt_condition > 0) {
             ///@todo some sort of error code
             ERR_PRINTF("A malformed packet was sent for parsing\n");
+            dterm_publish_rxstat(dth, DFMT_Binary, rpkt->buffer, rpkt->size, 0, rpkt->sequence, rpkt->tstamp, rpkt->crcqual);
+            
             pktlist_del(appdata->rlist, rpkt);
+            if (appdata->tlist->front != appdata->tlist->cursor) {
+                pktlist_punt(appdata->tlist, appdata->tlist->front);
+            }
         }
         else {
             uint8_t*    payload_front;
             int         payload_bytes;
             uint64_t    rxaddr;
-            bool        clear_rpkt      = true;
-            bool        rpkt_is_resp    = false;
             bool        rpkt_is_valid   = false;
             
             /// Response Packets should match to a sequence number of the last Request.
-            /// If there is no match, then there is no response processing, we just
-            /// print the damn packet.
-            tpkt = appdata->tlist->front;
-            while (tpkt != NULL) {
-                if (tpkt->sequence == rpkt->sequence) {
-                    // matching transmitted packet: it IS a response
-                    rpkt_is_resp = true;
-                    break;
-                }
-                tpkt = tpkt->next;
-            }
+            /// If there is no match, then nothing in tlist is deleted.
+            pktlist_del_sequence(appdata->tlist, rpkt->sequence);
             
             /// For Mpipe, the address is implicit based on the interface vid
             rxaddr = devtab_get_uid(appdata->endpoint.devtab, rpkt->intf);
             
-            /// If CRC is bad, discard packet now, and rxstat an error
-            /// Else, if CRC is good, send packet to processor.
-            if (appdata->rlist->cursor->crcqual != 0) {
-                ///@todo add rx address of input packet (set to 0)
-                dterm_publish_rxstat(dth, DFMT_Binary, rpkt->buffer, rpkt->size, 0, rpkt->sequence, rpkt->tstamp, rpkt->crcqual);
-            }
-            else {
-                // -----------------------------------------------------------
-                ///@todo Here is where decryption might go, if not handled in pktlist
-                /// there should be an encryption header at this offset (6),
-                /// followed by the payload, and then the real data payload.
-                /// The real data payload is followed by a 4 byte Message
-                /// Authentication Check (Crypto-MAC) value.  AES128 EAX is the
-                /// cryptography and cipher used.
-                if (rpkt->buffer[5] & (3<<5)) {
-                    // Case with encryption
-                    payload_front = &rpkt->buffer[6];
-                }
-                else {
-                    payload_front = &rpkt->buffer[6];
-                }
-                // -----------------------------------------------------------
-                
-                // Inspect header to see if M2DEF
-                if ((rpkt->buffer[5] & (1<<7)) == 0) {
-                    rpkt_is_valid = true;
-                    //parse some shit
-                    //clear_rpkt = false when there is non-atomic input
-                }
-                
-                // Get Payload Bytes, found in buffer[2:3]
-                // Then print-out the payload.
-                // If it is a M2DEF payload, the print-out can be formatted in different ways
-                payload_bytes   = rpkt->buffer[2] * 256;
-                payload_bytes  += rpkt->buffer[3];
+            // Get Payload Bytes, found in buffer[2:3]
+            // Then print-out the payload.
+            // If it is a M2DEF payload, the print-out can be formatted in different ways
+            payload_bytes   = rpkt->buffer[2] * 256;
+            payload_bytes  += rpkt->buffer[3];
+            
+            // Inspect header to see if M2DEF
+            if ((rpkt->buffer[5] & (1<<7)) == 0) {
+                rpkt_is_valid = true;
 
-                /// - If packet is valid and framing correct, process packet.
-                /// - Else, dump the hex
-                if ((rpkt_is_valid) && (payload_bytes <= rpkt->size)) {
-                    while (payload_bytes > 0) {
-                        size_t putsbytes    = 0;
-                        uint8_t* lastfront  = payload_front;
-                        int subsig;
-                        int proc_result;
-                    
-                        /// ALP message:
-                        /// proc_result now takes the value from the protocol formatter.
-                        /// The formatter will give negative values on framing errors
-                        /// and also for protocol errors (i.e. NACKs).
-                        proc_result = fmt_fprintalp((uint8_t*)putsbuf, &putsbytes, &payload_front, payload_bytes);
-                        
-                        /// Successful formatted output gets propagated to any
-                        /// subscribers of this ALP ID.
-                        subsig = (proc_result >= 0) ? SUBSCR_SIG_OK : SUBSCR_SIG_ERR;
-                        subscriber_post(appdata->subscribers, proc_result, subsig, NULL, 0);
-                        
-                        // Send RXstat message back to control interface.
-                        dterm_publish_rxstat(dth, DFMT_Native, putsbuf, putsbytes, 0, rpkt->sequence, rpkt->tstamp, rpkt->crcqual);
-                        
-                        // Recalculate message size following the treatment of the last segment
-                        payload_bytes -= (payload_front - lastfront);
-                    }
-                }
-                else {
-                    size_t putsbytes = 0;
-                    clear_rpkt = true;
-                    ///@todo better way to send an error via dterm_publish_rxstat()
-                    fmt_printhex((uint8_t*)putsbuf, &putsbytes, &payload_front, rpkt->size, 16);
-                    dterm_publish_rxstat(dth, DFMT_Text, putsbuf, putsbytes, 0, rpkt->sequence, rpkt->tstamp, rpkt->crcqual);
-                }
+                ///@todo consider any need to deal with fragmentation.  Maybe
+                /// via subscriber module, but a secondary buffer required.
             }
             
-            // tpkt is already matched to the packet with same sequence of
-            // received packet.
-            if (rpkt_is_resp && (tpkt != NULL)) {
-                pktlist_del(appdata->tlist, tpkt);
+            // -----------------------------------------------------------
+            ///@todo Here is where decryption might go, if not handled in pktlist
+            /// there should be an encryption header at this offset (6),
+            /// followed by the payload, and then the real data payload.
+            /// The real data payload is followed by a 4 byte Message
+            /// Authentication Check (Crypto-MAC) value.  AES128 EAX is the
+            /// cryptography and cipher used.
+            if (rpkt->buffer[5] & (3<<5)) {
+                // Case with encryption
+                payload_front = &rpkt->buffer[6];
             }
             else {
-                ///@todo clear the oldest tpkt if its timestamp is of a certain amout.
-                //if (rlist->front->tstamp == 0) {
-                //    tpkt = tlist->front;
-                //    ---> do routine in else if below
-                //}
+                payload_front = &rpkt->buffer[6];
+            }
+            // -----------------------------------------------------------
+            
+            /// - If packet is valid and framing correct, process packet.
+            /// - Else, dump the hex
+            if ((rpkt_is_valid) && (payload_bytes <= rpkt->size)) {
+                while (payload_bytes > 0) {
+                    size_t putsbytes    = 0;
+                    uint8_t* lastfront  = payload_front;
+                    int subsig;
+                    int proc_result;
+                
+                    /// ALP message:
+                    /// proc_result now takes the value from the protocol formatter.
+                    /// The formatter will give negative values on framing errors
+                    /// and also for protocol errors (i.e. NACKs).
+                    proc_result = fmt_fprintalp((uint8_t*)putsbuf, &putsbytes, &payload_front, payload_bytes);
+                    
+                    /// Successful formatted output gets propagated to any
+                    /// subscribers of this ALP ID.
+                    subsig = (proc_result >= 0) ? SUBSCR_SIG_OK : SUBSCR_SIG_ERR;
+                    subscriber_post(appdata->subscribers, proc_result, subsig, NULL, 0);
+                    
+                    // Send RXstat message back to control interface.
+                    dterm_publish_rxstat(dth, DFMT_Native, putsbuf, putsbytes, rxaddr, rpkt->sequence, rpkt->tstamp, rpkt->crcqual);
+                    
+                    // Recalculate message size following the treatment of the last segment
+                    payload_bytes -= (payload_front - lastfront);
+                }
+            }
+            else {
+                size_t putsbytes = 0;
+                ///@todo better way to send an error via dterm_publish_rxstat()
+                fmt_printhex((uint8_t*)putsbuf, &putsbytes, &payload_front, rpkt->size, 16);
+                dterm_publish_rxstat(dth, DFMT_Text, putsbuf, putsbytes, rxaddr, rpkt->sequence, rpkt->tstamp, rpkt->crcqual);
             }
             
-            // Clear the rpkt if required
-            if (clear_rpkt) {
-                pktlist_del(appdata->rlist, rpkt);
-            }
+            // Clear the rpkt
+            pktlist_del(appdata->rlist, rpkt);
         } 
         
         mpipe_parser_END:
