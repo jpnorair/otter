@@ -500,7 +500,8 @@ int pktlist_del_sequence(pktlist_t* plist, uint32_t sequence) {
     if (plist != NULL) {
         pkt_t* pkt = plist->front;
     
-        while (pkt != NULL) {
+//        while (pkt != NULL) {
+        while (pkt != plist->cursor) {
             pkt_t* next_pkt = pkt->next;
             if (pkt->sequence == sequence) {
                 rc += (pktlist_del(plist, pkt) == 0);
