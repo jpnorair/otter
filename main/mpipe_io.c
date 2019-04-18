@@ -48,11 +48,6 @@
 
 
 
-static dterm_fd_t* mpipe_active_dterm;
-
-static int sub_dtputs(char* str) {
-    return dterm_puts(mpipe_active_dterm, str);
-}
 
 
 
@@ -286,9 +281,7 @@ void* mpipe_reader(void* args) {
             HEX_DUMP(&rbuf[6], payload_length, "pkt   : ");
 
             // Copy the packet to the rlist and signal mpipe_parser()
-            pthread_mutex_lock(appdata->rlist_mutex);
             list_size = pktlist_add_rx(&appdata->endpoint, mpipe_intf_get(mph, i), appdata->rlist, rbuf, (size_t)(header_length + payload_length));
-            pthread_mutex_unlock(appdata->rlist_mutex);
             if (list_size <= 0) {
                 errcode = 3;
             }
@@ -298,7 +291,10 @@ void* mpipe_reader(void* args) {
             mpipe_reader_ERR:
             switch (errcode) {
             case 0: TTY_RX_PRINTF("Packet Received Successfully (%d bytes).\n", frame_length);
-                    pthread_cond_signal(appdata->pktrx_cond);
+                    if (pthread_mutex_trylock(appdata->pktrx_mutex) == 0) {
+                        pthread_cond_signal(appdata->pktrx_cond);
+                        pthread_mutex_unlock(appdata->pktrx_mutex);
+                    }
                     break;
             
             case 1: TTY_RX_PRINTF("MPipe Packet Sync could not be retrieved.\n");
@@ -363,9 +359,6 @@ void* mpipe_writer(void* args) {
         pthread_mutex_lock(appdata->tlist_cond_mutex);
         pthread_cond_wait(appdata->tlist_cond, appdata->tlist_cond_mutex);
         
-        ///@todo may be redundant
-        pthread_mutex_lock(appdata->tlist_mutex);
-        
         ///@todo replace cursor/marker system with just cursor.  Packets that
         /// must be retransmitted will be pushed to the end of the list
         while (appdata->tlist->cursor != NULL) {
@@ -413,8 +406,6 @@ void* mpipe_writer(void* args) {
             /// @todo make configurable instead of 10ms
             usleep(10000);
         }
-        
-        pthread_mutex_unlock(appdata->tlist_mutex);
         
         pthread_mutex_unlock(appdata->tlist_cond_mutex);
     }
@@ -470,33 +461,16 @@ void* mpipe_parser(void* args) {
         pthread_cond_wait(appdata->pktrx_cond, appdata->pktrx_mutex);
         
         pthread_mutex_lock(dth->iso_mutex);
-        pthread_mutex_lock(appdata->rlist_mutex);
-        pthread_mutex_lock(appdata->tlist_mutex);
         
-        mpipe_active_dterm = (dterm_fd_t*)&dth->fd;
         rpkt = appdata->rlist->cursor;
         
-        // ===================LOOP CONDITION LOGIC==========================
+
         /// pktlist_getnew will validate the packet with CRC:
         /// - It returns 0 if all is well
         /// - It returns -1 if the list is empty
         /// - It returns a positive error code if there is some packet error
         /// - rlist->cursor points to the working packet
-        pkt_condition = pktlist_getnew(appdata->rlist);
-        if (pkt_condition < 0) {
-            goto mpipe_parser_END;
-        }
-        // =================================================================
-
-        /// If packet has an error of some kind -- delete it and move-on.
-        /// Else, print-out the packet.  This can get rich depending on the
-        /// internal protocol, and it can result in responses being queued.
-        if (pkt_condition > 0) {
-            ///@todo some sort of error code
-            ERR_PRINTF("A malformed packet was sent for parsing\n");
-            pktlist_del(appdata->rlist, rpkt);
-        }
-        else {
+        while (1) {
             uint8_t*    payload_front;
             int         payload_bytes;
             uint64_t    rxaddr;
@@ -504,6 +478,21 @@ void* mpipe_parser(void* args) {
             bool        rpkt_is_resp    = false;
             bool        rpkt_is_valid   = false;
             
+            pkt_condition = pktlist_getnew(appdata->rlist);
+            if (pkt_condition < 0) {
+                break;
+            }
+
+            /// If packet has an error of some kind -- delete it and move-on.
+            /// Else, print-out the packet.  This can get rich depending on the
+            /// internal protocol, and it can result in responses being queued.
+            if (pkt_condition > 0) {
+                ///@todo some sort of error code
+                ERR_PRINTF("A malformed packet was sent for parsing\n");
+                pktlist_del(rpkt);
+                break;
+            }
+
             /// Response Packets should match to a sequence number of the last Request.
             /// If there is no match, then there is no response processing, we just
             /// print the damn packet.
@@ -595,7 +584,7 @@ void* mpipe_parser(void* args) {
             // tpkt is already matched to the packet with same sequence of
             // received packet.
             if (rpkt_is_resp && (tpkt != NULL)) {
-                pktlist_del(appdata->tlist, tpkt);
+                pktlist_del(tpkt);
             }
             else {
                 ///@todo clear the oldest tpkt if its timestamp is of a certain amout.
@@ -607,15 +596,11 @@ void* mpipe_parser(void* args) {
             
             // Clear the rpkt if required
             if (clear_rpkt) {
-                pktlist_del(appdata->rlist, rpkt);
+                pktlist_del(rpkt);
             }
         } 
         
-        mpipe_parser_END:
-        pthread_mutex_unlock(appdata->tlist_mutex);
-        pthread_mutex_unlock(appdata->rlist_mutex);
         pthread_mutex_unlock(dth->iso_mutex);
-        
         pthread_mutex_unlock(appdata->pktrx_mutex);
         
         ///@todo Can check for major error in pkt_condition

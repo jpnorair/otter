@@ -558,9 +558,7 @@ int otter_main( ttyspec_t* ttylist,
     
     // Thread & Mutex Instances
     ///@todo do tlist_mutex, tlist_cond need instantiation here?
-    pthread_mutex_t     tlist_mutex;
     pthread_cond_t      tlist_cond;
-    pthread_mutex_t     rlist_mutex;
     pthread_mutex_t     tlist_cond_mutex;
     pthread_cond_t      pktrx_cond;
     pthread_mutex_t     pktrx_mutex;
@@ -610,8 +608,6 @@ int otter_main( ttyspec_t* ttylist,
     DEBUG_PRINTF("Initializing Multitasking elements ...\n");
     assert( pthread_mutex_init(&cli.kill_mutex, NULL) == 0 );
     pthread_cond_init(&cli.kill_cond, NULL);
-    assert( pthread_mutex_init(&rlist_mutex, NULL) == 0 );
-    assert( pthread_mutex_init(&tlist_mutex, NULL) == 0 );
     assert( pthread_mutex_init(&tlist_cond_mutex, NULL) == 0 );
     pthread_cond_init(&tlist_cond, NULL);
     assert( pthread_mutex_init(&pktrx_mutex, NULL) == 0 );
@@ -715,9 +711,7 @@ int otter_main( ttyspec_t* ttylist,
     appdata.endpoint.node  = devtab_select(appdata.endpoint.devtab, 0);
     appdata.endpoint.usertype= USER_guest;
     appdata.dterm_parent   = &dterm_handle;
-    appdata.tlist_mutex    = &tlist_mutex;
     appdata.tlist_cond     = &tlist_cond;
-    appdata.rlist_mutex    = &rlist_mutex;
     appdata.tlist_cond_mutex = &tlist_cond_mutex;
     appdata.pktrx_cond     = &pktrx_cond;
     appdata.pktrx_mutex    = &pktrx_mutex;
@@ -897,12 +891,6 @@ int otter_main( ttyspec_t* ttylist,
     }
 
     DEBUG_PRINTF("Destroying thread resources\n");
-    pthread_mutex_unlock(&rlist_mutex);
-    pthread_mutex_destroy(&rlist_mutex);
-    DEBUG_PRINTF("-- rlist_mutex destroyed\n");
-    pthread_mutex_unlock(&tlist_mutex);
-    pthread_mutex_destroy(&tlist_mutex);
-    DEBUG_PRINTF("-- tlist_mutex destroyed\n");
     pthread_mutex_unlock(&tlist_cond_mutex);
     pthread_mutex_destroy(&tlist_cond_mutex);
     pthread_cond_destroy(&tlist_cond);
