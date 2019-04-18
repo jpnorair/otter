@@ -410,6 +410,8 @@ void* modbus_parser(void* args) {
     
     while (1) {
         int pkt_condition;  // tracks some error conditions
+        pkt_t* rpkt;
+
     
         //pthread_mutex_lock(pktrx_mutex);
         pthread_cond_wait(appdata->pktrx_cond, appdata->pktrx_mutex);
@@ -438,13 +440,16 @@ void* modbus_parser(void* args) {
         }
         // =================================================================
         
+        rpkt = appdata->rlist->cursor;
+        VDSRC_PRINTF("RX size=%zu, cond=%i, sid=%i, qual=%i\n", rpkt->size, pkt_condition, rpkt->sequence, rpkt->crcqual);
+
         /// If packet has an error of some kind -- delete it and move-on.
         /// Else, print-out the packet.  This can get rich depending on the
         /// internal protocol, and it can result in responses being queued.
         if (pkt_condition > 0) {
             ///@todo some sort of error code
             ERR_PRINTF("A malformed packet was sent for parsing\n");
-            pktlist_del(appdata->rlist, appdata->rlist->cursor);
+            pktlist_del(appdata->rlist, rpkt);
         }
         else {
             uint16_t    smut_outbytes;
@@ -454,19 +459,17 @@ void* modbus_parser(void* args) {
             uint8_t*    msg;
             int         msgbytes;
             bool        rpkt_is_resp;
-            pkt_t*      rpkt;
             uint64_t    rxaddr;
             
             /// For a Modbus master (like this), all received packets are 
             /// responses.  In some type of peer-peer modbus system, this would
             /// need to be intelligently managed.
             rpkt_is_resp    = true;
-            rpkt            = appdata->rlist->cursor;
             rxaddr          = devtab_lookup_uid(appdata->endpoint.devtab, rpkt->buffer[2]);
 
             /// If CRC is bad, discard packet now, and rxstat an error
             /// CRC is good, so send packet to Modbus processor.
-            if (appdata->rlist->cursor->crcqual != 0) {
+            if (rpkt->crcqual != 0) {
                 ///@todo add rx address of input packet (set to 0)
                 dterm_publish_rxstat(dth, DFMT_Binary, rpkt->buffer, rpkt->size, 0, rpkt->sequence, rpkt->tstamp, rpkt->crcqual);
             }
