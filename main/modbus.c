@@ -226,10 +226,7 @@ void* modbus_reader(void* args) {
             //HEX_DUMP(rbuf, frame_length, "Reading %d Bytes on tty\n", frame_length);
 
             /// Copy the packet to the rlist and signal modbus_parser()
-            pthread_mutex_lock(appdata->rlist_mutex);
             list_size = pktlist_add_rx(&appdata->endpoint, mpipe_intf_get(mph, i), appdata->rlist, rbuf, (size_t)frame_length);
-            pthread_mutex_unlock(appdata->rlist_mutex);
-            
             if (list_size <= 0) {
                 errcode = 3;
             }
@@ -239,7 +236,10 @@ void* modbus_reader(void* args) {
             modbus_reader_ERR:
             switch (errcode) {
                 case 0: TTY_RX_PRINTF("Packet Received Successfully (%d bytes).\n", frame_length);
-                        pthread_cond_signal(appdata->pktrx_cond);
+                        if (pthread_mutex_trylock(appdata->pktrx_mutex) == 0) {
+                            pthread_cond_signal(appdata->pktrx_cond);
+                            pthread_mutex_unlock(appdata->pktrx_mutex);
+                        }
                         break;
                 
                 case 2: TTY_RX_PRINTF("Modbus Packet Payload Length (%d bytes) is out of bounds.\n", frame_length);
@@ -316,11 +316,8 @@ void* modbus_writer(void* args) {
     
     while (1) {
         
+        pthread_mutex_lock(appdata->tlist_cond_mutex);
         pthread_cond_wait(appdata->tlist_cond, appdata->tlist_cond_mutex);
-        pthread_mutex_unlock(appdata->tlist_cond_mutex);
-        
-        ///@todo this lock may be redundant
-        pthread_mutex_lock(appdata->tlist_mutex);
         
         while (appdata->tlist->cursor != NULL) {
             pkt_t* txpkt;
@@ -349,10 +346,10 @@ void* modbus_writer(void* args) {
             
             /// Modbus operates in lockstep: TX->RX
             /// Always delete the packet data after finishing TX
-            pktlist_del(appdata->tlist, txpkt);
+            pktlist_del(txpkt);
         }
         
-        pthread_mutex_unlock(appdata->tlist_mutex);
+        pthread_mutex_unlock(appdata->tlist_cond_mutex);
     }
     
     modbus_writer_TERM:
@@ -398,14 +395,12 @@ void* modbus_parser(void* args) {
     
     while (1) {
         int pkt_condition;  // tracks some error conditions
-    
-        //pthread_mutex_lock(pktrx_mutex);
+        pkt_t* rpkt;
+        
+        pthread_mutex_lock(appdata->pktrx_mutex);
         pthread_cond_wait(appdata->pktrx_cond, appdata->pktrx_mutex);
-        pthread_mutex_unlock(appdata->pktrx_mutex);
         
         pthread_mutex_lock(dth->iso_mutex);
-        pthread_mutex_lock(appdata->rlist_mutex);
-        pthread_mutex_lock(appdata->tlist_mutex);
         
         modbus_active_dterm = &dth->fd;
         
@@ -420,21 +415,7 @@ void* modbus_parser(void* args) {
         /// - It returns -1 if the list is empty
         /// - It returns a positive error code if there is some packet error
         /// - rlist->cursor points to the working packet
-        pkt_condition = pktlist_getnew(appdata->rlist);
-        if (pkt_condition < 0) {
-            goto modbus_parser_END;
-        }
-        // =================================================================
-        
-        /// If packet has an error of some kind -- delete it and move-on.
-        /// Else, print-out the packet.  This can get rich depending on the
-        /// internal protocol, and it can result in responses being queued.
-        if (pkt_condition > 0) {
-            ///@todo some sort of error code
-            ERR_PRINTF("A malformed packet was sent for parsing\n");
-            pktlist_del(appdata->rlist, appdata->rlist->cursor);
-        }
-        else {
+        while (1) {
             uint16_t    smut_outbytes;
             uint16_t    smut_msgbytes;
             int         proc_result;
@@ -442,14 +423,30 @@ void* modbus_parser(void* args) {
             uint8_t*    msg;
             int         msgbytes;
             bool        rpkt_is_resp;
-            pkt_t*      rpkt;
             uint64_t    rxaddr;
+            
+            pkt_condition = pktlist_getnew(appdata->rlist);
+            if (pkt_condition < 0) {
+                break;
+            }
+
+            rpkt = appdata->rlist->cursor;
+            VDSRC_PRINTF("RX size=%zu, cond=%i, sid=%i, qual=%i\n", rpkt->size, pkt_condition, rpkt->sequence, rpkt->crcqual);
+        
+            /// If packet has an error of some kind -- delete it and move-on.
+            /// Else, print-out the packet.  This can get rich depending on the
+            /// internal protocol, and it can result in responses being queued.
+            if (pkt_condition > 0) {
+                ///@todo some sort of error code
+                ERR_PRINTF("A malformed packet was sent for parsing\n");
+                pktlist_del(rpkt);
+                break;
+            }
             
             /// For a Modbus master (like this), all received packets are 
             /// responses.  In some type of peer-peer modbus system, this would
             /// need to be intelligently managed.
             rpkt_is_resp    = true;
-            rpkt            = appdata->rlist->cursor;
             rxaddr          = devtab_lookup_uid(appdata->endpoint.devtab, rpkt->buffer[2]);
 
             /// If CRC is bad, discard packet now, and rxstat an error
@@ -498,13 +495,11 @@ void* modbus_parser(void* args) {
             }
             
             // Remove the packet that was just received
-            pktlist_del(appdata->rlist, rpkt);
+            pktlist_del(rpkt);
         }
-        
-        modbus_parser_END:
-        pthread_mutex_unlock(appdata->tlist_mutex);
-        pthread_mutex_unlock(appdata->rlist_mutex);
+
         pthread_mutex_unlock(dth->iso_mutex);
+        pthread_mutex_unlock(appdata->pktrx_mutex);
         
         ///@todo Can check for major error in pkt_condition
         ///      Major errors are integers less than -1

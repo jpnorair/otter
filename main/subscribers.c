@@ -203,6 +203,7 @@ int subscriber_wait(subscr_t subscriber, int timeout_ms) {
         return -1;
     }
     
+    pthread_mutex_lock(&node->mutex);
     if (timeout_ms <= 0) {
         rc = pthread_cond_wait(&node->cond, &node->mutex);
     }

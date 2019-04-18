@@ -42,10 +42,7 @@ typedef struct {
     void*               smut_handle;
     void*               dterm_parent;
     
-    pthread_mutex_t*    tlist_mutex;
     pthread_cond_t*     tlist_cond;
-    
-    pthread_mutex_t*    rlist_mutex;
     pthread_mutex_t*    tlist_cond_mutex;
     pthread_cond_t*     pktrx_cond;
     pthread_mutex_t*    pktrx_mutex;
