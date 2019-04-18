@@ -77,7 +77,6 @@ void* mpipe_reader(void* args) {
     int num_fds;
     int pollcode;
     int polltimeout;
-    int list_size;
     int ready_fds;
     
     uint8_t rbuf[1024];
@@ -281,8 +280,7 @@ void* mpipe_reader(void* args) {
             HEX_DUMP(&rbuf[6], payload_length, "pkt   : ");
 
             // Copy the packet to the rlist and signal mpipe_parser()
-            list_size = pktlist_add_rx(&appdata->endpoint, mpipe_intf_get(mph, i), appdata->rlist, rbuf, (size_t)(header_length + payload_length));
-            if (list_size <= 0) {
+            if (pktlist_add_rx(&appdata->endpoint, mpipe_intf_get(mph, i), appdata->rlist, rbuf, (size_t)(header_length + payload_length)) == NULL) {
                 errcode = 3;
             }
             
@@ -350,6 +348,8 @@ void* mpipe_writer(void* args) {
 /// <LI> Sends the packet over the TTY. </LI>
 ///
     otter_app_t* appdata = args;
+    pkt_t* txpkt;
+    mpipe_fd_t* intf_fd;
     
     if (appdata == NULL) {
         goto mpipe_writer_TERM;
@@ -359,13 +359,8 @@ void* mpipe_writer(void* args) {
         pthread_mutex_lock(appdata->tlist_cond_mutex);
         pthread_cond_wait(appdata->tlist_cond, appdata->tlist_cond_mutex);
         
-        while (appdata->tlist->cursor != NULL) {
-            pkt_t* txpkt;
-            mpipe_fd_t* intf_fd;
-            
-            txpkt                   = appdata->tlist->cursor;
-            appdata->tlist->cursor  = appdata->tlist->cursor->next;
-            
+        while ((txpkt = pktlist_get(appdata->tlist)) != NULL) {
+        
             intf_fd = mpipe_fds_resolve(txpkt->intf);
             if (intf_fd != NULL) {
                 int bytes_left;
@@ -440,7 +435,6 @@ void* mpipe_parser(void* args) {
     while (1) {
         int pkt_condition;  // tracks some error conditions
         pkt_t*  rpkt;
-        pkt_t*  tpkt;
     
         pthread_mutex_lock(appdata->pktrx_mutex);
         pthread_cond_wait(appdata->pktrx_cond, appdata->pktrx_mutex);
@@ -448,7 +442,7 @@ void* mpipe_parser(void* args) {
         pthread_mutex_lock(dth->iso_mutex);
         
 
-        /// pktlist_getnew will validate the packet with CRC:
+        /// pktlist_parse will validate the packet with CRC:
         /// - It returns 0 if all is well
         /// - It returns -1 if the list is empty
         /// - It returns a positive error code if there is some packet error
@@ -457,16 +451,12 @@ void* mpipe_parser(void* args) {
             uint8_t*    payload_front;
             int         payload_bytes;
             uint64_t    rxaddr;
-            bool        clear_rpkt      = true;
-            bool        rpkt_is_resp    = false;
             bool        rpkt_is_valid   = false;
             
-            pkt_condition = pktlist_getnew(appdata->rlist);
+            rpkt = pktlist_parse(&pkt_condition, appdata->rlist);
             if (pkt_condition < 0) {
                 break;
             }
-            
-            rpkt = appdata->rlist->cursor;
             
             /// If packet has an error of some kind -- delete it and move-on.
             /// Else, print-out the packet.  This can get rich depending on the
@@ -555,7 +545,7 @@ void* mpipe_parser(void* args) {
             }
             
             // Clear the rpkt
-            pktlist_del(appdata->rlist, rpkt);
+            pktlist_del(rpkt);
         } 
         
         pthread_mutex_unlock(dth->iso_mutex);

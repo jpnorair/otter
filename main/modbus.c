@@ -88,7 +88,6 @@ void* modbus_reader(void* args) {
     uint8_t* rbuf_cursor;
     int read_limit;
     int frame_length;
-    int list_size;
     int errcode;
     
     if (appdata == NULL) {
@@ -226,8 +225,7 @@ void* modbus_reader(void* args) {
             //HEX_DUMP(rbuf, frame_length, "Reading %d Bytes on tty\n", frame_length);
 
             /// Copy the packet to the rlist and signal modbus_parser()
-            list_size = pktlist_add_rx(&appdata->endpoint, mpipe_intf_get(mph, i), appdata->rlist, rbuf, (size_t)frame_length);
-            if (list_size <= 0) {
+            if (pktlist_add_rx(&appdata->endpoint, mpipe_intf_get(mph, i), appdata->rlist, rbuf, (size_t)frame_length) == NULL) {
                 errcode = 3;
             }
         
@@ -307,6 +305,7 @@ void* modbus_writer(void* args) {
 ///
     otter_app_t* appdata = args;
     mpipe_handle_t mph;
+    pkt_t* txpkt;
     
     if (appdata == NULL) {
         goto modbus_writer_TERM;
@@ -319,14 +318,10 @@ void* modbus_writer(void* args) {
         pthread_mutex_lock(appdata->tlist_cond_mutex);
         pthread_cond_wait(appdata->tlist_cond, appdata->tlist_cond_mutex);
         
-        while (appdata->tlist->cursor != NULL) {
-            pkt_t* txpkt;
+        while ((txpkt = pktlist_get(appdata->tlist)) != NULL) {
             
             /// Modbus 1.75ms idle SOF
             usleep(1750);
-            
-            txpkt                   = appdata->tlist->cursor;
-            appdata->tlist->cursor  = appdata->tlist->cursor->next;
             
             time(&txpkt->tstamp);
             
@@ -410,7 +405,7 @@ void* modbus_parser(void* args) {
         // are none remaining.
 
         // ===================LOOP CONDITION LOGIC==========================
-        /// pktlist_getnew will validate the packet with CRC:
+        /// pktlist_parse will validate the packet with CRC:
         /// - It returns 0 if all is well
         /// - It returns -1 if the list is empty
         /// - It returns a positive error code if there is some packet error
@@ -425,12 +420,11 @@ void* modbus_parser(void* args) {
             bool        rpkt_is_resp;
             uint64_t    rxaddr;
             
-            pkt_condition = pktlist_getnew(appdata->rlist);
+            rpkt = pktlist_parse(&pkt_condition, appdata->rlist);
             if (pkt_condition < 0) {
                 break;
             }
 
-            rpkt = appdata->rlist->cursor;
             VDSRC_PRINTF("RX size=%zu, cond=%i, sid=%i, qual=%i\n", rpkt->size, pkt_condition, rpkt->sequence, rpkt->crcqual);
         
             /// If packet has an error of some kind -- delete it and move-on.

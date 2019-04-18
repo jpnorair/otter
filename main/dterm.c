@@ -805,17 +805,17 @@ static int sub_proc_lineinput(dterm_handle_t* dth, int* cmdrc, char* loadbuf, in
                     test_dumpbytes(protocol_buf, bytesout, "TX Packet Add");
                 }
                 else {
-                    int list_size;
-                    pthread_mutex_lock(appdata->tlist_mutex);
-                    list_size   = pktlist_add_tx(&appdata->endpoint, NULL, appdata->tlist, protocol_buf, bytesout);
-                    output_sid  = appdata->tlist->cursor->sequence;
-                    
-                    pthread_mutex_unlock(appdata->tlist_mutex);
-                    if (list_size > 0) {
+                    pkt_t* txpkt;
+                    txpkt = pktlist_add_tx(&appdata->endpoint, NULL, appdata->tlist, protocol_buf, bytesout);
+                    if (txpkt != NULL) {
+                        output_sid  = txpkt->sequence;
+                        pthread_mutex_lock(appdata->tlist_cond_mutex);
                         pthread_cond_signal(appdata->tlist_cond);
+                        pthread_mutex_unlock(appdata->tlist_cond_mutex);
                     }
                     else {
-                        output_err = -32;  ///@todo come up with a better error code
+                        ///@todo come up with a better error code
+                        output_err = -32;
                     }
                 }
                 // ---------------------------------------------------------------
