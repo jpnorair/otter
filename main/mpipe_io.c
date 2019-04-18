@@ -360,9 +360,10 @@ void* mpipe_writer(void* args) {
     }
     
     while (1) {
+        pthread_mutex_lock(appdata->tlist_cond_mutex);
         pthread_cond_wait(appdata->tlist_cond, appdata->tlist_cond_mutex);
-        pthread_mutex_unlock(appdata->tlist_cond_mutex);
         
+        ///@todo may be redundant
         pthread_mutex_lock(appdata->tlist_mutex);
         
         ///@todo replace cursor/marker system with just cursor.  Packets that
@@ -414,6 +415,8 @@ void* mpipe_writer(void* args) {
         }
         
         pthread_mutex_unlock(appdata->tlist_mutex);
+        
+        pthread_mutex_unlock(appdata->tlist_cond_mutex);
     }
     
     mpipe_writer_TERM:
@@ -463,8 +466,8 @@ void* mpipe_parser(void* args) {
         pkt_t*  rpkt;
         pkt_t*  tpkt;
     
+        pthread_mutex_lock(appdata->pktrx_mutex);
         pthread_cond_wait(appdata->pktrx_cond, appdata->pktrx_mutex);
-        pthread_mutex_unlock(appdata->pktrx_mutex);
         
         pthread_mutex_lock(dth->iso_mutex);
         pthread_mutex_lock(appdata->rlist_mutex);
@@ -612,6 +615,8 @@ void* mpipe_parser(void* args) {
         pthread_mutex_unlock(appdata->tlist_mutex);
         pthread_mutex_unlock(appdata->rlist_mutex);
         pthread_mutex_unlock(dth->iso_mutex);
+        
+        pthread_mutex_unlock(appdata->pktrx_mutex);
         
         ///@todo Can check for major error in pkt_condition
         ///      Major errors are integers less than -1

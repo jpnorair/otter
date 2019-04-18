@@ -316,8 +316,8 @@ void* modbus_writer(void* args) {
     
     while (1) {
         
+        pthread_mutex_lock(appdata->tlist_cond_mutex);
         pthread_cond_wait(appdata->tlist_cond, appdata->tlist_cond_mutex);
-        pthread_mutex_unlock(appdata->tlist_cond_mutex);
         
         ///@todo this lock may be redundant
         pthread_mutex_lock(appdata->tlist_mutex);
@@ -364,7 +364,10 @@ void* modbus_writer(void* args) {
             pktlist_del(appdata->tlist, txpkt);
         }
         
+        ///@todo this lock may be redundant
         pthread_mutex_unlock(appdata->tlist_mutex);
+        
+        pthread_mutex_unlock(appdata->tlist_cond_mutex);
     }
     
     modbus_writer_TERM:
@@ -410,10 +413,10 @@ void* modbus_parser(void* args) {
     
     while (1) {
         int pkt_condition;  // tracks some error conditions
+        pkt_t* rpkt;
     
-        //pthread_mutex_lock(pktrx_mutex);
+        pthread_mutex_lock(appdata->pktrx_mutex);
         pthread_cond_wait(appdata->pktrx_cond, appdata->pktrx_mutex);
-        pthread_mutex_unlock(appdata->pktrx_mutex);
         
         pthread_mutex_lock(dth->iso_mutex);
         pthread_mutex_lock(appdata->rlist_mutex);
@@ -433,6 +436,10 @@ void* modbus_parser(void* args) {
         /// - It returns a positive error code if there is some packet error
         /// - rlist->cursor points to the working packet
         pkt_condition = pktlist_getnew(appdata->rlist);
+        
+        rpkt = appdata->rlist->cursor;
+        VDSRC_PRINTF("RX size=%zu, cond=%i, sid=%i, qual=%i\n", rpkt->size, pkt_condition, rpkt->sequence, rpkt->crcqual);
+        
         if (pkt_condition < 0) {
             goto modbus_parser_END;
         }
@@ -444,7 +451,7 @@ void* modbus_parser(void* args) {
         if (pkt_condition > 0) {
             ///@todo some sort of error code
             ERR_PRINTF("A malformed packet was sent for parsing\n");
-            pktlist_del(appdata->rlist, appdata->rlist->cursor);
+            pktlist_del(appdata->rlist, rpkt);
         }
         else {
             uint16_t    smut_outbytes;
@@ -454,14 +461,12 @@ void* modbus_parser(void* args) {
             uint8_t*    msg;
             int         msgbytes;
             bool        rpkt_is_resp;
-            pkt_t*      rpkt;
             uint64_t    rxaddr;
             
             /// For a Modbus master (like this), all received packets are 
             /// responses.  In some type of peer-peer modbus system, this would
             /// need to be intelligently managed.
             rpkt_is_resp    = true;
-            rpkt            = appdata->rlist->cursor;
             rxaddr          = devtab_lookup_uid(appdata->endpoint.devtab, rpkt->buffer[2]);
 
             /// If CRC is bad, discard packet now, and rxstat an error
@@ -517,6 +522,8 @@ void* modbus_parser(void* args) {
         pthread_mutex_unlock(appdata->tlist_mutex);
         pthread_mutex_unlock(appdata->rlist_mutex);
         pthread_mutex_unlock(dth->iso_mutex);
+        
+        pthread_mutex_unlock(appdata->pktrx_mutex);
         
         ///@todo Can check for major error in pkt_condition
         ///      Major errors are integers less than -1
