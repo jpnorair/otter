@@ -922,52 +922,6 @@ static int sub_proc_lineinput(dterm_handle_t* dth, int* cmdrc, char* loadbuf, in
 
 
 
-
-/*
-static int sub_readline(size_t* bytesread, int fd, uint8_t* buf_a, uint8_t* buf_b, int max) {
-    uint8_t* start = buf_a;
-    size_t readlen;
-    int newbytes;
-    
-    while (max > 0) {
-        char* marker;
-    
-        newbytes = (int)read(fd, buf_a, max);
-        if (newbytes < 0) {
-            return newbytes;
-        }
-        if (newbytes == 0) {
-            //
-            break;
-        }
-        
-        
-        
-        marker = strchr((const char*)buf_a, '\n');
-        if (marker != NULL) {
-            
-        
-            newbytes = (int)(marker - (char*)buf_a);
-        }
-        
-        
-        buf[newbytes] = 0;
-        
-        
-        
-        rc += newbytes;
-        buf += newbytes;
-        max -= newbytes;
-        
-        
-    }
-    
-    
-    
-    return (int)(buf-start);
-}*/
-
-
 static int sub_readline(size_t* bytesread, int fd, char* buf_a, char* buf_b, int max) {
     size_t bytesin;
     char* start = buf_a;
@@ -1116,101 +1070,6 @@ void* dterm_socketer(void* args) {
 
 
 
-
-
-///@todo bridge with OTDB
-///@todo harmonize with sub_procline
-/*
-void* dterm_piper(void* args) {
-/// Thread that:
-/// <LI> Listens to stdin via read() pipe </LI>
-/// <LI> Processes each LINE and takes action accordingly. </LI>
-    
-    uint8_t             protocol_buf[1024];
-    char                cmdname[32];
-    dterm_handle_t*     dth = (dterm_handle_t*)args;
-    otter_app_t*        appdata = dth->ext;
-    int                 loadlen     = 0;
-    char*               loadbuf     = dth->intf->linebuf;
-    
-    // Initial state = off
-    dth->intf->state = prompt_off;
-    
-    /// Get each line from the pipe.
-    while (1) {
-        int cmdlen;
-        int linelen;
-        const cmdtab_item_t* cmdptr;
-    
-        if (loadlen <= 0) {
-            dterm_reset(dth->intf);
-            loadlen = (int)read(dth->fd.in, dth->intf->linebuf, 1024);
-            loadbuf = dth->intf->linebuf;
-            sub_str_sanitize(loadbuf, (size_t)loadlen);
-        }
-        
-        // Burn whitespace ahead of command.
-        // Then determine length until newline, or null.
-        // then search/get command in list.
-        while (isspace(*loadbuf)) { loadbuf++; loadlen--; }
-        linelen = (int)sub_str_mark(loadbuf, (size_t)loadlen);
-        cmdlen  = cmd_getname(cmdname, loadbuf, 32);
-        cmdptr  = cmd_search(appdata->cmdtab, cmdname);
-        
-        ///@todo this is the same block of code used in prompter.  It could be
-        ///      consolidated into a subroutine called by both.
-        if (cmdptr == NULL) {
-            ///@todo build a nicer way to show where the error is,
-            ///      possibly by using pi or ci (sign reversing)
-            if (linelen > 0) {
-                dterm_puts(&dth->fd, "--> command not found\n");
-            }
-        }
-        else {
-            int bytesout;
-            int bytesin = 0;
-
-            ///@todo final arg is max size of protocol_buf.  It should be changed
-            ///      to a non constant.
-            bytesout = cmd_run(cmdptr, dth, protocol_buf, &bytesin, (uint8_t*)(loadbuf+cmdlen), 1024);
-            
-            ///@todo spruce-up the command error reporting, maybe even with
-            ///      a cursor showing where the first error was found.
-            if (bytesout < 0) {
-                dterm_puts(&dth->fd, "--> command execution error\n");
-            }
-            
-            // If there are bytes to send to MPipe, do that.
-            // If bytesout == 0, there is no error, but also nothing
-            // to send to MPipe.
-            else if (bytesout > 0) {
-                if (cliopt_isdummy()) {
-                    test_dumpbytes(protocol_buf, bytesout, "TX Packet Add");
-                }
-                else {
-                    int list_size;
-                    pthread_mutex_lock(appdata->tlist_mutex);
-                    list_size = pktlist_add_tx(&appdata->endpoint, NULL, appdata->tlist, protocol_buf, bytesout);
-                    pthread_mutex_unlock(appdata->tlist_mutex);
-                    if (list_size > 0) {
-                        pthread_cond_signal(appdata->tlist_cond);
-                    }
-                }
-            }
-        }
-        
-        // +1 eats the terminator
-        loadlen -= (linelen + 1);
-        loadbuf += (linelen + 1);
-    }
-    
-    /// This code should never occur, given the while(1) loop.
-    /// If it does (possibly a stack fuck-up), we print this "chaotic error."
-    fprintf(stderr, "\n--> Chaotic error: dterm_piper() thread broke loop.\n");
-    raise(SIGINT);
-    return NULL;
-}
-*/
 void* dterm_piper(void* args) {
 /// Thread that:
 /// <LI> Listens to stdin via read() pipe </LI>
@@ -1659,25 +1518,6 @@ void* dterm_prompter(void* args) {
 /** Subroutines for reading & writing
   * ========================================================================<BR>
   */
-
-//int dterm_put(dterm_intf_t *dt, char *s, int size) {
-//    return (int)write(dt->fd_out, s, size);
-//}
-//
-//int dterm_puts(dterm_intf_t *dt, char *s) {
-//    char* end = s-1;
-//    while (*(++end) != 0);
-//
-//    return (int)write(dt->fd_out, s, end-s);
-//}
-//
-//int dterm_putc(dterm_intf_t *dt, char c) {
-//    return (int)write(dt->fd_out, &c, 1);
-//}
-//
-//int dterm_puts2(dterm_intf_t *dt, char *s) {
-//    return (int)write(dt->fd_out, s, strlen(s));
-//}
 
 int dterm_put(dterm_fd_t* fd, char *s, int size) {
     return (int)write(fd->out, s, size);
