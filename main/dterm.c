@@ -455,11 +455,11 @@ int dterm_publish_rxstat(dterm_handle_t* dth, DFMT_Type dfmt, void* rxdata, size
         datasize = sub_rxstat(output, 1024, dfmt, rxdata, rxsize, rxaddr, sid, tstamp, crcqual);
         if (datasize > 0) {
             if (dth->intf->type == INTF_socket) {
-{
-struct timespec cur;
-clock_gettime(CLOCK_REALTIME, &cur);
-fprintf(stderr, _E_MAG "dterm_publish_rxstat() sid=%u [%zu.%zu]\n" _E_NRM, sid, cur.tv_sec, cur.tv_nsec);
-}
+//{
+//struct timespec cur;
+//clock_gettime(CLOCK_REALTIME, &cur);
+//fprintf(stderr, _E_MAG "dterm_publish_rxstat() sid=%u [%zu.%zu]\n" _E_NRM, sid, cur.tv_sec, cur.tv_nsec);
+//}
                 clithread_publish(dth->clithread, sid, (uint8_t*)output, datasize);
             }
             else if (dth->fd.out >= 0) {

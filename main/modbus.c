@@ -329,6 +329,7 @@ void* modbus_writer(void* args) {
             usleep(1750);
             
             txpkt = appdata->tlist->cursor;
+            VDSRC_PRINTF("TX size=%zu, sid=%i\n", txpkt->size, txpkt->sequence);
             
             // This is a never-before transmitted packet (not a re-transmit)
             // Move to the next in the list.
