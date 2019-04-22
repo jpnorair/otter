@@ -93,7 +93,8 @@
 #   define OTTER_FEATURE_OTDB       DISABLED
 #endif
 
-/// Parameter configurations
+/// Parameter configuration defaults
+///@todo some of these should be otter environment variables, namely timeouts and addresses
 #define OTTER_PARAM(VAL)            OTTER_PARAM_##VAL
 #ifndef OTTER_PARAM_NAME
 #   define OTTER_PARAM_NAME         "otter"
