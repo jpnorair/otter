@@ -455,6 +455,11 @@ int dterm_publish_rxstat(dterm_handle_t* dth, DFMT_Type dfmt, void* rxdata, size
         datasize = sub_rxstat(output, 1024, dfmt, rxdata, rxsize, rxaddr, sid, tstamp, crcqual);
         if (datasize > 0) {
             if (dth->intf->type == INTF_socket) {
+{
+struct timespec cur;
+clock_gettime(CLOCK_REALTIME, &cur);
+fprintf(stderr, _E_MAG "dterm_publish_rxstat() sid=%u [%zu.%zu]\n" _E_NRM, sid, cur.tv_sec, cur.tv_nsec);
+}
                 clithread_publish(dth->clithread, sid, (uint8_t*)output, datasize);
             }
             else if (dth->fd.out >= 0) {
@@ -471,6 +476,7 @@ static int sub_rxstat(  char* dst, int dstlimit, DFMT_Type dfmt,
                         void* rxdata, size_t rxsize,
                         uint64_t rxaddr, uint32_t sid, time_t tstamp, int crcqual) {
     int bytesout;
+    int max = dstlimit;
     
     // exit if parameters are incorrect
     if (dstlimit <= 0) {
@@ -563,8 +569,14 @@ static int sub_rxstat(  char* dst, int dstlimit, DFMT_Type dfmt,
         } break;
     }
     
-    *dst++ = '\n';
-    bytesout++;
+    if (dstlimit <= 0) {
+        dst[bytesout] = '\n';
+        bytesout = max;
+    }
+    else {
+        *dst = '\n';
+        bytesout++;
+    }
     
     return bytesout;
 }
@@ -573,13 +585,20 @@ static int sub_rxstat(  char* dst, int dstlimit, DFMT_Type dfmt,
 
 ///@todo integrate this implementation using fmt_printtext, if possible.
 int dterm_force_cmdmsg(int fd_out, const char* cmdname, const char* msg) {
-    int bytesout = 0;
+    char output[1024];
+    char* dst   = output;
+    int lim     = 1024-1;
+    int a;
 
     ///@todo getformat should be stored in dth
     switch (cliopt_getformat()) {
         case FORMAT_Hex: {
-            bytesout  = sub_hexwrite(fd_out, 0);
-            bytesout += sub_hexstream(fd_out, (const uint8_t*)msg, strlen(msg));
+            a       = sub_hexswrite(dst, 0);
+            dst    += a;
+            lim    -= a;
+            a       = sub_hexsnstream(dst, lim, (uint8_t*)msg, strlen(msg));
+            dst    += a;
+            lim    -= a;
         } break;
 
         case FORMAT_Json:
@@ -589,7 +608,12 @@ int dterm_force_cmdmsg(int fd_out, const char* cmdname, const char* msg) {
             const char* lineend;
             int linesize;
             
-            bytesout = dprintf(fd_out, "{\"type\":\"msg\", \"data\":{\"cmd\":\"%s\", \"lines\":[", cmdname);
+            a       = snprintf(dst, lim, "{\"type\":\"msg\", \"data\":{\"cmd\":\"%s\", \"lines\":[", cmdname);
+            dst    += a;
+            lim    -= a;
+            if (lim <= 0) {
+                goto dterm_force_cmdmsg_OUT;
+            }
 
             if (msg != NULL) {
                 linefront = msg;
@@ -613,28 +637,32 @@ int dterm_force_cmdmsg(int fd_out, const char* cmdname, const char* msg) {
                     
                     // Deal with quote marks and non-printable characters
                     if (linesize > 0) {
-                        write(fd_out, "\"", 1);
-                        bytesout += 1;
+                        *dst++ = '\"';
+                        lim--;
+                        if (lim <= 0) {
+                            goto dterm_force_cmdmsg_OUT;
+                        }
                         
-                        while (linefront < lineback) {
+                        while ((linefront < lineback) && (lim > 2)) {
                             if ((linefront[0] == '\"') && (linefront[-1] != '\\')) {
-                                write(fd_out, "\\\"", 2);
-                                bytesout += 2;
+                                dst = stpcpy(dst, "\\\"");
+                                lim -= 2;
                             }
                             else if ((linefront[0] >= 32) && (linefront[0] <= 126)) {
-                                write(fd_out, linefront, 1);
-                                bytesout += 1;
+                                *dst++ = *linefront;
+                                lim--;
                             }
                             linefront++;
                         }
                     
-                        if (lineend[0] != 0) {
-                            write(fd_out, "\", ", 3);
-                            bytesout += 3;
+                        if ((lineend[0] != 0) && (lim > 3)) {
+                            dst = stpcpy(dst, "\", ");
+                            lim -= 3;
                         }
                         else {
-                            write(fd_out, "\"", 1);
-                            bytesout += 1;
+                            *dst++ = '\"';
+                            lim--;
+                            if (lim <= 0) break;
                         }
                     }
 
@@ -642,45 +670,77 @@ int dterm_force_cmdmsg(int fd_out, const char* cmdname, const char* msg) {
                 }
             }
             
-            bytesout += dprintf(fd_out, "]}}\n");
+            if (lim >= 3) {
+                dst = stpcpy(dst, "]}}");
+                lim -= 3;
+            }
         } break;
         
         case FORMAT_Bintex: ///@todo
             break;
         
         default: {
-            bytesout = dprintf(fd_out, _E_CYN"MSG: "_E_NRM"%s %s\n", cmdname, msg);
+            a = snprintf(dst, lim, _E_CYN"MSG: "_E_NRM"%s %s", cmdname, msg);
+            dst += a;
+            lim -= a;
         } break;
     }
     
-    return bytesout;
+    dterm_force_cmdmsg_OUT:
+    if (lim <= 0) {
+        output[1023] = '\n';
+        a = 1024;
+    }
+    else {
+        *dst++ = '\n';
+        a = (int)(dst - output);
+    }
+    
+    write(fd_out, output, a);
+    return a;
 }
 
 
 
 int dterm_force_error(int fd_out, const char* cmdname, int errcode, uint32_t sid, const char* desc) {
-    int bytesout = 0;
+    char output[1024];
+    char* dst   = output;
+    int lim     = 1024-1;
+    int a;
     
     ///@todo getformat should be stored in dth
     switch (cliopt_getformat()) {
         case FORMAT_Hex: {
-            bytesout += sub_hexwrite(fd_out, (uint8_t)(255 & abs(errcode)));
-            //bytesout += dprintf(dth->fd.out, "%02X", (uint8_t)(255 & abs(errcode)));
+            a       = sub_hexswrite(dst, (uint8_t)(255 & abs(errcode)));
+            dst    += a;
+            lim    -= a;
         } break;
 
         case FORMAT_Json:
         case FORMAT_JsonHex: {
-            bytesout += dprintf(fd_out, "{\"type\":\"ack\", \"data\":{\"cmd\":\"%s\", \"err\":%i", cmdname, errcode);
+            a       = snprintf(dst, lim, "{\"type\":\"ack\", \"data\":{\"cmd\":\"%s\", \"err\":%i", cmdname, errcode);
+            dst    += a;
+            lim    -= a;
+            if (lim <= 0) {
+                break;
+            }
+            
+            a = 0;
             if (errcode == 0) {
                 if (sid >= 0) {
-                    bytesout += dprintf(fd_out, ", \"sid\":%u", sid);
+                    a = snprintf(dst, lim, ", \"sid\":%u", sid);
                 }
             }
             else if (desc != NULL) {
-                bytesout += dprintf(fd_out, ", \"desc\":\"%s\"", desc);
+                a = snprintf(dst, lim, ", \"desc\":\"%s\"", desc);
             }
-            bytesout += dprintf(fd_out, "}}");
-
+            
+            dst    += a;
+            lim    -= a;
+            if (lim > 0) {
+                dst = stpncpy(dst, "}}", lim);
+                lim -= 2;
+            }
         } break;
         
         case FORMAT_Bintex: ///@todo
@@ -688,21 +748,45 @@ int dterm_force_error(int fd_out, const char* cmdname, int errcode, uint32_t sid
         
         default: {
             if (errcode == 0) {
-                bytesout += dprintf(fd_out, _E_GRN"ACK: "_E_NRM"%s", cmdname);
+                a       = snprintf(dst, lim, _E_GRN"ACK: "_E_NRM"%s", cmdname);
+                dst    += a;
+                lim    -= a;
+                if (lim <= 0) {
+                    break;
+                }
                 if (sid != 0) {
-                    bytesout += dprintf(fd_out, " [%u]", sid);
+                    a       = snprintf(dst, lim, " [%u]", sid);
+                    dst    += a;
+                    lim    -= a;
                 }
             }
             else {
-                bytesout += dprintf(fd_out, _E_RED"ERR: "_E_NRM"%s (%i)", cmdname, errcode);
+                a       = snprintf(dst, lim, _E_RED"ERR: "_E_NRM"%s (%i)", cmdname, errcode);
+                dst    += a;
+                lim    -= a;
+                if (lim <= 0) {
+                    break;
+                }
                 if (desc != NULL) {
-                    bytesout += dprintf(fd_out, ": %s", desc);
+                    a       = snprintf(dst, lim, ": %s", desc);
+                    dst    += a;
+                    lim    -= a;
                 }
             }
         } break;
     }
     
-    return bytesout;
+    if (lim <= 0) {
+        output[1023] = '\n';
+        a = 1024;
+    }
+    else {
+        *dst++ = '\n';
+        a = (int)(dst - output);
+    }
+    
+    write(fd_out, output, a);
+    return a;
 }
 
 
@@ -772,10 +856,8 @@ static int sub_proc_lineinput(dterm_handle_t* dth, int* cmdrc, char* loadbuf, in
     cmdlen  = cmd_getname(cmdname, loadbuf, sizeof(cmdname));
     cmdptr  = cmd_search(appdata->cmdtab, cmdname);
     if (cmdptr == NULL) {
-        ///@todo build a nicer way to show where the error is,
-        ///      possibly by using pi or ci (sign reversing)
         if (linelen > 0) {
-            bytesout = dterm_send_error(dth, cmdname, 1, 0, "command not found");
+            dterm_send_error(dth, cmdname, 1, 0, "command not found");
         }
     }
     else {
@@ -789,8 +871,7 @@ static int sub_proc_lineinput(dterm_handle_t* dth, int* cmdrc, char* loadbuf, in
             *cmdrc = bytesout;
         }
         if (bytesout < 0) {
-            bytesout = dterm_send_error(dth, cmdname, bytesout, 0, (char*)cursor);
-            
+            dterm_send_error(dth, cmdname, bytesout, 0, (char*)cursor);
         }
         else {
             if (bytesout > 0) {
@@ -820,12 +901,11 @@ static int sub_proc_lineinput(dterm_handle_t* dth, int* cmdrc, char* loadbuf, in
                 }
                 // ---------------------------------------------------------------
             }
-        
+            
+            // This is actually an ack message, which is an error with code=0
+            // In interactive mode, acks are suppressed
             if (dth->intf->type != INTF_interactive) {
-                bytesout = dterm_send_error(dth, cmdname, output_err, output_sid, NULL);
-            }
-            else {
-                bytesout = 0;
+                dterm_send_error(dth, cmdname, output_err, output_sid, NULL);
             }
         }
     }
@@ -836,11 +916,6 @@ static int sub_proc_lineinput(dterm_handle_t* dth, int* cmdrc, char* loadbuf, in
     // Return cJSON and argtable to generic context allocators
     cjson_std_allocators();
     arg_set_allocators(NULL, NULL);
-    
-    // Dterm uses newline as a I/O separator for all interface modes
-    if (bytesout > 0) {
-        write(dth->fd.out, "\n", 1);
-    }
     
     return output_sid;
 }
