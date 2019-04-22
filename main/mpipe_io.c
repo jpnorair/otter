@@ -87,6 +87,7 @@ void* mpipe_reader(void* args) {
     
     uint8_t rbuf[1024];
     uint8_t* rbuf_cursor;
+    int frame_length;
     int header_length;
     int payload_length;
     int payload_left;
@@ -287,7 +288,8 @@ void* mpipe_reader(void* args) {
 
             // Copy the packet to the rlist and signal mpipe_parser()
             pthread_mutex_lock(appdata->rlist_mutex);
-            list_size = pktlist_add_rx(&appdata->endpoint, mpipe_intf_get(mph, i), appdata->rlist, rbuf, (size_t)(header_length + payload_length));
+            frame_length = header_length + payload_length;
+            list_size = pktlist_add_rx(&appdata->endpoint, mpipe_intf_get(mph, i), appdata->rlist, rbuf, (size_t)frame_length);
             pthread_mutex_unlock(appdata->rlist_mutex);
             if (list_size <= 0) {
                 errcode = 3;
