@@ -972,6 +972,7 @@ static int sub_readline(size_t* bytesread, int fd, char* buf_a, char* buf_b, int
     size_t bytesin;
     char* start = buf_a;
     int rc = 0;
+    char test;
     
     while (max > 0) {
         rc = (int)read(fd, buf_a, 1);
@@ -979,7 +980,8 @@ static int sub_readline(size_t* bytesread, int fd, char* buf_a, char* buf_b, int
             break;
         }
         max--;
-        if (*buf_a++ == '\n') {
+        test = *buf_a++;
+        if ((test == '\n') || (test == 0)) {
             break;
         }
     }
