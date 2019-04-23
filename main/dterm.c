@@ -17,13 +17,14 @@
 ///@todo harmonize this with the more slick dterm from otdb project
 
 // Application Headers
-#include "cliopt.h"
-#include "cmdhistory.h"
-#include "cmd_api.h"
+#include "cliopt.h"         // to be part of dterm via environment variables
+#include "cmdhistory.h"     // to be part of dterm
+#include "cmd_api.h"        // to be part of dterm
 #include "dterm.h"
-#include "otter_app.h"
+#include "otter_app.h"      // must be external to dterm
 #include "../test/test.h"
 #include "user.h"
+
 
 // Local Libraries/Headers
 #include <argtable3.h>
@@ -85,14 +86,126 @@ static const char* prompt_str[]     = {
 
 
 
-int dterm_putlinec(dterm_intf_t *dt, char c);
+// ----------------------------------------------------------------------------
+/// Legacy terminal operation subroutines (still used internally)
+
+static int sub_put(dterm_fd_t* fd, char *s, int size);
+static int sub_puts(dterm_fd_t* fd, char *s);
+static int sub_putc(dterm_fd_t* fd, char c);
+static int sub_puts2(dterm_fd_t* fd, char *s);
+static int sub_putcmd(dterm_intf_t *dt, char *s, int size);
 
 // removes count characters from linebuf
-int dterm_remc(dterm_intf_t *dt, int count);
+static int sub_remc(dterm_intf_t *dt, int count);
+
+static void sub_remln(dterm_intf_t *dt, dterm_fd_t* fd);
+static void sub_reset(dterm_intf_t *dt);
+
+
+static int sub_putlinec(dterm_intf_t *dt, char c);
+
+
+
+static int sub_put(dterm_fd_t* fd, char *s, int size) {
+    return (int)write(fd->out, s, size);
+}
+
+static int sub_puts(dterm_fd_t* fd, char *s) {
+    char* end = s-1;
+    while (*(++end) != 0);
+    return (int)write(fd->out, s, end-s);
+}
+
+static int sub_putc(dterm_fd_t* fd, char c) {
+    return (int)write(fd->out, &c, 1);
+}
+
+static int sub_puts2(dterm_fd_t* fd, char *s) {
+    return (int)write(fd->out, s, strlen(s));
+}
+
+
+static int sub_putsc(dterm_intf_t *dt, char *s) {
+    uint8_t* end = (uint8_t*)s - 1;
+    while (*(++end) != 0);
+    
+    return sub_putcmd(dt, s, (int)(end-(uint8_t*)s) );
+}
+
+
+
+static int sub_putcmd(dterm_intf_t *dt, char *s, int size) {
+    int i;
+    
+    if ((dt->linelen + size) > LINESIZE) {
+        return 0;
+    }
+    
+    dt->linelen += size;
+    
+    for (i=0; i<size; i++) {
+        *dt->cline++ = *s++;
+    }
+    
+    return size;
+}
+
+
+int sub_putlinec(dterm_intf_t *dt, char c) {
+    int line_delta = 0;
+    
+    if (c == ASCII_BACKSPC) {
+        line_delta = -1;
+    }
+    
+    else if (c == ASCII_DEL) {
+        size_t line_remnant;
+        line_remnant = dt->linelen - 1 - (dt->cline - dt->linebuf);
+        
+        if (line_remnant > 0) {
+            memcpy(dt->cline, dt->cline+1, line_remnant);
+            line_delta = -1;
+        }
+    }
+    
+    else if (dt->linelen > (LINESIZE-1) ) {
+        return 0;
+    }
+    
+    else {
+        *dt->cline++    = c;
+        line_delta      = 1;
+    }
+    
+    dt->linelen += line_delta;
+    return line_delta;
+}
+
+static int sub_remc(dterm_intf_t *dt, int count) {
+    int cl = dt->linelen;
+    while (--count >= 0) {
+        dt->cline[0] = 0;
+        dt->cline--;
+        dt->linelen--;
+    }
+    return cl - dt->linelen;
+}
 
 // clears current line, resets command buffer
 // return ignored
-void dterm_remln(dterm_intf_t *dt, dterm_fd_t* fd);
+static void sub_remln(dterm_intf_t *dt, dterm_fd_t* fd) {
+    sub_put(fd, VT100_CLEAR_LN, 5);
+    sub_reset(dt);
+}
+
+static void sub_reset(dterm_intf_t *dt) {
+    memset(dt->linebuf, 0, LINESIZE);
+    dt->cline   = dt->linebuf;
+    dt->linelen = 0;
+}
+
+// END OF LEGACY SUBS ---------------------------------------------------------
+
 
 
 
@@ -371,7 +484,7 @@ dterm_thread_t dterm_open(dterm_handle_t* dth, const char* path) {
     }
     
     dterm_open_END:
-    dterm_reset(dth->intf);
+    sub_reset(dth->intf);
     return dt_thread;
 }
 
@@ -878,26 +991,21 @@ static int sub_proc_lineinput(dterm_handle_t* dth, int* cmdrc, char* loadbuf, in
                 ///@todo what's between these lines should be a callback provided
                 /// by the user of DTerm into DTerm
                 // ---------------------------------------------------------------
-                
                 // There are bytes to send out via MPipe IO
-                ///@todo This "cliopt_isdummy()" call must be changed to a dterm
-                ///      state/parameter check.
-                if (cliopt_isdummy()) {
-                    test_dumpbytes(protocol_buf, bytesout, "TX Packet Add");
+                int list_size;
+                pthread_mutex_lock(appdata->tlist_mutex);
+                list_size   = pktlist_add_tx(&appdata->endpoint, NULL, appdata->tlist, protocol_buf, bytesout);
+                output_sid  = appdata->tlist->cursor->sequence;
+                
+                pthread_mutex_unlock(appdata->tlist_mutex);
+                if (list_size > 0) {
+                    pthread_mutex_lock(appdata->tlist_mutex);
+                    appdata->tlist_cond_inactive = false;
+                    pthread_cond_signal(appdata->tlist_cond);
+                    pthread_mutex_unlock(appdata->tlist_mutex);
                 }
                 else {
-                    int list_size;
-                    pthread_mutex_lock(appdata->tlist_mutex);
-                    list_size   = pktlist_add_tx(&appdata->endpoint, NULL, appdata->tlist, protocol_buf, bytesout);
-                    output_sid  = appdata->tlist->cursor->sequence;
-                    
-                    pthread_mutex_unlock(appdata->tlist_mutex);
-                    if (list_size > 0) {
-                        pthread_cond_signal(appdata->tlist_cond);
-                    }
-                    else {
-                        output_err = -32;  ///@todo come up with a better error code
-                    }
+                    output_err = -32;  ///@todo come up with a better error code
                 }
                 // ---------------------------------------------------------------
             }
@@ -1086,7 +1194,7 @@ void* dterm_piper(void* args) {
         int linelen;
         
         if (loadlen <= 0) {
-            dterm_reset(dth->intf);
+            sub_reset(dth->intf);
             loadlen = (int)read(dth->fd.in, loadbuf, 1024);
             sub_str_sanitize(loadbuf, (size_t)loadlen);
         }
@@ -1166,7 +1274,7 @@ int dterm_cmdfile(dterm_handle_t* dth, const char* filename) {
     sub_str_sanitize(filebuf, (size_t)filebuf_sz);
 
     // Reset the terminal to default state
-    dterm_reset(dth->intf);
+    sub_reset(dth->intf);
 
     pthread_mutex_lock(dth->iso_mutex);
     local.in    = STDIN_FILENO;
@@ -1364,8 +1472,8 @@ void* dterm_prompter(void* args) {
                                     break;
             }
             
-            dterm_reset(dth->intf);
-            dterm_puts(&dth->fd, (char*)killstring);
+            sub_reset(dth->intf);
+            sub_puts(&dth->fd, (char*)killstring);
 
             raise(sigcode);
             return NULL;
@@ -1383,15 +1491,15 @@ void* dterm_prompter(void* args) {
             switch (cmd) {
                 // A printable key is used
                 case ct_key: {
-                    dterm_putcmd(dth->intf, &c, 1);
-                    //dterm_put(dt, &c, 1);
-                    dterm_putc(&dth->fd, c);
+                    sub_putcmd(dth->intf, &c, 1);
+                    //sub_putdt, &c, 1);
+                    sub_putc(&dth->fd, c);
                 } break;
                                     
                 // Prompt-Escape is pressed, 
                 case ct_prompt: {
                     if (dth->intf->state == prompt_on) {
-                        dterm_remln(dth->intf, &dth->fd);
+                        sub_remln(dth->intf, &dth->fd);
                         dth->intf->state = prompt_off;
                     }
                     else {
@@ -1409,7 +1517,7 @@ void* dterm_prompter(void* args) {
                 // 3. Search and try to execute cmd
                 // 4. Reset prompt, change to OFF State, unlock mutex on dterm
                 case ct_enter: {
-                    dterm_putc(&dth->fd, '\n');
+                    sub_putc(&dth->fd, '\n');
 
                     if (!ch_contains(dth->ch, dth->intf->linebuf)) {
                         ch_add(dth->ch, dth->intf->linebuf);
@@ -1427,7 +1535,7 @@ void* dterm_prompter(void* args) {
                     // Free temporary memory pool context
                     talloc_free(dth->tctx);
 
-                    dterm_reset(dth->intf);
+                    sub_reset(dth->intf);
                     dth->intf->state = prompt_close;
                 } break;
                 
@@ -1437,13 +1545,13 @@ void* dterm_prompter(void* args) {
                     cmdlen = cmd_getname((char*)cmdname, dth->intf->linebuf, 256);
                     cmdptr = cmd_subsearch(appdata->cmdtab, (char*)cmdname);
                     if ((cmdptr != NULL) && (dth->intf->linebuf[cmdlen] == 0)) {
-                        dterm_remln(dth->intf, &dth->fd);
+                        sub_remln(dth->intf, &dth->fd);
                         dprintf(dth->fd.out, _E_MAG"%s"_E_NRM, (char*)prompt_str[appdata->endpoint.usertype]);
-                        dterm_putsc(dth->intf, (char*)cmdptr->name);
-                        dterm_puts(&dth->fd, (char*)cmdptr->name);
+                        sub_putsc(dth->intf, (char*)cmdptr->name);
+                        sub_puts(&dth->fd, (char*)cmdptr->name);
                     }
                     else {
-                        dterm_puts(&dth->fd, ASCII_BEL);
+                        sub_puts(&dth->fd, ASCII_BEL);
                     }
                 } break;
                 
@@ -1452,10 +1560,10 @@ void* dterm_prompter(void* args) {
                 case ct_histnext: {
                     cmdstr = ch_next(dth->ch);
                     if (dth->ch->count && cmdstr) {
-                        dterm_remln(dth->intf, &dth->fd);
+                        sub_remln(dth->intf, &dth->fd);
                         dprintf(dth->fd.out, _E_MAG"%s"_E_NRM, (char*)prompt_str[appdata->endpoint.usertype]);
-                        dterm_putsc(dth->intf, cmdstr);
-                        dterm_puts(&dth->fd, cmdstr);
+                        sub_putsc(dth->intf, cmdstr);
+                        sub_puts(&dth->fd, cmdstr);
                     }
                 } break;
                 
@@ -1464,18 +1572,18 @@ void* dterm_prompter(void* args) {
                 case ct_histprev: {
                     cmdstr = ch_prev(dth->ch);
                     if (dth->ch->count && cmdstr) {
-                        dterm_remln(dth->intf, &dth->fd);
+                        sub_remln(dth->intf, &dth->fd);
                         dprintf(dth->fd.out, _E_MAG"%s"_E_NRM, (char*)prompt_str[appdata->endpoint.usertype]);
-                        dterm_putsc(dth->intf, cmdstr);
-                        dterm_puts(&dth->fd, cmdstr);
+                        sub_putsc(dth->intf, cmdstr);
+                        sub_puts(&dth->fd, cmdstr);
                     }
                 } break;
                 
                 // DELETE presses issue a forward-DELETE
                 case ct_delete: {
                     if (dth->intf->linelen > 0) {
-                        dterm_remc(dth->intf, 1);
-                        dterm_put(&dth->fd, VT100_CLEAR_CH, 4);
+                        sub_remc(dth->intf, 1);
+                        sub_put(&dth->fd, VT100_CLEAR_CH, 4);
                     }
                 } break;
                 
@@ -1504,123 +1612,6 @@ void* dterm_prompter(void* args) {
     //fprintf(stderr, "\n--> Chaotic error: dterm_prompter() thread broke loop.\n");
     //raise(SIGINT);
     return NULL;
-}
-
-
-
-
-
-
-
-
-
-
-/** Subroutines for reading & writing
-  * ========================================================================<BR>
-  */
-
-int dterm_put(dterm_fd_t* fd, char *s, int size) {
-    return (int)write(fd->out, s, size);
-}
-
-int dterm_puts(dterm_fd_t* fd, char *s) {
-    char* end = s-1;
-    while (*(++end) != 0);
-    return (int)write(fd->out, s, end-s);
-}
-
-int dterm_putc(dterm_fd_t* fd, char c) {
-    return (int)write(fd->out, &c, 1);
-}
-
-int dterm_puts2(dterm_fd_t* fd, char *s) {
-    return (int)write(fd->out, s, strlen(s));
-}
-
-
-int dterm_putsc(dterm_intf_t *dt, char *s) {
-    uint8_t* end = (uint8_t*)s - 1;
-    while (*(++end) != 0);
-    
-    return dterm_putcmd(dt, s, (int)(end-(uint8_t*)s) );
-}
-
-
-int dterm_putcmd(dterm_intf_t *dt, char *s, int size) {
-    int i;
-    
-    if ((dt->linelen + size) > LINESIZE) {
-        return 0;
-    }
-    
-    dt->linelen += size;
-    
-    for (i=0; i<size; i++) {
-        *dt->cline++ = *s++;
-    }
-    
-    return size;
-}
-
-
-
-int dterm_putlinec(dterm_intf_t *dt, char c) {
-    int line_delta = 0;
-    
-    if (c == ASCII_BACKSPC) {
-        line_delta = -1;
-    }
-    
-    else if (c == ASCII_DEL) {
-        size_t line_remnant;
-        line_remnant = dt->linelen - 1 - (dt->cline - dt->linebuf);
-        
-        if (line_remnant > 0) {
-            memcpy(dt->cline, dt->cline+1, line_remnant);
-            line_delta = -1;
-        }
-    }
-    
-    else if (dt->linelen > (LINESIZE-1) ) {
-        return 0;
-    }
-    
-    else {
-        *dt->cline++    = c;
-        line_delta      = 1;
-    }
-    
-    dt->linelen += line_delta;
-    return line_delta;
-}
-
-
-
-
-
-int dterm_remc(dterm_intf_t *dt, int count) {
-    int cl = dt->linelen;
-    while (--count >= 0) {
-        dt->cline[0] = 0;
-        dt->cline--;
-        dt->linelen--;
-    }
-    return cl - dt->linelen;
-}
-
-
-
-void dterm_remln(dterm_intf_t *dt, dterm_fd_t* fd) {
-    dterm_put(fd, VT100_CLEAR_LN, 5);
-    dterm_reset(dt);
-}
-
-
-
-void dterm_reset(dterm_intf_t *dt) {
-    memset(dt->linebuf, 0, LINESIZE);
-    dt->cline   = dt->linebuf;
-    dt->linelen = 0;
 }
 
 
