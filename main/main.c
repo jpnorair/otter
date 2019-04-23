@@ -467,6 +467,7 @@ int main(int argc, char* argv[]) {
     }
 
     /// Client Options.  These are read-only from internal modules
+    cliopts.mempool_size = OTTER_PARAM_MMAP_PAGESIZE;
     cliopts.io          = io_val;
     cliopts.intf        = intf_val;
     cliopts.format      = fmt_val;
