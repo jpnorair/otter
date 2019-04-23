@@ -32,6 +32,7 @@
 typedef struct subsnode {
     void*               buffers;    ///@todo buffers feature not yet implemented
     int                 sigmask;
+    bool                cond_inactive;
     pthread_cond_t      cond;
     pthread_mutex_t     mutex;
     struct subsnode*    next;
@@ -203,8 +204,13 @@ int subscriber_wait(subscr_t subscriber, int timeout_ms) {
         return -1;
     }
     
+    pthread_mutex_lock(&node->mutex);
+    node->cond_inactive = true;
+    rc = 0;
     if (timeout_ms <= 0) {
-        rc = pthread_cond_wait(&node->cond, &node->mutex);
+        while (node->cond_inactive && (rc == 0)) {
+            rc = pthread_cond_wait(&node->cond, &node->mutex);
+        }
     }
     else {
         struct timespec abstime;
@@ -222,7 +228,9 @@ int subscriber_wait(subscr_t subscriber, int timeout_ms) {
             abstime.tv_sec += 1;
         }
     
-        rc = pthread_cond_timedwait(&node->cond, &node->mutex, (const struct timespec*)&abstime);
+        while (node->cond_inactive && (rc == 0)) {
+            rc = pthread_cond_timedwait(&node->cond, &node->mutex, (const struct timespec*)&abstime);
+        }
     }
     pthread_mutex_unlock(&node->mutex);
     
@@ -241,7 +249,10 @@ void subscriber_post(subscr_handle_t handle, int alp_id, int signal, uint8_t* pa
             node = item->head;
             while (node != NULL) {
                 if (node->sigmask & signal) {
+                    pthread_mutex_lock(&node->mutex);
+                    node->cond_inactive = false;
                     pthread_cond_signal(&node->cond);
+                    pthread_mutex_unlock(&node->mutex);
                 }
                 node = node->next;
             }

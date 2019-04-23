@@ -48,13 +48,6 @@
 
 
 
-static dterm_fd_t* mpipe_active_dterm;
-
-static int sub_dtputs(char* str) {
-    return dterm_puts(mpipe_active_dterm, str);
-}
-
-
 
 
 /** MPipe Threads <BR>
@@ -300,7 +293,10 @@ void* mpipe_reader(void* args) {
             mpipe_reader_ERR:
             switch (errcode) {
             case 0: TTY_RX_PRINTF("Packet Received Successfully (%d bytes).\n", frame_length);
+                    pthread_mutex_lock(appdata->pktrx_mutex);
+                    appdata->pktrx_cond_inactive = false;
                     pthread_cond_signal(appdata->pktrx_cond);
+                    pthread_mutex_unlock(appdata->pktrx_mutex);
                     break;
             
             case 1: TTY_RX_PRINTF("MPipe Packet Sync could not be retrieved.\n");
@@ -362,7 +358,11 @@ void* mpipe_writer(void* args) {
     }
     
     while (1) {
-        pthread_cond_wait(appdata->tlist_cond, appdata->tlist_cond_mutex);
+        pthread_mutex_lock(appdata->tlist_cond_mutex);
+        appdata->tlist_cond_inactive = true;
+        while (appdata->tlist_cond_inactive) {
+            pthread_cond_wait(appdata->tlist_cond, appdata->tlist_cond_mutex);
+        }
         pthread_mutex_unlock(appdata->tlist_cond_mutex);
         
         pthread_mutex_lock(appdata->tlist_mutex);
@@ -465,14 +465,17 @@ void* mpipe_parser(void* args) {
         pkt_t*  rpkt;
         pkt_t*  tpkt;
     
-        pthread_cond_wait(appdata->pktrx_cond, appdata->pktrx_mutex);
+        pthread_mutex_unlock(appdata->pktrx_mutex);
+        appdata->pktrx_cond_inactive = true;
+        while (appdata->pktrx_cond_inactive) {
+            pthread_cond_wait(appdata->pktrx_cond, appdata->pktrx_mutex);
+        }
         pthread_mutex_unlock(appdata->pktrx_mutex);
         
         pthread_mutex_lock(dth->iso_mutex);
         pthread_mutex_lock(appdata->rlist_mutex);
         pthread_mutex_lock(appdata->tlist_mutex);
         
-        mpipe_active_dterm = (dterm_fd_t*)&dth->fd;
         rpkt = appdata->rlist->cursor;
         
         // ===================LOOP CONDITION LOGIC==========================

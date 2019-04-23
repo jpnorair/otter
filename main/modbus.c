@@ -49,13 +49,6 @@
 
 
 
-static dterm_fd_t* modbus_active_dterm;
-
-static int sub_dtputs(char* str) {
-    return dterm_puts(modbus_active_dterm, str);
-}
-
-
 
 
 /** Modbus Threads <BR>
@@ -239,7 +232,10 @@ void* modbus_reader(void* args) {
             modbus_reader_ERR:
             switch (errcode) {
                 case 0: TTY_RX_PRINTF("Packet Received Successfully (%d bytes).\n", frame_length);
+                        pthread_mutex_lock(appdata->pktrx_mutex);
+                        appdata->pktrx_cond_inactive = false;
                         pthread_cond_signal(appdata->pktrx_cond);
+                        pthread_mutex_unlock(appdata->pktrx_mutex);
                         break;
                 
                 case 2: TTY_RX_PRINTF("Modbus Packet Payload Length (%d bytes) is out of bounds.\n", frame_length);
@@ -315,8 +311,11 @@ void* modbus_writer(void* args) {
     mph = appdata->mpipe;
     
     while (1) {
-        
-        pthread_cond_wait(appdata->tlist_cond, appdata->tlist_cond_mutex);
+        pthread_mutex_lock(appdata->tlist_cond_mutex);
+        appdata->tlist_cond_inactive = true;
+        while (appdata->tlist_cond_inactive) {
+            pthread_cond_wait(appdata->tlist_cond, appdata->tlist_cond_mutex);
+        }
         pthread_mutex_unlock(appdata->tlist_cond_mutex);
         
         ///@todo this lock may be redundant
@@ -413,16 +412,16 @@ void* modbus_parser(void* args) {
         int pkt_condition;  // tracks some error conditions
         pkt_t* rpkt;
 
-    
-        //pthread_mutex_lock(pktrx_mutex);
-        pthread_cond_wait(appdata->pktrx_cond, appdata->pktrx_mutex);
+        pthread_mutex_lock(appdata->pktrx_mutex);
+        appdata->pktrx_cond_inactive = true;
+        while (appdata->pktrx_cond_inactive) {
+            pthread_cond_wait(appdata->pktrx_cond, appdata->pktrx_mutex);
+        }
         pthread_mutex_unlock(appdata->pktrx_mutex);
         
         pthread_mutex_lock(dth->iso_mutex);
         pthread_mutex_lock(appdata->rlist_mutex);
         pthread_mutex_lock(appdata->tlist_mutex);
-        
-        modbus_active_dterm = &dth->fd;
         
         // This looks like an infinite loop, but is not.  The pkt_condition
         // variable will break the loop if the rlist has no new packets.

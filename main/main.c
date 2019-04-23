@@ -93,6 +93,7 @@ typedef struct {
 // CLI Data Type deals with kill signals
 typedef struct {
     int             exitcode;
+    bool            kill_cond_inactive;
     pthread_mutex_t kill_mutex;
     pthread_cond_t  kill_cond;
 } cli_struct;
@@ -123,12 +124,18 @@ void _assign_signal(int sigcode, void (*sighandler)(int)) {
 
 void sigint_handler(int sigcode) {
     cli.exitcode = -1;
+    pthread_mutex_lock(&cli.kill_mutex);
+    cli.kill_cond_inactive = false;
     pthread_cond_signal(&cli.kill_cond);
+    pthread_mutex_unlock(&cli.kill_mutex);
 }
 
 void sigquit_handler(int sigcode) {
     cli.exitcode = 0;
+    pthread_mutex_lock(&cli.kill_mutex);
+    cli.kill_cond_inactive = false;
     pthread_cond_signal(&cli.kill_cond);
+    pthread_mutex_unlock(&cli.kill_mutex);
 }
 
 
@@ -829,7 +836,10 @@ int otter_main( ttyspec_t* ttylist,
     
     /// Wait for kill cond.  Basic functionality is in the dterm thread(s).
     pthread_mutex_lock(&cli.kill_mutex);
-    pthread_cond_wait(&cli.kill_cond, &cli.kill_mutex);
+    cli.kill_cond_inactive = true;
+    while (cli.kill_cond_inactive) {
+        pthread_cond_wait(&cli.kill_cond, &cli.kill_mutex);
+    }
 
     ///@todo hack: wait for dterm thread to close on its own
     usleep(100000);
