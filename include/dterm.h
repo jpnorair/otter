@@ -207,28 +207,5 @@ int dterm_publish_rxstat(   dterm_handle_t* dth, DFMT_Type dfmt,
                             void* rxdata, size_t rxsize, uint64_t rxaddr,
                             uint32_t sid, time_t tstamp, int crcqual);
 
-/** @note All of these dterm output functions are deprecated and in danger of
-  * being removed from the code base in favor of direct utilization of dterm
-  * file descriptors.
-  */
-
-int dterm_put(dterm_fd_t* fd, char *s, int size);
-int dterm_puts(dterm_fd_t* fd, char *s);
-int dterm_putc(dterm_fd_t* fd, char c);
-int dterm_puts2(dterm_fd_t* fd, char *s);
-//int dterm_put(dterm_intf_t *dt, char *s, int size);
-//int dterm_puts(dterm_intf_t *dt, char *s);
-//int dterm_putc(dterm_intf_t *dt, char c);
-//int dterm_puts2(dterm_fd_t* fd, char *s);
-
-
-// writes c string to command buffer
-// retunrns number of bytes written
-int dterm_putsc(dterm_intf_t *dt, char *s);
-int dterm_putcmd(dterm_intf_t *dt, char *s, int size);
-
-// resets command buffer
-void dterm_reset(dterm_intf_t *dt);
-
 
 #endif
