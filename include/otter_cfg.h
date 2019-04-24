@@ -100,7 +100,7 @@
 #   define OTTER_PARAM_NAME         "otter"
 #endif
 #ifndef OTTER_PARAM_VERSION 
-#   define OTTER_PARAM_VERSION      "0.10.0"
+#   define OTTER_PARAM_VERSION      "1.0.a"
 #endif
 #ifndef OTTER_PARAM_GITHEAD
 #   define OTTER_PARAM_GITHEAD      "(unknown)"

@@ -43,11 +43,7 @@ typedef struct {
     void*               dterm_parent;
     
     bool                tlist_cond_inactive;
-    pthread_mutex_t*    tlist_mutex;
     pthread_cond_t*     tlist_cond;
-    
-    bool                rlist_cond_inactive;
-    pthread_mutex_t*    rlist_mutex;
     pthread_mutex_t*    tlist_cond_mutex;
     
     bool                pktrx_cond_inactive;

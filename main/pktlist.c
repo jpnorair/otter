@@ -15,7 +15,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
-
+#include <pthread.h>
 
 #include "crc_calc_block.h"
 
@@ -24,47 +24,73 @@
 /// MPipe Reader & Writer Thread Functions
 /// mpipe_add():    Adds a packet to the RX List (rlist) or TX List (tlist)
 /// mpipe_del():    Deletes a packet from some place in the rlist or tlist
+static void sub_pktlist_clear(pktlist_t* plist, size_t max) {
+    plist->front    = NULL;
+    plist->last     = NULL;
+    plist->cursor   = NULL;
+    plist->size     = 0;
+    plist->max      = max;
+    plist->txnonce  = 0;
+}
 
-int pktlist_init(pktlist_t* plist, size_t max) {
-    if (plist != NULL) {
-        plist->front    = NULL;
-        plist->last     = NULL;
-        plist->cursor   = NULL;
-        plist->marker   = NULL;
-        plist->size     = 0;
-        plist->max      = max;
-        plist->txnonce  = 0;
-        return 0;
+static void sub_pktlist_empty(pktlist_t* plist) {
+    pkt_t* pkt = plist->front;
+
+    while (pkt != NULL) {
+        pkt_t* next_pkt = pkt->next;
+        free(pkt->buffer);
+        free(pkt);
+        pkt = next_pkt;
     }
-    return -1;
 }
 
 
-void pktlist_free(pktlist_t* plist) {
-    if (plist != NULL) {
-        pkt_t* pkt = plist->front;
+
+static void sub_removepkt(pktlist_t* plist, pkt_t* ref, pkt_t* copy) {
+    /// If packet was front of list, move front to next,
+    if (plist->front == ref) {
+        plist->front = copy->next;
+    }
     
-        while (pkt != NULL) {
-            pkt_t* next_pkt = pkt->next;
-            if (pkt->buffer != NULL) {
-                free(pkt->buffer);
-            }
-            free(pkt);
-            pkt = next_pkt;
-        }
+    /// If packet was last of list, move last to prev
+    if (plist->last == ref) {
+        plist->last = copy->prev;
+    }
+    
+    /// Likewise, if the cursor was on the packet, advance it
+    if (plist->cursor == ref) {
+        plist->cursor = copy->next;
+    }
+    
+    /// Stitch the list back together
+    if (copy->next != NULL) {
+        copy->next->prev = copy->prev;
+    }
+    if (copy->prev != NULL) {
+        copy->prev->next = copy->next;
     }
 }
 
 
-void pktlist_empty(pktlist_t* plist) {
-    size_t max;
-    if (plist != NULL) {
-        max = plist->max;
-        pktlist_free(plist);
-        pktlist_init(plist, max);
+
+static void sub_delpkt(pktlist_t* plist, pkt_t* pkt) {
+    pkt_t* ref  = pkt;
+    pkt_t  copy = *pkt;
+
+    if (pkt->buffer != NULL) {
+        free(pkt->buffer);
+    }
+    free(pkt);
+    
+    /// 2. Downsize the list.  Re-init list if size == 0;
+    plist->size--;
+    if (plist->size <= 0) {
+        sub_pktlist_clear(plist, plist->max);
+    }
+    else {
+        sub_removepkt(plist, ref, &copy);
     }
 }
-
 
 
 
@@ -257,20 +283,25 @@ static void sub_writefooter_modbus(pkt_t* newpkt) {
 }
 
 
-static int sub_pktlist_add(user_endpoint_t* endpoint, void* intf, pktlist_t* plist, uint8_t* data, size_t size, bool iswrite) {
-    pkt_t* newpkt;
+static pkt_t* sub_pktlist_add(user_endpoint_t* endpoint, void* intf, pktlist_t* plist, uint8_t* data, size_t size, bool iswrite) {
     size_t max_overhead;
     void (*put_frame)(user_endpoint_t*, pkt_t*, uint8_t*, size_t);
     void (*put_footer)(pkt_t*);
+    pkt_t* newpkt = NULL;
+    int errcode = 0;
     
     if ((endpoint == NULL) || (plist == NULL)) {
-        return -1;
+        errcode = -1;
+        goto sub_pktlist_add_ERR;
     }
     
     newpkt = malloc(sizeof(pkt_t));
     if (newpkt == NULL) {
-        return -2;
+        errcode = -2;
+        goto sub_pktlist_add_ERR;
     }
+    
+    pthread_mutex_lock(plist->mutex);
     
     // Sequence is written first, using the incrementer.  Protocol functions
     // may or may overwrite sequence with their own values.
@@ -320,11 +351,12 @@ static int sub_pktlist_add(user_endpoint_t* endpoint, void* intf, pktlist_t* pli
     // Setup list connections for the new packet
     // Also allocate the buffer of the new packet
     // The starting size is the payload size, and put_frame() will modify it.
+    newpkt->parent  = plist;
     newpkt->size    = size;
     newpkt->buffer  = malloc(size + max_overhead + OTTER_PARAM_ENCALIGN-1);
     if (newpkt->buffer == NULL) {
-        free(newpkt);
-        return -3;
+        errcode =  -3;
+        goto sub_pktlist_add_TERM;
     }
     
     // put_frame() with either write the TX frame or process the RX frame.
@@ -332,9 +364,8 @@ static int sub_pktlist_add(user_endpoint_t* endpoint, void* intf, pktlist_t* pli
     // If there's an error, we scrub the packet and exit with error.
     put_frame(endpoint, newpkt, data, size);
     if (newpkt->size == 0) {
-        free(newpkt->buffer);
-        free(newpkt);
-        return -4;
+        errcode = -4;
+        goto sub_pktlist_add_TERM;
     }
     
     // Packet Frame is created successfully.
@@ -359,17 +390,14 @@ static int sub_pktlist_add(user_endpoint_t* endpoint, void* intf, pktlist_t* pli
     
     // List is empty, so start the list
     if (plist->last == NULL) {
-        //newpkt->sequence    = 0;
         plist->size         = 0;
         plist->front        = newpkt;
         plist->last         = newpkt;
         plist->cursor       = newpkt;
-        plist->marker       = newpkt;
     }
     // List is not empty, so simply extend the list.
     // set the cursor to the new packet if it points to NULL (end)
     else {
-        //newpkt->sequence    = plist->last->sequence + 1;
         newpkt->prev->next  = newpkt;
         plist->last         = newpkt;
         
@@ -384,10 +412,21 @@ static int sub_pktlist_add(user_endpoint_t* endpoint, void* intf, pktlist_t* pli
     // If the list is longer than max allowable size, delete oldest packet
     plist->size++;
     if (plist->size > plist->max) {
-        pktlist_del(plist, plist->front);
+        sub_delpkt(plist, plist->front);
     }
     
-    return (int)plist->size;
+    sub_pktlist_add_TERM:
+    if ((newpkt != NULL) && (errcode != 0)) {
+        free(newpkt->buffer);
+        free(newpkt);
+        newpkt = NULL;
+    }
+    
+    pthread_mutex_unlock(plist->mutex);
+    return newpkt;
+    
+    sub_pktlist_add_ERR:
+    return NULL;
 }
 
 
@@ -398,95 +437,126 @@ static int sub_pktlist_add(user_endpoint_t* endpoint, void* intf, pktlist_t* pli
 
 
 
-int pktlist_add_tx(user_endpoint_t* endpoint, void* intf, pktlist_t* plist, uint8_t* data, size_t size) {
+
+
+
+int pktlist_init(pktlist_t* plist, size_t max) {
+    if ((plist == NULL) || (max == 0)) {
+        return -1;
+    }
+    
+    plist->mutex = malloc(sizeof(pthread_mutex_t));
+    if (plist->mutex == NULL) {
+        return -2;
+    }
+    
+    if (pthread_mutex_init(plist->mutex, NULL) != 0) {
+        free(plist->mutex);
+        return -3;
+    }
+
+    sub_pktlist_clear(plist, max);
+    return 0;
+}
+
+
+void pktlist_free(pktlist_t* plist) {
+    if (plist != NULL) {
+        sub_pktlist_empty(plist);
+        pthread_mutex_destroy(plist->mutex);
+        free(plist->mutex);
+    }
+}
+
+
+void pktlist_empty(pktlist_t* plist) {
+    if (plist != NULL) {
+        size_t max;
+        pthread_mutex_lock(plist->mutex);
+        max = plist->max;
+        sub_pktlist_empty(plist);
+        sub_pktlist_clear(plist, max);
+        pthread_mutex_unlock(plist->mutex);
+    }
+}
+
+
+
+pkt_t* pktlist_add_tx(user_endpoint_t* endpoint, void* intf, pktlist_t* plist, uint8_t* data, size_t size) {
     ///@todo endpoint vs. intf NULL check
     return sub_pktlist_add(endpoint, intf, plist, data, size, true);
 }
 
-int pktlist_add_rx(user_endpoint_t* endpoint, void* intf,  pktlist_t* plist, uint8_t* data, size_t size) {
+pkt_t* pktlist_add_rx(user_endpoint_t* endpoint, void* intf,  pktlist_t* plist, uint8_t* data, size_t size) {
     ///@todo endpoint vs. intf NULL check
-    int rc;
+    pkt_t* rc;
     
     rc = sub_pktlist_add(endpoint, intf, plist, data, size, false);
     
-    HEX_DUMP(plist->cursor->buffer, plist->cursor->size, "%zu Bytes Queued (code: %i)\n", plist->cursor->size, rc);
+    HEX_DUMP(plist->last->buffer, plist->last->size, "%zu Bytes Queued\n", plist->last->size);
 
     return rc;
 }
 
 
 
-
-int pktlist_del(pktlist_t* plist, pkt_t* pkt) {
-    pkt_t*  ref;
-    pkt_t   copy; 
-    
-    /// First thing is to free the packet even if it's not in the list
-    /// We make a local copy in order to stitch the list back together.
+int pktlist_del(pkt_t* pkt) {
     if (pkt == NULL) {
         return -1;
     }
-    ref     = pkt;
-    copy    = *pkt;
-    if (pkt->buffer != NULL) {
-        free(pkt->buffer);
-    }
-    free(pkt);
-    
-    /// plist can be NULL if there is no list, although this is irregular behavior
-    if (plist == NULL) {
-        return 0;
+    if (pkt->parent == NULL) {
+        return -2;
     }
 
-    /// Downsize the list.  Re-init list if size == 0;
-    plist->size--;
-    if (plist->size <= 0) {
-        pktlist_init(plist, plist->max);
-        return 0;
-    }
-    
-    /// If packet was front of list, move front to next,
-    if (plist->front == ref) {
-        plist->front = copy.next;
-    }
-    
-    /// If packet was last of list, move last to prev
-    if (plist->last == ref) {
-        plist->last = copy.prev;
-    }
-    
-    /// Likewise, if the cursor and marker were on the packet, advance them
-    if (plist->cursor == pkt) {
-        plist->cursor = copy.next;
-    }
-    if (plist->marker == pkt) {
-        plist->marker = copy.next;
-    }
-    
-    /// Stitch the list back together
-    if (copy.next != NULL) {
-        copy.next->prev = copy.prev;
-    }
-    if (copy.prev != NULL) {
-        copy.prev->next = copy.next;
-    }
-
+    pthread_mutex_lock(((pktlist_t*)pkt->parent)->mutex);
+    sub_delpkt((pktlist_t*)pkt->parent, pkt);
+    pthread_mutex_unlock(((pktlist_t*)pkt->parent)->mutex);
     return 0;
 }
 
+
+
+int pktlist_punt(pkt_t* pkt) {
+    pktlist_t* plist;
+
+    if (pkt == NULL) {
+        return -1;
+    }
+    if (pkt->parent == NULL) {
+        return -2;
+    }
+    
+    plist = pkt->parent;
+    sub_removepkt(plist, pkt, pkt);
+    
+    // Move to last
+    plist->last->next   = pkt;
+    pkt->prev           = plist->last;
+    pkt->next           = NULL;
+    plist->last         = pkt;
+    
+    return 0;
+}
+
+
+
 int pktlist_del_sequence(pktlist_t* plist, uint32_t sequence) {
+    pkt_t* pkt;
     int rc = 0;
 
     if (plist != NULL) {
-        pkt_t* pkt = plist->front;
+        pthread_mutex_lock(plist->mutex);
+        pkt = plist->front;
     
-        while (pkt != NULL) {
+//        while (pkt != NULL) {
+        while (pkt != plist->cursor) {
             pkt_t* next_pkt = pkt->next;
             if (pkt->sequence == sequence) {
-                rc += (pktlist_del(plist, pkt) == 0);
+                rc += (pktlist_del(pkt) == 0);
             }
             pkt = next_pkt;
         }
+        pthread_mutex_unlock(plist->mutex);
     }
     
     return rc;
@@ -494,43 +564,72 @@ int pktlist_del_sequence(pktlist_t* plist, uint32_t sequence) {
 
 
 
-int pktlist_getnew(pktlist_t* plist) {
+
+pkt_t* pktlist_get(pktlist_t* plist) {
+    pkt_t* pkt;
+
+    if (plist != NULL) {
+        pthread_mutex_lock(plist->mutex);
+        pkt = plist->cursor;
+        if (plist->cursor != NULL) {
+            plist->cursor = plist->cursor->next;
+        }
+        pthread_mutex_unlock(plist->mutex);
+    }
+    else {
+        pkt = NULL;
+    }
+
+    return pkt;
+}
+
+
+pkt_t* pktlist_parse(int* errcode, pktlist_t* plist) {
     IO_Type intf;
+    int outcode;
+    pkt_t* pkt = NULL;
     //time_t      seconds;
 
     // packet list is not allocated -- that's a serious error
     if (plist == NULL) {
-        return -11;
+        outcode = -11;
     }
-    
     // packet list is empty
-    if (plist->cursor == NULL) {
-        return -1;
+    else if (plist->cursor == NULL) {
+        outcode = -1;
     }
-    
-    // Save Timestamp 
-    plist->cursor->tstamp   = time(NULL);   //;localtime(&seconds);
-    
-    intf = cliopt_getio();
-    
-    // MPipe uses Sequence-ID for message matching
-    ///@todo move this into pktlist_add() via sub_mpipe_readframe()
-    if (intf == IO_mpipe) {
-        uint16_t    crc_val;
-        uint16_t    crc_comp;
-    
-        plist->cursor->sequence = plist->cursor->buffer[4];
-        crc_val                 = (plist->cursor->buffer[0] << 8) + plist->cursor->buffer[1];
-        crc_comp                = crc_calc_block(&plist->cursor->buffer[2], plist->cursor->size-2);
-        plist->cursor->crcqual  = (crc_comp - crc_val);
-    }
-    else if (intf == IO_modbus) {
-        // do nothing
-    }
+    // packet list is fine
     else {
-        plist->cursor->crcqual  = 0;
+        pthread_mutex_lock(plist->mutex);
+        
+        pkt         = plist->cursor;
+        pkt->tstamp = time(NULL);   //;localtime(&seconds);
+        intf        = cliopt_getio();
+        
+        // MPipe uses Sequence-ID for message matching
+        ///@todo move this into pktlist_add() via sub_mpipe_readframe()
+        if (intf == IO_mpipe) {
+            uint16_t crc_val;
+            uint16_t crc_comp;
+        
+            pkt->sequence   = pkt->buffer[4];
+            crc_val         = (pkt->buffer[0] << 8) + pkt->buffer[1];
+            crc_comp        = crc_calc_block(&pkt->buffer[2], pkt->size-2);
+            pkt->crcqual    = (crc_comp - crc_val);
+        }
+        else if (intf == IO_modbus) {
+            // do nothing
+        }
+        else {
+            pkt->crcqual  = 0;
+        }
+        
+        pthread_mutex_unlock(plist->mutex);
+        outcode = 0;
     }
-
-    // return 0 on account that nothing went wrong.  So far, no checks.
-    return 0;
+    
+    if (errcode != NULL) {
+        *errcode = outcode;
+    }
+    return pkt;
 }

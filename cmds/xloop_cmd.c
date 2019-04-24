@@ -132,15 +132,11 @@ static int sub_cmdrun(dterm_handle_t* dth, const cmdtab_item_t* cmdptr, char* cm
     
     bytesout = cmd_run(cmdptr, dth, dst, &bytesin, (uint8_t*)cmddata, dstmax);
     if (bytesout > 0) {
-        int list_size;
-        pthread_mutex_lock(appdata->tlist_mutex);
-        list_size = pktlist_add_tx(&appdata->endpoint, NULL, appdata->tlist, dst, bytesout);
-        pthread_mutex_unlock(appdata->tlist_mutex);
-        if (list_size > 0) {
-            pthread_mutex_lock(appdata->tlist_mutex);
+        if (pktlist_add_tx(&appdata->endpoint, NULL, appdata->tlist, dst, bytesout) != NULL) {
+            pthread_mutex_lock(appdata->tlist_cond_mutex);
             appdata->tlist_cond_inactive = false;
             pthread_cond_signal(appdata->tlist_cond);
-            pthread_mutex_unlock(appdata->tlist_mutex);
+            pthread_mutex_unlock(appdata->tlist_cond_mutex);
         }
     }
     

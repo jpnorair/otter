@@ -993,20 +993,25 @@ static int sub_proc_lineinput(dterm_handle_t* dth, int* cmdrc, char* loadbuf, in
                 /// by the user of DTerm into DTerm
                 // ---------------------------------------------------------------
                 // There are bytes to send out via MPipe IO
-                int list_size;
-                pthread_mutex_lock(appdata->tlist_mutex);
-                list_size   = pktlist_add_tx(&appdata->endpoint, NULL, appdata->tlist, protocol_buf, bytesout);
-                output_sid  = appdata->tlist->cursor->sequence;
-                
-                pthread_mutex_unlock(appdata->tlist_mutex);
-                if (list_size > 0) {
-                    pthread_mutex_lock(appdata->tlist_mutex);
-                    appdata->tlist_cond_inactive = false;
-                    pthread_cond_signal(appdata->tlist_cond);
-                    pthread_mutex_unlock(appdata->tlist_mutex);
+                ///@todo This "cliopt_isdummy()" call must be changed to a dterm
+                ///      state/parameter check.
+                if (cliopt_isdummy()) {
+                    test_dumpbytes(protocol_buf, bytesout, "TX Packet Add");
                 }
                 else {
-                    output_err = -32;  ///@todo come up with a better error code
+                    pkt_t* txpkt;
+                    txpkt = pktlist_add_tx(&appdata->endpoint, NULL, appdata->tlist, protocol_buf, bytesout);
+                    if (txpkt != NULL) {
+                        output_sid  = txpkt->sequence;
+                        pthread_mutex_lock(appdata->tlist_cond_mutex);
+                        appdata->tlist_cond_inactive = false;
+                        pthread_cond_signal(appdata->tlist_cond);
+                        pthread_mutex_unlock(appdata->tlist_cond_mutex);
+                    }
+                    else {
+                        ///@todo come up with a better error code
+                        output_err = -32;
+                    }
                 }
                 // ---------------------------------------------------------------
             }
