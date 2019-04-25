@@ -38,8 +38,7 @@ typedef struct {
     size_t  size;
     size_t  max;
     int     txnonce;
-    
-    pthread_mutex_t* mutex;
+    pthread_mutex_t mutex;
 } pktlist_t;
 
 
