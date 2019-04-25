@@ -51,10 +51,6 @@
 // DTerm to be extricated into its own library
 #include "dterm.h"
 
-// Potentially deprecated, to be replaced with sockets
-#include "ppipe.h"
-#include "ppipelist.h"
-
 // Local Libraries
 #include <argtable3.h>
 #include <cJSON.h>
@@ -166,8 +162,6 @@ void otter_json_loadargs(cJSON* json,
                        char** initfile,
                        char** xpath,
                        bool* verbose_val );
-
-void ppipelist_populate(cJSON* obj);
 
 
 
@@ -556,31 +550,72 @@ int otter_main( ttyspec_t* ttylist,
     
     int rc;
     
-    
-    // MPipe Datastructs
-    pktlist_t   mpipe_tlist;
-    pktlist_t   mpipe_rlist;
-    
     // DTerm Datastructs
     dterm_handle_t dterm_handle;
-    
-    // Thread & Mutex Instances
-    ///@todo do tlist_mutex, tlist_cond need instantiation here?
-    pthread_cond_t      tlist_cond;
-    pthread_mutex_t     tlist_cond_mutex;
-    pthread_cond_t      pktrx_cond;
-    pthread_mutex_t     pktrx_mutex;
-    pthread_t           thr_mpreader;
-    pthread_t           thr_mpwriter;
-    pthread_t           thr_mpparser;
-    void*               (*dterm_fn)(void* args);
-    pthread_t           thr_dterm;
     
     // Application data container
     otter_app_t appdata;
     
+    // Thread Instances
+    pthread_t   thr_mpreader;
+    pthread_t   thr_mpwriter;
+    pthread_t   thr_mpparser;
+    void*       (*dterm_fn)(void* args);
+    pthread_t   thr_dterm;
+
     // 0 is the success code
     cli.exitcode = 0;
+    
+    
+    /// Initialize Otter Application Data
+    DEBUG_PRINTF("Initializing Application Data\n");
+    if (pthread_mutex_init(&cli.kill_mutex, NULL) != 0) {
+        cli.exitcode = 1;
+        goto otter_main_EXIT;
+    }
+    if (pthread_cond_init(&cli.kill_cond, NULL) != 0) {
+        cli.exitcode = 2;
+        goto otter_main_EXIT;
+    }
+    
+    appdata.tlist_cond_mutex = calloc(1, sizeof(pthread_mutex_t));
+    if (appdata.tlist_cond_mutex == NULL) {
+        cli.exitcode = 3;
+        goto otter_main_EXIT;
+    }
+    appdata.tlist_cond = calloc(1, sizeof(pthread_cond_t));
+    if (appdata.tlist_cond == NULL) {
+        cli.exitcode = 4;
+        goto otter_main_EXIT;
+    }
+    appdata.pktrx_mutex = calloc(1, sizeof(pthread_mutex_t));
+    if (appdata.pktrx_mutex == NULL) {
+        cli.exitcode = 5;
+        goto otter_main_EXIT;
+    }
+    appdata.pktrx_cond = calloc(1, sizeof(pthread_cond_t));
+    if (appdata.pktrx_cond == NULL) {
+        cli.exitcode = 6;
+        goto otter_main_EXIT;
+    }
+    if (pthread_mutex_init(appdata.tlist_cond_mutex, NULL) != 0) {
+        cli.exitcode = 7;
+        goto otter_main_EXIT;
+    }
+    if (pthread_mutex_init(appdata.pktrx_mutex, NULL) != 0) {
+        cli.exitcode = 8;
+        goto otter_main_EXIT;
+    }
+    if (pthread_cond_init(appdata.tlist_cond, NULL) != 0) {
+        cli.exitcode = 9;
+        goto otter_main_EXIT;
+    }
+    if (pthread_cond_init(appdata.pktrx_cond, NULL) != 0) {
+        cli.exitcode = 10;
+        goto otter_main_EXIT;
+    }
+    DEBUG_PRINTF("--> done\n");
+    
     
     /// Initialize Otter Environment Variables.
     /// This must be the first module to be initialized.
@@ -590,44 +625,12 @@ int otter_main( ttyspec_t* ttylist,
     /// Device Table initialization.
     /// Device 0 is used for implicit addressing
     
-    // -----------------------------------------------------------------------
-    /// Initialize the ppipe system of named pipes, based on the input json
-    /// configuration file.  We have input and output pipes of several types.
-    /// @todo Pipelist is deprecated, and to be replaced by sockets
-    ppipelist_init("./pipes/");
-    if (params != NULL) {
-        cJSON* obj;
-        for (obj=params->child; obj!=NULL; obj=obj->next) {
-            if (strcmp(obj->string, "pipes") != 0) {
-                continue;
-            }
-            
-            /// This is the pipes object, the only one we care about here
-            for (obj=obj->child; obj!=NULL; obj=obj->next) {
-                ppipelist_populate(obj);
-            }
-            break;
-        }
-    }
-    // -----------------------------------------------------------------------
-    
-    /// Initialize Thread Mutexes & Conds.  This is finnicky and it must be
-    /// done before assignment into the argument containers.
-    DEBUG_PRINTF("Initializing Multitasking elements ...\n");
-    assert( pthread_mutex_init(&cli.kill_mutex, NULL) == 0 );
-    pthread_cond_init(&cli.kill_cond, NULL);
-    assert( pthread_mutex_init(&tlist_cond_mutex, NULL) == 0 );
-    pthread_cond_init(&tlist_cond, NULL);
-    assert( pthread_mutex_init(&pktrx_mutex, NULL) == 0 );
-    pthread_cond_init(&pktrx_cond, NULL);
-    DEBUG_PRINTF("--> done\n");
-    
     /// Initialize DTerm data objects
     /// Non intrinsic dterm elements (cmdtab, devtab, etc) get attached
     /// following initialization
     DEBUG_PRINTF("Initializing DTerm ...\n");
     if (dterm_init(&dterm_handle, &appdata, intf) != 0) {
-        cli.exitcode = 1;
+        cli.exitcode = 11;
         goto otter_main_EXIT;
     }
     DEBUG_PRINTF("--> done\n");
@@ -638,7 +641,7 @@ int otter_main( ttyspec_t* ttylist,
     DEBUG_PRINTF("Initializing commands ...\n");
     if (cmd_init(&appdata.cmdtab, xpath) < 0) {
         fprintf(stderr, "Err: command table cannot be initialized.\n");
-        cli.exitcode = 2;
+        cli.exitcode = 12;
         goto otter_main_EXIT;
     }
     DEBUG_PRINTF("--> done\n");
@@ -648,13 +651,13 @@ int otter_main( ttyspec_t* ttylist,
     rc = devtab_init(&appdata.endpoint.devtab);
     if (rc != 0) {
         fprintf(stderr, "Device Table Initialization Failure (%i)\n", rc);
-        cli.exitcode = 3;
+        cli.exitcode = 13;
         goto otter_main_EXIT;
     }
     rc = devtab_insert(appdata.endpoint.devtab, 0, 0, NULL, NULL, NULL);
     if (rc != 0) {
         fprintf(stderr, "Device Table Insertion Failure (%i)\n", rc);
-        cli.exitcode = 4;
+        cli.exitcode = 14;
         goto otter_main_EXIT;
     }
     DEBUG_PRINTF("--> done\n");
@@ -664,7 +667,7 @@ int otter_main( ttyspec_t* ttylist,
     rc = subscriber_init(&appdata.subscribers);
     if (rc != 0) {
         fprintf(stderr, "Subscribers Initialization Failure (%i)\n", rc);
-        cli.exitcode = 5;
+        cli.exitcode = 15;
         goto otter_main_EXIT;
     }
     DEBUG_PRINTF("--> done\n");
@@ -675,7 +678,7 @@ int otter_main( ttyspec_t* ttylist,
     rc = user_init();
     if (rc != 0) {
         fprintf(stderr, "User Construct Initialization Failure (%i)\n", rc);
-        cli.exitcode = 6;
+        cli.exitcode = 16;
         goto otter_main_EXIT;
     }
     DEBUG_PRINTF("--> done\n");
@@ -683,10 +686,10 @@ int otter_main( ttyspec_t* ttylist,
     /// Initialize packet lists for transmitted packets and received packets
     ///@todo cliopt for max list size
     DEBUG_PRINTF("Initializing Packet Lists ...\n");
-    if ((pktlist_init(&mpipe_rlist, 256) != 0)
-    ||  (pktlist_init(&mpipe_tlist, 256) != 0)) {
+    if ((pktlist_init(&appdata.rlist, 256) != 0)
+    ||  (pktlist_init(&appdata.tlist, 256) != 0)) {
         fprintf(stderr, "Pktlist Initialization Failure (%i)\n", -1);
-        cli.exitcode = 7;
+        cli.exitcode = 17;
         goto otter_main_EXIT;
     }
     DEBUG_PRINTF("--> done\n");
@@ -696,7 +699,7 @@ int otter_main( ttyspec_t* ttylist,
     rc = mpipe_init(&appdata.mpipe, num_tty);
     if (rc != 0) {
         fprintf(stderr, "MPipe Initialization Failure (%i)\n", rc);
-        cli.exitcode = 8;
+        cli.exitcode = 18;
         goto otter_main_EXIT;
     }
     DEBUG_PRINTF("--> done\n");
@@ -714,15 +717,9 @@ int otter_main( ttyspec_t* ttylist,
     /// Link Remaining object data into the Application container
     /// Link threads variable instances into appdata
     ///@todo endpoint should be a pointer
-    appdata.tlist          = &mpipe_tlist;
-    appdata.rlist          = &mpipe_rlist;
     appdata.endpoint.node  = devtab_select(appdata.endpoint.devtab, 0);
     appdata.endpoint.usertype= USER_guest;
     appdata.dterm_parent   = &dterm_handle;
-    appdata.tlist_cond     = &tlist_cond;
-    appdata.tlist_cond_mutex = &tlist_cond_mutex;
-    appdata.pktrx_cond     = &pktrx_cond;
-    appdata.pktrx_mutex    = &pktrx_mutex;
 
     /// Open the mpipe TTY & Setup MPipe threads
     /// The MPipe Filename (e.g. /dev/ttyACMx) is sent as the first argument
@@ -738,7 +735,7 @@ int otter_main( ttyspec_t* ttylist,
                                 0, 0, 0);
         if (open_rc < 0) {
             fprintf(stderr, "Could not open TTY on %s (error %i)\n", ttylist[i].ttyfile, open_rc);
-            cli.exitcode = 9;
+            cli.exitcode = 19;
             goto otter_main_EXIT;
         }
     }
@@ -749,7 +746,7 @@ int otter_main( ttyspec_t* ttylist,
     DEBUG_PRINTF("Opening DTerm on %s ...\n", socket);
     dterm_fn = dterm_open(appdata.dterm_parent, socket);
     if (dterm_fn == NULL) {
-        cli.exitcode = 10;
+        cli.exitcode = 20;
         goto otter_main_EXIT;
     }
     DEBUG_PRINTF("--> done\n");
@@ -787,7 +784,7 @@ int otter_main( ttyspec_t* ttylist,
 #       endif
         {
             fprintf(stderr, "Specified interface (id:%i) not supported\n", cliopt_getio());
-            cli.exitcode = 11;
+            cli.exitcode = 21;
             goto otter_main_EXIT;
         }
     }
@@ -857,9 +854,9 @@ int otter_main( ttyspec_t* ttylist,
     
     switch (cli.exitcode) {
        default:
-        case 11:// Failure in MPipe thread creation
-        case 10:// Failure on dterm_open()
-        case 9: // Failure on mpipe_opentty()
+       case 21: // Failure in MPipe thread creation
+       case 20: // Failure on dterm_open()
+       case 19: // Failure on mpipe_opentty()
                 DEBUG_PRINTF("Deinitializing MPipe\n");
                 mpipe_deinit(appdata.mpipe);
 #               if OTTER_FEATURE(MODBUS)
@@ -868,64 +865,73 @@ int otter_main( ttyspec_t* ttylist,
                 }
 #               endif
 
-        case 8: // Failure on mpipe_init()
+       case 18: // Failure on mpipe_init()
                 DEBUG_PRINTF("Deinitializing Packet Lists\n");
-                pktlist_free(&mpipe_rlist);
-                pktlist_free(&mpipe_tlist);
-
-        case 7: // Failure on pktlist_init()
+                pktlist_free(appdata.rlist);
+                pktlist_free(appdata.tlist);
+            
+       case 17: // Failure on pktlist_init()
                 DEBUG_PRINTF("Deinitializing User Module\n");
                 user_deinit();
-
-        case 6: // Failure on user_init()
+            
+       case 16: // Failure on user_init()
                 DEBUG_PRINTF("Deinitializing Subscribers\n");
                 subscriber_deinit(appdata.subscribers);
-
-        case 5: // Failure on subscriber_init()
-        case 4: // Failure on devtab_insert()
+       
+       case 15: // Failure on subscriber_init()
+       case 14: // Failure on devtab_insert()
                 DEBUG_PRINTF("Deinitializing Device Table\n");
                 devtab_free(appdata.endpoint.devtab);
-
-        case 3: // Failure on devtab_init()
+       
+       case 13: // Failure on devtab_init()
                 DEBUG_PRINTF("Deinitializing Command Table\n");
                 cmd_free(appdata.cmdtab);
-
-        case 2: // Failure on cmd_init()
+       
+       case 12: // Failure on cmd_init()
                 DEBUG_PRINTF("Deinitializing DTerm\n");
                 ///@todo crashes here when OTDB is quit first
                 dterm_deinit(&dterm_handle);
 
-        case 1: // Failure on dterm_init()
-                DEBUG_PRINTF("Deinitializing PPipe\n");
-                ppipelist_deinit();
-                break;
-    }
+       case 11: // Failure on dterm_init()
+                DEBUG_PRINTF("Destroying pktrx_cond\n");
+                pthread_cond_destroy(appdata.pktrx_cond);
+            
+       case 10: DEBUG_PRINTF("Destroying tlist_cond\n");
+                pthread_cond_destroy(appdata.tlist_cond);
+       
+        case 9: DEBUG_PRINTF("Destroying pktrx_mutex\n");
+                pthread_mutex_unlock(appdata.pktrx_mutex);
+                pthread_mutex_destroy(appdata.pktrx_mutex);
 
-    DEBUG_PRINTF("Destroying thread resources\n");
-    pthread_mutex_unlock(&tlist_cond_mutex);
-    pthread_mutex_destroy(&tlist_cond_mutex);
-    pthread_cond_destroy(&tlist_cond);
-    DEBUG_PRINTF("-- tlist_mutex & tlist_cond destroyed\n");
-    pthread_mutex_unlock(&pktrx_mutex);
-    pthread_mutex_destroy(&pktrx_mutex);
-    pthread_cond_destroy(&pktrx_cond);
+        case 8: DEBUG_PRINTF("Destroying tlist_mutex\n");
+                pthread_mutex_unlock(appdata.tlist_cond_mutex);
+                pthread_mutex_destroy(appdata.tlist_cond_mutex);
+
+        case 7: DEBUG_PRINTF("Freeing pktrx_cond\n");
+                free(appdata.pktrx_cond);
+            
+        case 6: DEBUG_PRINTF("Freeing pktrx_mutex\n");
+                free(appdata.pktrx_mutex);
+
+        case 5: DEBUG_PRINTF("Freeing tlist_cond\n");
+                free(appdata.tlist_cond);
+            
+        case 4: DEBUG_PRINTF("Freeing tlist_mutex\n");
+                free(appdata.tlist_cond_mutex);
+
+        case 3: DEBUG_PRINTF("Destroying cli.kill_cond\n");
+                pthread_cond_destroy(&cli.kill_cond);
+            
+        case 2: DEBUG_PRINTF("Destroying cli.kill_mutex\n");
+                pthread_mutex_unlock(&cli.kill_mutex);
+                pthread_mutex_destroy(&cli.kill_mutex);
+            
+        case 1: break;
+    }
 
     DEBUG_PRINTF("Exiting cleanly and flushing output buffers\n");
     fflush(stdout);
     fflush(stderr);
-
-    ///@todo there is a SIGILL that happens on pthread_cond_destroy(), but only
-    ///      after packets have been TX'ed.
-    ///      - Happens on two different systems
-    ///      - May need to use valgrind to figure out what is happening
-    ///      - after fixed, can move this code block upwards.
-    DEBUG_PRINTF("-- rlist_mutex & rlist_cond destroyed\n");
-    pthread_mutex_unlock(&cli.kill_mutex);
-    DEBUG_PRINTF("-- pthread_mutex_unlock(&cli.kill_mutex)\n");
-    pthread_mutex_destroy(&cli.kill_mutex);
-    DEBUG_PRINTF("-- pthread_mutex_destroy(&cli.kill_mutex)\n");
-    pthread_cond_destroy(&cli.kill_cond);
-    DEBUG_PRINTF("-- cli.kill_mutex & cli.kill_cond destroyed\n");
 
     return cli.exitcode;
 }
@@ -1049,24 +1055,3 @@ void otter_json_loadargs(cJSON* json,
 
 
 
-
-void ppipelist_populate(cJSON* obj) {
-
-    if (obj != NULL) {
-        const char* prefix;
-        prefix = obj->string;
-        
-        obj = obj->child;
-        while (obj != NULL) { 
-            if (cJSON_IsString(obj) != 0) { 
-                //fprintf(stderr, "%s, %s, %s\n", prefix, obj->string, obj->valuestring);
-                ppipelist_new(prefix, obj->string, obj->valuestring); 
-                //fprintf(stderr, "%d\n", __LINE__);
-            }
-            obj = obj->next;
-        }
-    }
-}
-
-
- 
