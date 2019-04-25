@@ -8,7 +8,6 @@
 
 #include "formatters.h"
 
-#include "ppipelist.h"
 #include "cliopt.h"
 #include "otter_cfg.h"
 
@@ -438,15 +437,7 @@ static int sub_log_binmsg(FORMAT_Type fmt, uint8_t* dst, size_t* dst_accum, uint
     if (msgbreak != NULL) {
         *msgbreak++ = 0;
         length -= (msgbreak - front);
-        
-        // write out to the logger pipe
-        ///@todo move this functionality into subscribers
-        ppipelist_puthex("./pipes/log", front, msgbreak, length);
-        
-        // ppipe is going away, but if needed, it's possible to put a switch
-        // here (via cliopts probably) to output binary instead of hex.
-        //ppipelist_putbinary("./pipes/log", front, msgbreak, length);
-        
+
         use_delim = false;
         use_newline = (cliopt_getintf() == INTF_interactive);
         switch (fmt) {
@@ -514,10 +505,6 @@ static int sub_log_hexmsg(FORMAT_Type fmt, uint8_t* dst, size_t* dst_accum, uint
         *msgbreak++ = 0;
         length -= (msgbreak - front);
         
-        // write out to the logger pipe
-        ///@todo move this functionality into subscribers
-        ppipelist_puttext("./pipes/log", front, msgbreak, length);
-        
         use_delim = false;
         use_newline = (cliopt_getintf() == INTF_interactive);
         switch (fmt) {
@@ -581,10 +568,6 @@ static int sub_log_textmsg(FORMAT_Type fmt, uint8_t* dst, size_t* dst_accum, uin
     if (msgbreak != NULL) {
         *msgbreak++ = 0;
         length -= (msgbreak - front);
-        
-        // write out to the logger pipe
-        ///@todo move this functionality into subscribers
-        ppipelist_puttext("./pipes/log", front, msgbreak, length);
         
         use_delim = false;
         use_newline = (cliopt_getintf() == INTF_interactive);
@@ -737,15 +720,6 @@ int fmt_fprintalp(uint8_t* dst, size_t* dst_accum, uint8_t** src, size_t srcsz) 
         ///@note could squelch output for mismatched length
         length = (int)rem_bytes;
     }
-    
-///@todo remove pipes and move this feature into subscribers module
-/// Send the ALP data to an appropriate output pipe.
-/// If output pipe for this ALP isn't defined, nothing will happen.
-/// The id/cmd bytes are sent as well
-{   char str_alpid[8];
-    snprintf(str_alpid, 7, "%d", id);
-    ppipelist_puthex("./pipes/alp", str_alpid, (char*)(scurs-2), length+2);
-}
     
     /// Framing
     /// Raw Hex: load ALP frame with no formatting/framing

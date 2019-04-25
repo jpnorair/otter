@@ -21,9 +21,6 @@
 #include "otter_app.h"
 #include "otter_cfg.h"
 
-// Deprecated
-#include "ppipelist.h"
-
 // Local Libraries/Includes
 #include <dterm.h>
 #include <cJSON.h>
