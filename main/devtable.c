@@ -14,6 +14,8 @@
   *
   */
 
+///@todo replace this implementation with talloc & talloc array
+
 // Local Headers
 #include "otter_cfg.h"
 #include "devtable.h"
