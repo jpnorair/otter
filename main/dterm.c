@@ -325,11 +325,19 @@ int dterm_init(dterm_handle_t* dth, void* ext_data, INTF_Type intf) {
         return -1;
     }
     
+    talloc_disable_null_tracking();
+    dth->pctx = talloc_new(NULL);
+    dth->tctx = dth->pctx;
+    if (dth->pctx == NULL) {
+        rc = -2;
+        goto dterm_init_TERM;
+    }
+    
     dth->ext    = ext_data;
     dth->ch     = NULL;
-    dth->intf   = calloc(1, sizeof(dterm_intf_t));
+    dth->intf   = talloc_zero_size(dth->pctx, sizeof(dterm_intf_t));
     if (dth->intf == NULL) {
-        rc = -2;
+        rc = -3;
         goto dterm_init_TERM;
     }
     
@@ -338,31 +346,22 @@ int dterm_init(dterm_handle_t* dth, void* ext_data, INTF_Type intf) {
     if (intf == INTF_interactive) {
         dth->ch = ch_init(0);
         if (dth->ch == NULL) {
-            rc = -3;
+            rc = -4;
             goto dterm_init_TERM;
         }
     }
     
     dth->clithread = clithread_init();
     if (dth->clithread == NULL) {
-        rc = -4;
-        goto dterm_init_TERM;
-    }
-    
-    talloc_disable_null_tracking();
-    dth->pctx = talloc_new(NULL); 
-    dth->tctx = dth->pctx;
-    if (dth->pctx == NULL) {
         rc = -5;
         goto dterm_init_TERM;
     }
     
-    dth->iso_mutex = malloc(sizeof(pthread_mutex_t));
+    dth->iso_mutex = talloc_size(dth->pctx, sizeof(pthread_mutex_t));
     if (dth->iso_mutex == NULL) {
         rc = -6;
         goto dterm_init_TERM;
     }
-    
     if (pthread_mutex_init(dth->iso_mutex, NULL) != 0 ) {
         rc = -7;
         goto dterm_init_TERM;
@@ -372,17 +371,15 @@ int dterm_init(dterm_handle_t* dth, void* ext_data, INTF_Type intf) {
     
     dterm_init_TERM:
     clithread_deinit(dth->clithread);
-    
-    free(dth->intf);
-    free(dth->ch);
-    
+    talloc_free(dth->pctx);
     return rc;
 }
+
+
 
 void dterm_deinit(dterm_handle_t* dth) {
     if (dth->intf != NULL) {
         dterm_close(dth);
-        free(dth->intf);
     }
     if (dth->ch != NULL) {
         ch_free(dth->ch);
@@ -393,8 +390,9 @@ void dterm_deinit(dterm_handle_t* dth) {
     if (dth->iso_mutex != NULL) {
         pthread_mutex_unlock(dth->iso_mutex);
         pthread_mutex_destroy(dth->iso_mutex);
-        free(dth->iso_mutex);
     }
+    
+    talloc_free(dth->pctx);
 }
 
 
@@ -1301,6 +1299,7 @@ int dterm_cmdfile(dterm_handle_t* dth, const char* filename) {
         int cmdrc;
         size_t poolsize;
         size_t est_poolobj;
+        void* old_ctx;
         
         // Burn whitespace ahead of command.
         while (isspace(*filecursor)) { filecursor++; filebuf_sz--; }
@@ -1309,6 +1308,7 @@ int dterm_cmdfile(dterm_handle_t* dth, const char* filename) {
         // Create temporary context as a memory pool
         poolsize    = cliopt_getpoolsize();
         est_poolobj = (poolsize / 128) + 1;
+        old_ctx     = dth->tctx;
         dth->tctx   = talloc_pooled_object(NULL, void, est_poolobj, poolsize);
         
         // Echo input line to dterm
@@ -1319,6 +1319,7 @@ int dterm_cmdfile(dterm_handle_t* dth, const char* filename) {
         
         // Free temporary memory pool context
         talloc_free(dth->tctx);
+        dth->tctx = old_ctx;
         
         // Exit the command sequence on first detection of error.
         if (cmdrc < 0) {
