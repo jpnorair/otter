@@ -23,7 +23,6 @@
 #include "dterm.h"
 #include "mpipe.h"
 #include "modbus.h"
-#include "ppipelist.h"
 #include "formatters.h"
 
 // OT Filesystem modular library
@@ -308,21 +307,24 @@ void* modbus_writer(void* args) {
     mph = appdata->mpipe;
     
     while (1) {
-        
         pthread_mutex_lock(appdata->tlist_cond_mutex);
         appdata->tlist_cond_inactive = true;
         while (appdata->tlist_cond_inactive) {
             pthread_cond_wait(appdata->tlist_cond, appdata->tlist_cond_mutex);
         }
         
-        while ((txpkt = pktlist_get(appdata->tlist)) != NULL) {
+        while (1) {
+            txpkt = pktlist_get(appdata->tlist);
+            if (txpkt == NULL) {
+                break;
+            }
             
             /// Modbus 1.75ms idle SOF
             usleep(1750);
             
             VDSRC_PRINTF("TX size=%zu, sid=%i\n", txpkt->size, txpkt->sequence);
             
-            time(&txpkt->tstamp);
+            //txpkt->tstamp = time(NULL);
             
             if (txpkt->intf == NULL) {
                 int id_i = (int)mpipe_numintf_get(mph);
@@ -335,12 +337,12 @@ void* modbus_writer(void* args) {
                 sub_write_on_intf(txpkt->intf, txpkt->buffer, (int)txpkt->size);
             }
             
-            /// Modbus 1.75ms idle EOF
-            usleep(1750);
-            
             /// Modbus operates in lockstep: TX->RX
             /// Always delete the packet data after finishing TX
             pktlist_del(txpkt);
+            
+            /// Modbus 1.75ms idle EOF
+            usleep(1750);
         }
         
         pthread_mutex_unlock(appdata->tlist_cond_mutex);
