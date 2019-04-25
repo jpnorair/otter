@@ -45,7 +45,7 @@ typedef struct {
 
 
 // Packet List Manipulation Functions
-int pktlist_init(pktlist_t* plist, size_t max);
+int pktlist_init(pktlist_t** plist, size_t max);
 void pktlist_free(pktlist_t* plist);
 void pktlist_empty(pktlist_t* plist);
 
