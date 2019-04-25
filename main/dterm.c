@@ -327,8 +327,8 @@ int dterm_init(dterm_handle_t* dth, void* ext_data, INTF_Type intf) {
     
     talloc_disable_null_tracking();
     dth->pctx = talloc_new(NULL);
-    dth->tctx = dth->pctx;
-    if (dth->pctx == NULL) {
+    dth->tctx = NULL;
+    if (dth->pctx == NULL){
         rc = -2;
         goto dterm_init_TERM;
     }
@@ -392,6 +392,7 @@ void dterm_deinit(dterm_handle_t* dth) {
         pthread_mutex_destroy(dth->iso_mutex);
     }
     
+    talloc_free(dth->tctx);
     talloc_free(dth->pctx);
 }
 
@@ -1086,6 +1087,8 @@ void* dterm_socket_clithread(void* args) {
     // idle before killing the thread.
     pthread_setcanceltype(PTHREAD_CANCEL_DEFERRED, NULL);
     
+    talloc_disable_null_tracking();
+    
     // Thread-local memory elements
     dth = ((clithread_args_t*)args)->app_handle;
     memcpy(&dts, dth, sizeof(dterm_handle_t));
@@ -1195,6 +1198,8 @@ void* dterm_piper(void* args) {
     // Initial state = off
     dth->intf->state = prompt_off;
     
+    talloc_disable_null_tracking();
+    
     /// Get each line from the pipe.
     while (dth->thread_active) {
         int linelen;
@@ -1213,7 +1218,7 @@ void* dterm_piper(void* args) {
 
         // Create temporary context as a memory pool
         poolsize    = cliopt_getpoolsize();
-        est_poolobj = (poolsize / 128) + 1;
+        est_poolobj = 4; //(poolsize / 128) + 1;
         dth->tctx   = talloc_pooled_object(NULL, void*, est_poolobj, poolsize);
 
         // Process the line-input command
@@ -1221,6 +1226,7 @@ void* dterm_piper(void* args) {
         
         // Free temporary memory pool context
         talloc_free(dth->tctx);
+        dth->tctx = NULL;
         
         // +1 eats the terminator
         loadlen -= (linelen + 1);
@@ -1299,7 +1305,6 @@ int dterm_cmdfile(dterm_handle_t* dth, const char* filename) {
         int cmdrc;
         size_t poolsize;
         size_t est_poolobj;
-        void* old_ctx;
         
         // Burn whitespace ahead of command.
         while (isspace(*filecursor)) { filecursor++; filebuf_sz--; }
@@ -1307,8 +1312,7 @@ int dterm_cmdfile(dterm_handle_t* dth, const char* filename) {
 
         // Create temporary context as a memory pool
         poolsize    = cliopt_getpoolsize();
-        est_poolobj = (poolsize / 128) + 1;
-        old_ctx     = dth->tctx;
+        est_poolobj = 4; //(poolsize / 128) + 1;
         dth->tctx   = talloc_pooled_object(NULL, void, est_poolobj, poolsize);
         
         // Echo input line to dterm
@@ -1319,7 +1323,7 @@ int dterm_cmdfile(dterm_handle_t* dth, const char* filename) {
         
         // Free temporary memory pool context
         talloc_free(dth->tctx);
-        dth->tctx = old_ctx;
+        dth->tctx = NULL;
         
         // Exit the command sequence on first detection of error.
         if (cmdrc < 0) {
@@ -1403,6 +1407,8 @@ void* dterm_prompter(void* args) {
         fprintf(stderr, "Linkage error between dterm handle and application data.\n");
         goto dterm_prompter_TERM;
     }
+
+    talloc_disable_null_tracking();
 
     // Initial state = off
     dth->intf->state = prompt_off;
@@ -1544,7 +1550,7 @@ void* dterm_prompter(void* args) {
 
                     // Create temporary context as a memory pool
                     poolsize    = cliopt_getpoolsize();
-                    est_poolobj = (poolsize / 128) + 1;
+                    est_poolobj = 4; //(poolsize / 128) + 1;
                     dth->tctx   = talloc_pooled_object(NULL, void*, est_poolobj, poolsize);
 
                     // Run command(s) from line input
@@ -1555,6 +1561,7 @@ void* dterm_prompter(void* args) {
 
                     // Free temporary memory pool context
                     talloc_free(dth->tctx);
+                    dth->tctx = NULL;
 
                     sub_reset(dth->intf);
                     dth->intf->state = prompt_close;

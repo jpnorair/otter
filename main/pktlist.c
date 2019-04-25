@@ -430,6 +430,8 @@ int pktlist_init(pktlist_t** plist, size_t max) {
         rc = -1;
         goto pktlist_init_ERR;
     }
+    
+    talloc_disable_null_tracking();
     newlist = talloc_size(NULL, sizeof(pktlist_t));
     if (newlist == NULL) {
         rc = -2;
