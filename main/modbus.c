@@ -342,7 +342,7 @@ void* modbus_writer(void* args) {
             pktlist_del(txpkt);
             
             /// Modbus 1.75ms idle EOF
-            usleep(1750);
+            //usleep(1750);
         }
         
         pthread_mutex_unlock(appdata->tlist_cond_mutex);
