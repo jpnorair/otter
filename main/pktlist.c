@@ -306,7 +306,7 @@ static pkt_t* sub_pktlist_add(user_endpoint_t* endpoint, void* intf, pktlist_t* 
                 break;
             
             case IO_modbus:
-                padding     = 14;
+                padding     = 17;
                 put_frame   = &sub_writeframe_modbus;
                 put_footer  = &sub_writefooter_modbus;
                 break;
