@@ -21,6 +21,10 @@
 #include "crc_calc_block.h"
 
 
+///@todo Make pktlist a circular array (possibly via talloc arrays) in order
+///      to reduce amount of allocations at runtime.
+
+
 
 /// MPipe Reader & Writer Thread Functions
 /// mpipe_add():    Adds a packet to the RX List (rlist) or TX List (tlist)
@@ -274,7 +278,7 @@ static void sub_writefooter_modbus(pkt_t* newpkt) {
 
 
 static pkt_t* sub_pktlist_add(user_endpoint_t* endpoint, void* intf, pktlist_t* plist, uint8_t* data, size_t size, bool iswrite) {
-    size_t max_overhead;
+    size_t padding;
     void (*put_frame)(user_endpoint_t*, pkt_t*, uint8_t*, size_t);
     void (*put_footer)(pkt_t*);
     pkt_t* newpkt = NULL;
@@ -285,8 +289,7 @@ static pkt_t* sub_pktlist_add(user_endpoint_t* endpoint, void* intf, pktlist_t* 
         goto sub_pktlist_add_ERR;
     }
     
-    ///@todo replace 400 with cliopt for maximum packet size in bytes.
-    newpkt = talloc_pool(plist, sizeof(pkt_t) + 400);
+    newpkt = talloc_size(plist, sizeof(pkt_t));
     if (newpkt == NULL) {
         errcode = -2;
         goto sub_pktlist_add_ERR;
@@ -297,19 +300,19 @@ static pkt_t* sub_pktlist_add(user_endpoint_t* endpoint, void* intf, pktlist_t* 
     if (iswrite) {
         switch (cliopt_getio()) {
             case IO_mpipe:
-                max_overhead= 8;
+                padding     = 8;
                 put_frame   = &sub_writeframe_mpipe;
                 put_footer  = &sub_writefooter_mpipe;
                 break;
             
             case IO_modbus:
-                max_overhead= 12;
+                padding     = 14;
                 put_frame   = &sub_writeframe_modbus;
                 put_footer  = &sub_writefooter_modbus;
                 break;
             
             default:
-                max_overhead= 0;
+                padding     = 0;
                 put_frame   = &sub_frame_null;
                 put_footer  = &sub_footer_null;
                 break;
@@ -330,7 +333,7 @@ static pkt_t* sub_pktlist_add(user_endpoint_t* endpoint, void* intf, pktlist_t* 
                 break;
         }
         put_footer  = &sub_footer_null;
-        max_overhead= 0;
+        padding     = 0;
     }
     
     pthread_mutex_lock(&plist->mutex);
@@ -346,7 +349,8 @@ static pkt_t* sub_pktlist_add(user_endpoint_t* endpoint, void* intf, pktlist_t* 
     newpkt->prev    = plist->last;
     newpkt->next    = NULL;
     newpkt->size    = size;
-    newpkt->buffer  = talloc_size(newpkt, size + max_overhead + OTTER_PARAM_ENCALIGN-1);
+    padding         = ((padding + size + OTTER_PARAM_ENCALIGN-1) / OTTER_PARAM_ENCALIGN) * OTTER_PARAM_ENCALIGN;
+    newpkt->buffer  = talloc_size(newpkt, padding);
     if (newpkt->buffer == NULL) {
         errcode =  -3;
         goto sub_pktlist_add_TERM;
