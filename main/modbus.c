@@ -322,7 +322,7 @@ void* modbus_writer(void* args) {
             /// Modbus 1.75ms idle SOF
             usleep(1750);
             
-            VDSRC_PRINTF("TX size=%zu, sid=%i\n", txpkt->size, txpkt->sequence);
+            VDSRC_PRINTF("TX size=%zu, sid=%u\n", txpkt->size, txpkt->sequence);
             
             //txpkt->tstamp = time(NULL);
             
@@ -398,6 +398,7 @@ void* modbus_parser(void* args) {
         while (appdata->pktrx_cond_inactive) {
             pthread_cond_wait(appdata->pktrx_cond, appdata->pktrx_mutex);
         }
+        pthread_mutex_unlock(appdata->pktrx_mutex);
         
         pthread_mutex_lock(dth->iso_mutex);
         
@@ -421,14 +422,14 @@ void* modbus_parser(void* args) {
             int         msgbytes;
             bool        rpkt_is_resp;
             uint64_t    rxaddr;
-            
+
             rpkt = pktlist_parse(&pkt_condition, appdata->rlist);
             if (pkt_condition < 0) {
                 break;
             }
 
-            VDSRC_PRINTF("RX size=%zu, cond=%i, sid=%i, qual=%i\n", rpkt->size, pkt_condition, rpkt->sequence, rpkt->crcqual);
-        
+            VDSRC_PRINTF("RX size=%zu, cond=%i, sid=%u, qual=%i\n", rpkt->size, pkt_condition, rpkt->sequence, rpkt->crcqual);
+            
             /// If packet has an error of some kind -- delete it and move-on.
             /// Else, print-out the packet.  This can get rich depending on the
             /// internal protocol, and it can result in responses being queued.
@@ -444,7 +445,7 @@ void* modbus_parser(void* args) {
             /// need to be intelligently managed.
             rpkt_is_resp    = true;
             rxaddr          = devtab_lookup_uid(appdata->endpoint.devtab, rpkt->buffer[2]);
-
+            
             /// If CRC is bad, discard packet now, and rxstat an error
             /// CRC is good, so send packet to Modbus processor.
             if (rpkt->crcqual != 0) {
@@ -457,7 +458,7 @@ void* modbus_parser(void* args) {
                 smut_msgbytes   = rpkt->size;
                 msgtype         = smut_extract_payload((void**)&msg, (void*)msg, &smut_msgbytes, smut_msgbytes, true);
                 msgbytes        = smut_msgbytes;
-                
+
                 while (msgbytes > 0) {
                     DFMT_Type rxstat_fmt;
                     int subsig;
@@ -471,7 +472,7 @@ void* modbus_parser(void* args) {
                         /// and also for protocol errors (i.e. NACKs).
                         proc_result = fmt_fprintalp((uint8_t*)putsbuf, &putsbytes, &msg, msgbytes);
                         rxstat_fmt  = DFMT_Native;
-                        
+
                         /// Successful formatted output gets propagated to any
                         /// subscribers of this ALP ID.
                         subsig = (proc_result >= 0) ? SUBSCR_SIG_OK : SUBSCR_SIG_ERR;
@@ -484,7 +485,7 @@ void* modbus_parser(void* args) {
                     }
 
                     dterm_publish_rxstat(dth, rxstat_fmt, putsbuf, putsbytes, rxaddr, rpkt->sequence, rpkt->tstamp, rpkt->crcqual);
-                    
+
                     // Recalculate message size following the treatment of the last segment
                     msgbytes -= (msg - lastmsg);
                 }
@@ -493,9 +494,7 @@ void* modbus_parser(void* args) {
             // Remove the packet that was just received
             pktlist_del(rpkt);
         }
-
         pthread_mutex_unlock(dth->iso_mutex);
-        pthread_mutex_unlock(appdata->pktrx_mutex);
         
         ///@todo Can check for major error in pkt_condition
         ///      Major errors are integers less than -1

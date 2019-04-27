@@ -325,6 +325,9 @@ int dterm_init(dterm_handle_t* dth, void* ext_data, INTF_Type intf) {
         return -1;
     }
     
+    dth->intf = NULL;
+    dth->iso_mutex = NULL;
+    
     talloc_disable_null_tracking();
     dth->pctx = talloc_new(NULL);
     dth->tctx = NULL;
@@ -335,7 +338,7 @@ int dterm_init(dterm_handle_t* dth, void* ext_data, INTF_Type intf) {
     
     dth->ext    = ext_data;
     dth->ch     = NULL;
-    dth->intf   = talloc_zero_size(dth->pctx, sizeof(dterm_intf_t));
+    dth->intf   = calloc(1, sizeof(dterm_intf_t));
     if (dth->intf == NULL) {
         rc = -3;
         goto dterm_init_TERM;
@@ -357,7 +360,7 @@ int dterm_init(dterm_handle_t* dth, void* ext_data, INTF_Type intf) {
         goto dterm_init_TERM;
     }
     
-    dth->iso_mutex = talloc_size(dth->pctx, sizeof(pthread_mutex_t));
+    dth->iso_mutex = malloc(sizeof(pthread_mutex_t));
     if (dth->iso_mutex == NULL) {
         rc = -6;
         goto dterm_init_TERM;
@@ -371,7 +374,11 @@ int dterm_init(dterm_handle_t* dth, void* ext_data, INTF_Type intf) {
     
     dterm_init_TERM:
     clithread_deinit(dth->clithread);
+    talloc_free(dth->tctx);
     talloc_free(dth->pctx);
+    free(dth->iso_mutex);
+    free(dth->intf);
+    
     return rc;
 }
 
@@ -380,6 +387,7 @@ int dterm_init(dterm_handle_t* dth, void* ext_data, INTF_Type intf) {
 void dterm_deinit(dterm_handle_t* dth) {
     if (dth->intf != NULL) {
         dterm_close(dth);
+        free(dth->intf);
     }
     if (dth->ch != NULL) {
         ch_free(dth->ch);
@@ -390,6 +398,7 @@ void dterm_deinit(dterm_handle_t* dth) {
     if (dth->iso_mutex != NULL) {
         pthread_mutex_unlock(dth->iso_mutex);
         pthread_mutex_destroy(dth->iso_mutex);
+        free(dth->iso_mutex);
     }
     
     talloc_free(dth->tctx);
@@ -560,6 +569,10 @@ int dterm_send_rxstat(dterm_handle_t* dth, DFMT_Type dfmt, void* rxdata, size_t 
     return dterm_publish_rxstat(dth, dfmt, rxdata, rxsize, rxaddr, sid, tstamp, crcqual);
 }
 
+
+///@todo clithread_publish is not safe when the file descriptor is lost before
+///      the response arrives.  Need to implement a way to indicate when a
+///      client drops in order to skip write and update clithread-table
 int dterm_publish_rxstat(dterm_handle_t* dth, DFMT_Type dfmt, void* rxdata, size_t rxsize, uint64_t rxaddr, uint32_t sid, time_t tstamp, int crcqual) {
     char output[1024];
     int datasize = 0;
@@ -978,8 +991,9 @@ static int sub_proc_lineinput(dterm_handle_t* dth, int* cmdrc, char* loadbuf, in
         
         // Null terminate the cursor: errors may report a string.
         *cursor = 0;
-        
+
         bytesout = cmd_run(cmdptr, dth, cursor, &bytesin, (uint8_t*)(loadbuf+cmdlen), bufmax);
+
         if (cmdrc != NULL) {
             *cmdrc = bytesout;
         }
@@ -999,6 +1013,7 @@ static int sub_proc_lineinput(dterm_handle_t* dth, int* cmdrc, char* loadbuf, in
                 }
                 else {
                     pkt_t* txpkt;
+
                     txpkt = pktlist_add_tx(&appdata->endpoint, NULL, appdata->tlist, protocol_buf, bytesout);
                     if (txpkt != NULL) {
                         output_sid  = txpkt->sequence;
@@ -1088,7 +1103,7 @@ void* dterm_socket_clithread(void* args) {
     pthread_setcanceltype(PTHREAD_CANCEL_DEFERRED, NULL);
     
     talloc_disable_null_tracking();
-    
+
     // Thread-local memory elements
     dth = ((clithread_args_t*)args)->app_handle;
     memcpy(&dts, dth, sizeof(dterm_handle_t));
@@ -1111,10 +1126,10 @@ void* dterm_socket_clithread(void* args) {
         loadlen = sub_readline(NULL, dts.fd.out, loadbuf, NULL, LINESIZE);
         if (loadlen > 0) {
             sub_str_sanitize(loadbuf, (size_t)loadlen);
-            
+
             pthread_mutex_lock(dts.iso_mutex);
             dts.intf->state = prompt_off;
-            
+
             do {
                 int output_sid;
 
@@ -1125,7 +1140,7 @@ void* dterm_socket_clithread(void* args) {
                 // Process the line-input command
                 output_sid = sub_proc_lineinput(&dts, NULL, loadbuf, linelen);
                 clithread_chxid(ct_args->clithread_self, output_sid);
-                
+
                 // +1 eats the terminator
                 loadlen -= (linelen + 1);
                 loadbuf += (linelen + 1);
@@ -1173,7 +1188,7 @@ void* dterm_socketer(void* args) {
         }
         else {
             size_t poolsize     = cliopt_getpoolsize();
-            size_t est_poolobj  = (poolsize / 128) + 1;
+            size_t est_poolobj  = 4;
             clithread_add(dth->clithread, NULL, est_poolobj, poolsize, &dterm_socket_clithread, (void*)&clithread);
         }
     }

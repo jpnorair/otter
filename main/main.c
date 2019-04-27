@@ -89,7 +89,7 @@ typedef struct {
 // CLI Data Type deals with kill signals
 typedef struct {
     int             exitcode;
-    bool            kill_cond_inactive;
+    volatile bool   kill_cond_inactive;
     pthread_mutex_t kill_mutex;
     pthread_cond_t  kill_cond;
 } cli_struct;
@@ -119,19 +119,15 @@ void _assign_signal(int sigcode, void (*sighandler)(int)) {
 }
 
 void sigint_handler(int sigcode) {
-    cli.exitcode = -1;
-    pthread_mutex_lock(&cli.kill_mutex);
+    cli.exitcode = 0;
     cli.kill_cond_inactive = false;
     pthread_cond_signal(&cli.kill_cond);
-    pthread_mutex_unlock(&cli.kill_mutex);
 }
 
 void sigquit_handler(int sigcode) {
-    cli.exitcode = 0;
-    pthread_mutex_lock(&cli.kill_mutex);
+    cli.exitcode = -1;
     cli.kill_cond_inactive = false;
     pthread_cond_signal(&cli.kill_cond);
-    pthread_mutex_unlock(&cli.kill_mutex);
 }
 
 
@@ -569,6 +565,9 @@ int otter_main( ttyspec_t* ttylist,
     
     /// Initialize Otter Application Data
     DEBUG_PRINTF("Initializing Application Data\n");
+    bzero(&appdata, sizeof(otter_app_t));
+    appdata.cmdtab = NULL;
+    
     if (pthread_mutex_init(&cli.kill_mutex, NULL) != 0) {
         cli.exitcode = 1;
         goto otter_main_EXIT;
@@ -614,6 +613,7 @@ int otter_main( ttyspec_t* ttylist,
         cli.exitcode = 10;
         goto otter_main_EXIT;
     }
+    
     DEBUG_PRINTF("--> done\n");
     
     
@@ -641,7 +641,7 @@ int otter_main( ttyspec_t* ttylist,
     DEBUG_PRINTF("Initializing commands ...\n");
     if (cmd_init(&appdata.cmdtab, xpath) < 0) {
         fprintf(stderr, "Err: command table cannot be initialized.\n");
-        cli.exitcode = 12;
+        cli.exitcode         = 12;
         goto otter_main_EXIT;
     }
     DEBUG_PRINTF("--> done\n");
@@ -809,7 +809,7 @@ int otter_main( ttyspec_t* ttylist,
     /// Otter is shutdown.
     DEBUG_PRINTF("Assign Kill Signals\n");
     _assign_signal(SIGINT, &sigint_handler);
-    _assign_signal(SIGQUIT, &sigquit_handler);
+    //_assign_signal(SIGQUIT, &sigquit_handler);
     DEBUG_PRINTF("--> done\n");
     
     DEBUG_PRINTF("Creating Dterm theads\n");
@@ -827,7 +827,6 @@ int otter_main( ttyspec_t* ttylist,
 // ----------------------------------------------------------------------------
     
     /// Wait for kill cond.  Basic functionality is in the dterm thread(s).
-    pthread_mutex_lock(&cli.kill_mutex);
     cli.kill_cond_inactive = true;
     while (cli.kill_cond_inactive) {
         pthread_cond_wait(&cli.kill_cond, &cli.kill_mutex);

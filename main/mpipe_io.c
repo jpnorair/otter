@@ -442,7 +442,7 @@ void* mpipe_parser(void* args) {
             pthread_cond_wait(appdata->pktrx_cond, appdata->pktrx_mutex);
         }
         
-        pthread_mutex_lock(dth->iso_mutex);
+        
         
 
         /// pktlist_parse will validate the packet with CRC:
