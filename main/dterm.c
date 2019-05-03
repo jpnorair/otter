@@ -1111,6 +1111,7 @@ void* dterm_socket_clithread(void* args) {
     dts.fd.out  = ((clithread_args_t*)args)->fd_out;
     dts.tctx    = ct_args->tctx;
 
+    clithread_sigup(ct_args->clithread_self);
     VERBOSE_PRINTF("Client Thread on socket:fd=%i has started\n", dts.fd.out);
     
     /// Get a packet from the Socket
@@ -1178,6 +1179,7 @@ void* dterm_socketer(void* args) {
     dth->intf->state        = prompt_off;
     clithread.app_handle    = dth;
     clithread.fd_in         = dth->fd.in;
+    clithread.tctx          = NULL;
     
     /// Get a packet from the Socket
     while (dth->thread_active) {
@@ -1193,10 +1195,6 @@ void* dterm_socketer(void* args) {
         }
     }
     
-    /// This code should never occur, given the while(1) loop.
-    /// If it does (possibly a stack fuck-up), we print this "chaotic error."
-    //fprintf(stderr, "\n--> Chaotic error: dterm_piper() thread broke loop.\n");
-    //raise(SIGINT);
     return NULL;
 }
 
