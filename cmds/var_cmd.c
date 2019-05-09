@@ -24,6 +24,9 @@
 //#include "test.h"
 
 
+// HBuilder libraries
+
+
 
 // Standard C & POSIX Libraries
 #include <stdint.h>
@@ -33,7 +36,141 @@
 #include <ctype.h>
 
 
+/*
+#include <uthash.h>
 
+typedef enum {
+    VAR_Binary = 0,
+    VAR_String,
+    VAR_Int,
+    VAR_Float,
+} VAR_Type;
+
+typedef union {
+    void* pointer;
+    int64_t integer;
+    double number;
+} var_union;
+
+struct varstruct {
+    char name[16];
+    int id;
+    
+    size_t size;
+    VAR_Type type;
+    var_union val;
+    
+    UT_hash_handle hh;
+};
+
+typedef struct {
+    size_t size;
+    int    id_master;
+    struct varstruct* base;
+} otvar_t;
+
+typedef void* otvar_handle_t;
+
+
+
+
+
+static struct varstruct* sub_findvar(otvar_t* otvar, const char* name) {
+    struct varstruct* item;
+    struct varstruct* base;
+    
+    base = otvar->base;
+    //HASH_FIND_STR(otvar->base, name, item);
+    HASH_FIND_STR(base, name, item);
+    return item;
+}
+
+
+int otvar_init(otvar_handle_t* handle) {
+    otvar_t* otvar;
+    
+    if (handle == NULL) {
+        return -1;
+    }
+    
+    otvar = malloc(sizeof(otvar_t));
+    if (otvar == NULL) {
+        return -2;
+    }
+    
+    otvar->size         = 0;
+    otvar->id_master    = 0;
+    otvar->base         = NULL;
+    *handle             = otvar;
+    return 0;
+}
+
+
+void otvar_deinit(otvar_handle_t handle) {
+    struct varstruct* tmp;
+    struct varstruct* item;
+    
+    if (handle != NULL) {
+        struct varstruct* vartab = ((otvar_t*)handle)->base;
+        
+        HASH_ITER(hh, vartab, item, tmp) {
+            HASH_DEL(vartab, item);         // delete item (vartab advances to next)
+            if (item->size != 0) {
+                free(item->val.pointer);
+            }
+            free(item);
+        }
+        
+        free(handle);
+    }
+}
+
+
+int otvar_del(otvar_handle_t handle, const char* varname) {
+    struct varstruct* input;
+    struct varstruct* output;
+    otvar_t* otvar;
+    int dels = 0;
+    
+    if (handle == NULL) {
+        return -1;
+    }
+    
+    otvar = handle;
+    if (otvar->base == NULL) {
+        return -2;
+    }
+    
+    input = sub_findvar(otvar, varname);
+    if (input != NULL) {
+        HASH_DEL(input, output);
+        if (output->size != 0) {
+            free(output->val.pointer);
+        }
+        free(output);
+        dels++;
+    }
+    
+    return dels;
+}
+
+
+int otvar_add(otvar_handle_t handle, const char* varname, VAR_Type type, ...) {
+    otvar_t* otvar;
+    int dels = 0;
+    
+    if (handle == NULL) {
+        return -1;
+    }
+    
+    otvar = handle;
+    if (otvar->base == NULL) {
+        return -2;
+    }
+    
+    return 0;
+}
+*/
 
 
 
