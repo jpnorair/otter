@@ -75,6 +75,7 @@ void* modbus_reader(void* args) {
     int pollcode;
     int polltimeout;
     int ready_fds;
+    int timeout_ms;
     
     uint8_t rbuf[1024];
     uint8_t* rbuf_cursor;
@@ -181,6 +182,7 @@ void* modbus_reader(void* args) {
             // abort when there's a long-enough break in reception
             rbuf_cursor = rbuf;
             read_limit  = 1024;
+            timeout_ms  = (int)otvar_get_integer(appdata->vardict, "timeout");
             while (read_limit > 0) {
                 int new_bytes;
                 
@@ -191,7 +193,7 @@ void* modbus_reader(void* args) {
                 
                 // 2. Poll function will do a timeout waiting for next byte(s).  In Modbus,
                 //    data timeout means end-of-frame.
-                pollcode = poll(&fds[i], 1, OTTER_PARAM(MBTIMEOUT));
+                pollcode = poll(&fds[i], 1, timeout_ms);
                 if (pollcode == 0) {
                     // delay limit detected: frame is over
                     break;
@@ -322,7 +324,7 @@ void* modbus_writer(void* args) {
             /// Modbus 1.75ms idle SOF
             usleep(1750);
             
-            VDSRC_PRINTF("TX size=%zu, sid=%u\n", txpkt->size, txpkt->sequence);
+            VDATA_PRINTF("TX size=%zu, sid=%u\n", txpkt->size, txpkt->sequence);
             
             //txpkt->tstamp = time(NULL);
             
@@ -428,7 +430,7 @@ void* modbus_parser(void* args) {
                 break;
             }
 
-            VDSRC_PRINTF("RX size=%zu, cond=%i, sid=%u, qual=%i\n", rpkt->size, pkt_condition, rpkt->sequence, rpkt->crcqual);
+            VDATA_PRINTF("RX size=%zu, cond=%i, sid=%u, qual=%i\n", rpkt->size, pkt_condition, rpkt->sequence, rpkt->crcqual);
             
             /// If packet has an error of some kind -- delete it and move-on.
             /// Else, print-out the packet.  This can get rich depending on the

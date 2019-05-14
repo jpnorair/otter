@@ -52,6 +52,7 @@
 #include "dterm.h"
 
 // Local Libraries
+#include <otvar.h>
 #include <argtable3.h>
 #include <cJSON.h>
 #include <cmdtab.h>
@@ -636,13 +637,32 @@ int otter_main( ttyspec_t* ttylist,
     DEBUG_PRINTF("--> done\n");
     
     /// Initialize command search table.
+    ///@todo cmdtab may be integrated into DTerm in the future.
     ///@todo in the future, let's pull this from an initialization file or
     ///      something dynamic as such.
     DEBUG_PRINTF("Initializing commands ...\n");
     if (cmd_init(&appdata.cmdtab, xpath) < 0) {
         fprintf(stderr, "Err: command table cannot be initialized.\n");
-        cli.exitcode         = 12;
+        cli.exitcode = 12;
         goto otter_main_EXIT;
+    }
+    DEBUG_PRINTF("--> done\n");
+    
+    /// Initialize environment variables, and set them to defaults.
+    ///@todo vardict may be integrated into DTerm in the future.
+    DEBUG_PRINTF("Initializing environment variables ...\n");
+    if (otvar_init(&appdata.vardict) < 0) {
+        fprintf(stderr, "Err: variable dictionary cannot be initialized.\n");
+        cli.exitcode = 13;
+        goto otter_main_EXIT;
+    }
+    else {
+        otvar_add(appdata.vardict, "verbose", VAR_Int, (int64_t)0);
+        otvar_add(appdata.vardict, "quiet", VAR_Int, (int64_t)0);
+        otvar_add(appdata.vardict, "timeout", VAR_Int, (int64_t)OTTER_PARAM_MBTIMEOUT);
+        otvar_add(appdata.vardict, "mempool", VAR_Int, (int64_t)OTTER_PARAM_MMAP_PAGESIZE);
+        otvar_add(appdata.vardict, "mbsrc", VAR_Int, (int64_t)1);
+        otvar_add(appdata.vardict, "mbdst", VAR_Int, (int64_t)OTTER_PARAM_DEFMBSLAVE);
     }
     DEBUG_PRINTF("--> done\n");
     
@@ -651,13 +671,13 @@ int otter_main( ttyspec_t* ttylist,
     rc = devtab_init(&appdata.endpoint.devtab);
     if (rc != 0) {
         fprintf(stderr, "Device Table Initialization Failure (%i)\n", rc);
-        cli.exitcode = 13;
+        cli.exitcode = 14;
         goto otter_main_EXIT;
     }
     rc = devtab_insert(appdata.endpoint.devtab, 0, 0, NULL, NULL, NULL);
     if (rc != 0) {
         fprintf(stderr, "Device Table Insertion Failure (%i)\n", rc);
-        cli.exitcode = 14;
+        cli.exitcode = 15;
         goto otter_main_EXIT;
     }
     DEBUG_PRINTF("--> done\n");
@@ -667,7 +687,7 @@ int otter_main( ttyspec_t* ttylist,
     rc = subscriber_init(&appdata.subscribers);
     if (rc != 0) {
         fprintf(stderr, "Subscribers Initialization Failure (%i)\n", rc);
-        cli.exitcode = 15;
+        cli.exitcode = 16;
         goto otter_main_EXIT;
     }
     DEBUG_PRINTF("--> done\n");
@@ -678,7 +698,7 @@ int otter_main( ttyspec_t* ttylist,
     rc = user_init();
     if (rc != 0) {
         fprintf(stderr, "User Construct Initialization Failure (%i)\n", rc);
-        cli.exitcode = 16;
+        cli.exitcode = 17;
         goto otter_main_EXIT;
     }
     DEBUG_PRINTF("--> done\n");
@@ -689,7 +709,7 @@ int otter_main( ttyspec_t* ttylist,
     if ((pktlist_init(&appdata.rlist, 32) != 0)
     ||  (pktlist_init(&appdata.tlist, 8) != 0)) {
         fprintf(stderr, "Pktlist Initialization Failure (%i)\n", -1);
-        cli.exitcode = 17;
+        cli.exitcode = 18;
         goto otter_main_EXIT;
     }
     DEBUG_PRINTF("--> done\n");
@@ -699,7 +719,7 @@ int otter_main( ttyspec_t* ttylist,
     rc = mpipe_init(&appdata.mpipe, num_tty);
     if (rc != 0) {
         fprintf(stderr, "MPipe Initialization Failure (%i)\n", rc);
-        cli.exitcode = 18;
+        cli.exitcode = 19;
         goto otter_main_EXIT;
     }
     DEBUG_PRINTF("--> done\n");
@@ -735,7 +755,7 @@ int otter_main( ttyspec_t* ttylist,
                                 0, 0, 0);
         if (open_rc < 0) {
             fprintf(stderr, "Could not open TTY on %s (error %i)\n", ttylist[i].ttyfile, open_rc);
-            cli.exitcode = 19;
+            cli.exitcode = 20;
             goto otter_main_EXIT;
         }
     }
@@ -746,7 +766,7 @@ int otter_main( ttyspec_t* ttylist,
     DEBUG_PRINTF("Opening DTerm on %s ...\n", socket);
     dterm_fn = dterm_open(appdata.dterm_parent, socket);
     if (dterm_fn == NULL) {
-        cli.exitcode = 20;
+        cli.exitcode = 21;
         goto otter_main_EXIT;
     }
     DEBUG_PRINTF("--> done\n");
@@ -784,7 +804,7 @@ int otter_main( ttyspec_t* ttylist,
 #       endif
         {
             fprintf(stderr, "Specified interface (id:%i) not supported\n", cliopt_getio());
-            cli.exitcode = 21;
+            cli.exitcode = 22;
             goto otter_main_EXIT;
         }
     }
@@ -853,9 +873,9 @@ int otter_main( ttyspec_t* ttylist,
     
     switch (cli.exitcode) {
        default:
-       case 21: // Failure in MPipe thread creation
-       case 20: // Failure on dterm_open()
-       case 19: // Failure on mpipe_opentty()
+       case 22: // Failure in MPipe thread creation
+       case 21: // Failure on dterm_open()
+       case 20: // Failure on mpipe_opentty()
                 DEBUG_PRINTF("Deinitializing MPipe\n");
                 mpipe_deinit(appdata.mpipe);
 #               if OTTER_FEATURE(MODBUS)
@@ -864,23 +884,28 @@ int otter_main( ttyspec_t* ttylist,
                 }
 #               endif
 
-       case 18: // Failure on mpipe_init()
+       case 19: // Failure on mpipe_init()
                 DEBUG_PRINTF("Deinitializing Packet Lists\n");
                 pktlist_free(appdata.rlist);
                 pktlist_free(appdata.tlist);
             
-       case 17: // Failure on pktlist_init()
+       case 18: // Failure on pktlist_init()
                 DEBUG_PRINTF("Deinitializing User Module\n");
                 user_deinit();
             
-       case 16: // Failure on user_init()
+       case 17: // Failure on user_init()
                 DEBUG_PRINTF("Deinitializing Subscribers\n");
                 subscriber_deinit(appdata.subscribers);
        
-       case 15: // Failure on subscriber_init()
-       case 14: // Failure on devtab_insert()
+       case 16: // Failure on subscriber_init()
+       case 15: // Failure on devtab_insert()
                 DEBUG_PRINTF("Deinitializing Device Table\n");
                 devtab_free(appdata.endpoint.devtab);
+       
+       case 14: // Failure on otvar_init()
+                DEBUG_PRINTF("Deinitializing vardict\n");
+                ///@todo crashes here when OTDB is quit first
+                otvar_deinit(appdata.vardict);
        
        case 13: // Failure on devtab_init()
                 DEBUG_PRINTF("Deinitializing Command Table\n");

@@ -5,9 +5,9 @@ OTTER_DEF   ?=
 
 ifneq ($(EXT_DEBUG),0)
 	ifeq ($(EXT_DEBUG),1)
-		CFLAGS  := -std=gnu99 -O2 -Wall -pthread -D__DEBUG__
+	    CFLAGS  := -std=gnu99 -Og -g -Wall -pthread -D__DEBUG__
 	else
-		CFLAGS  := -std=gnu99 -O -g -Wall -pthread -D__DEBUG__
+		CFLAGS  := -std=gnu99 -O2 -Wall -pthread -D__DEBUG__
 	endif
 #	SRCEXT      := c
 #	DEPEXT      := dd

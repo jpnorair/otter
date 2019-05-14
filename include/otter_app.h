@@ -26,15 +26,23 @@
 
 // External Dependencies
 #include <cmdtab.h>
+#include <otvar.h>
 
+// POSIX/STDC Dependencies
 #include <pthread.h>
 
+
+
 typedef struct {
+    ///@todo cmdtab and vardict might be moved into main dterm structure
     cmdtab_t*           cmdtab;
+    otvar_handle_t      vardict;
+    
+    /// All data below this comment are unique to otter app
     pktlist_t*          tlist;
     pktlist_t*          rlist;
     
-    ///@todo see if this can be made into a pointer
+    ///@todo see if endpoint can be made into a pointer
     user_endpoint_t     endpoint;
     
     void*               mpipe;
