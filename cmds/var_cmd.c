@@ -25,6 +25,7 @@
 
 
 // HBuilder libraries
+#include <bintex.h>
 #include <otvar.h>
 
 
@@ -34,13 +35,14 @@
 #include <stdio.h>
 #include <string.h>
 #include <ctype.h>
-
+#include <errno.h>
 
 
 
 
 int cmd_var(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
     char* end;
+    char* back;
     char* mark;
 
     otvar_item_t varitem;
@@ -59,16 +61,17 @@ int cmd_var(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, size_
     INPUT_SANITIZE();
 
     ///1. Search for equal sign.  If none exists, then print out the value &
-    ///   type of the variable.  The end of the variable name is either the
+    ///   type of the variable.  The back of the variable name is either the
     ///   end of the input or the position of the equal sign.
+    end  = (char*)&src[*inbytes];
     mark = strchr((const char*)src, '=');
-    end = (mark == NULL) ? (char*)&src[*inbytes] : mark;
+    back = (mark == NULL) ? end : mark;
     
     ///2. Burn whitespace ahead of and behind variable name,
     ///   and stringify var name with end terminator
     while (isspace(*src)) src++;
-    while (isspace(end[-1])) end--;
-    *end = 0;
+    while (isspace(*(back-1)) && ((back-1) > (char*)src)) back--;
+    *back = 0;
     
     ///3. Validate the variable name.
     ///   - restricted to: (0-9), (A-Z), (a-z), (_)
@@ -138,13 +141,52 @@ int cmd_var(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, size_
     }
     
     ///5. Case of assigning a variable with a value
-    ///   - burn whitespace around boundaries of value
-    ///   - todo: bintexify (bintex library needs work)
-    ///   - Determine if input is int, float, string.
     else {
-        ///@todo setting variable via command line
+        // Move mark past equal sign, and burn whitespace around entry
+        mark++;
+        while (isspace(*mark)) mark++;
+        while (isspace(*(end-1)) && ((end-1) > mark)) end--;
+        *end = 0;
+
+        // Zero length: implicit delete operation
+        // input = #: explicit delete
+        // input = some other string: explicit add
+        if ((*mark == 0) || (strcmp(mark, "#") == 0)) {
+            ///@todo only be able to delete user vars
+            //otvar_del(vardict, (const char*)src);
+        }
+        else {
+            long long integer;
+            double floater;
+            char* endptr;
+
+            integer = strtoll(mark, &endptr, 0);
+            if (*endptr == '\0') {
+                otvar_add(vardict, (const char*)src, VAR_Int, integer);
+                goto cmd_var_END;
+            }
+
+            floater = strtod(mark, &endptr);
+            if (*endptr == '\0') {
+                otvar_add(vardict, (const char*)src, VAR_Float, floater);
+                goto cmd_var_END;
+            }
+
+            output_sz = bintex_ss((unsigned char*)mark, dst, (int)dstmax);
+            if (output_sz < 0) {
+                ///@todo coordinate base error (-256) with code for bintex_ss
+                rc = -256 + output_sz;
+                goto cmd_var_END;
+            }
+            if (*mark == '\"') {
+                dst[output_sz] = 0;
+                otvar_add(vardict, (const char*)src, VAR_String, dst);
+            }
+            else {
+                otvar_add(vardict, (const char*)src, VAR_Binary, output_sz, dst);
+            }
+        }
     }
-    
 
     cmd_var_END:    
     return rc;
