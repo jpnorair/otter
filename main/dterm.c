@@ -1123,7 +1123,7 @@ void* dterm_socket_clithread(void* args) {
         bzero(databuf, sizeof(databuf));
 
         VERBOSE_PRINTF("Waiting for read on socket:fd=%i\n", dts.fd.out);
-        //loadlen = (int)read(dts.fd.out, loadbuf, LINESIZE);
+
         loadlen = sub_readline(NULL, dts.fd.out, loadbuf, NULL, LINESIZE);
         if (loadlen > 0) {
             sub_str_sanitize(loadbuf, (size_t)loadlen);
