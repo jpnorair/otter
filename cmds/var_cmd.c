@@ -44,13 +44,11 @@ int cmd_var(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, size_
     char* end;
     char* back;
     char* mark;
-
     otvar_item_t varitem;
-    otvar_handle_t vardict = ((otter_app_t*)(dth->ext))->vardict;
-    
-    int lim = (int)dstmax;
-    int output_sz = 0;
-    int rc = 0;
+    otvar_handle_t vardict;
+    int lim;
+    int output_sz;
+    int rc;
     
     /// dt == NULL is the initialization case.
     /// There may not be an initialization for all command groups.
@@ -59,6 +57,11 @@ int cmd_var(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, size_
     }
     
     INPUT_SANITIZE();
+
+    vardict = ((otter_app_t*)(dth->ext))->vardict;
+    lim = (int)dstmax;
+    output_sz = 0;
+    rc = 0;
 
     ///1. Search for equal sign.  If none exists, then print out the value &
     ///   type of the variable.  The back of the variable name is either the
