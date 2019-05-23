@@ -322,7 +322,14 @@ const cmdtab_item_t* cmd_quoteline_resolve(char* quoteline, dterm_handle_t* dth)
     cmdptr  = cmd_search(appdata->cmdtab, cmdname);
     
     // Rewrite loop->cmdline to remove the wrapper parts
-    strcpy(quoteline, cmdhead+cmdlen);
+    if (cmdptr != NULL) {
+        mark    = &cmdhead[cmdlen];
+        cmdhead = quoteline;
+        while (*mark != 0) {
+            *cmdhead++ = *mark++;
+        }
+        *cmdhead = 0;
+    }
 
     return cmdptr;
 }

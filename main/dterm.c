@@ -1063,6 +1063,7 @@ static int sub_readline(size_t* bytesread, int fd, char* buf_a, char* buf_b, int
         max--;
         test = *buf_a++;
         if ((test == '\n') || (test == 0)) {
+            *buf_a = 0;
             break;
         }
     }
