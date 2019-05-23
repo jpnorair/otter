@@ -92,7 +92,6 @@ static const char* prompt_str[]     = {
 static int sub_put(dterm_fd_t* fd, char *s, int size);
 static int sub_puts(dterm_fd_t* fd, char *s);
 static int sub_putc(dterm_fd_t* fd, char c);
-static int sub_puts2(dterm_fd_t* fd, char *s);
 static int sub_putcmd(dterm_intf_t *dt, char *s, int size);
 
 // removes count characters from linebuf
@@ -100,9 +99,6 @@ static int sub_remc(dterm_intf_t *dt, int count);
 
 static void sub_remln(dterm_intf_t *dt, dterm_fd_t* fd);
 static void sub_reset(dterm_intf_t *dt);
-
-
-static int sub_putlinec(dterm_intf_t *dt, char c);
 
 
 
@@ -120,19 +116,12 @@ static int sub_putc(dterm_fd_t* fd, char c) {
     return (int)write(fd->out, &c, 1);
 }
 
-static int sub_puts2(dterm_fd_t* fd, char *s) {
-    return (int)write(fd->out, s, strlen(s));
-}
-
-
 static int sub_putsc(dterm_intf_t *dt, char *s) {
     uint8_t* end = (uint8_t*)s - 1;
     while (*(++end) != 0);
     
     return sub_putcmd(dt, s, (int)(end-(uint8_t*)s) );
 }
-
-
 
 static int sub_putcmd(dterm_intf_t *dt, char *s, int size) {
     int i;
@@ -148,37 +137,6 @@ static int sub_putcmd(dterm_intf_t *dt, char *s, int size) {
     }
     
     return size;
-}
-
-
-int sub_putlinec(dterm_intf_t *dt, char c) {
-    int line_delta = 0;
-    
-    if (c == ASCII_BACKSPC) {
-        line_delta = -1;
-    }
-    
-    else if (c == ASCII_DEL) {
-        size_t line_remnant;
-        line_remnant = dt->linelen - 1 - (dt->cline - dt->linebuf);
-        
-        if (line_remnant > 0) {
-            memcpy(dt->cline, dt->cline+1, line_remnant);
-            line_delta = -1;
-        }
-    }
-    
-    else if (dt->linelen > (LINESIZE-1) ) {
-        return 0;
-    }
-    
-    else {
-        *dt->cline++    = c;
-        line_delta      = 1;
-    }
-    
-    dt->linelen += line_delta;
-    return line_delta;
 }
 
 static int sub_remc(dterm_intf_t *dt, int count) {
