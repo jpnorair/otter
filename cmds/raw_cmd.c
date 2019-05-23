@@ -85,7 +85,7 @@ int cmd_raw(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, size_
     
     ///@todo convert the character number into a line and character number
     if (bytesout < 0) {
-        dprintf(dth->fd.out, "Bintex error on character %d.\n", -bytesout);
+        sprintf((char*)dst, "input error on character %i", -bytesout);
     }
     else if ((bytesout > 0) && cliopt_isverbose() && (dth->intf->type == INTF_interactive)) {
         char printbuf[80];
