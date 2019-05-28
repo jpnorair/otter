@@ -6,7 +6,7 @@ THISSYSTEM	:= $(shell uname -s)
 APP         ?= otter
 PKGDIR      := ../_hbpkg/$(THISMACHINE)
 SYSDIR      := ../_hbsys/$(THISMACHINE)
-EXT_DEF     ?= 
+EXT_DEF     ?= -DOTTER_FEATURE_MODBUS=0
 EXT_INC     ?= 
 EXT_LIBFLAGS ?= 
 EXT_LIBS    ?= 
@@ -38,7 +38,7 @@ endif
 GITHEAD := $(shell git rev-parse --short HEAD)
 
 DEFAULT_DEF := -D__HBUILDER__ -DOTTER_PARAM_GITHEAD=\"$(GITHEAD)\"
-LIBMODULES  := argtable cJSON clithread cmdtab bintex m2def OTEAX libotfs hbuilder-lib $(EXT_LIBS)
+LIBMODULES  := argtable cJSON clithread cmdtab otvar bintex m2def OTEAX libotfs hbuilder-lib $(EXT_LIBS)
 SUBMODULES  := cmds main test
 
 SRCEXT      := c
@@ -51,7 +51,7 @@ CFLAGS      := -std=gnu99 -O3 -pthread
 INC         := -I. -I./include -I./$(SYSDIR)/include
 INCDEP      := -I.
 LIBINC      := -L./$(SYSDIR)/lib
-LIB         := -largtable -lbintex -lcJSON -lclithread -lcmdtab -lotvar -lsmut -lhbuilder -lotfs -loteax -ltalloc -lm -lc $(LIBBSD)
+LIB         := -largtable -lbintex -lcJSON -lclithread -lcmdtab -lotvar -lhbuilder -lotfs -loteax -ltalloc -lm -lc $(LIBBSD)
 
 OTTER_PKG   := $(PKGDIR)
 OTTER_DEF   := $(DEFAULT_DEF) $(EXT_DEF)
