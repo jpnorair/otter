@@ -29,7 +29,6 @@
 
 #define _HEX_(HEX, SIZE, ...)  do { \
     fprintf(stderr, _E_YEL"DEBUG: "_E_NRM __VA_ARGS__); \
-    fprintf(stderr, _E_YEL"DEBUG: "_E_NRM); \
     for (int i=0; i<(SIZE); i++) {   \
         fprintf(stderr, "%02X ", (HEX)[i]);   \
     } \
