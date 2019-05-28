@@ -538,11 +538,6 @@ int dterm_publish_rxstat(dterm_handle_t* dth, DFMT_Type dfmt, void* rxdata, size
         datasize = sub_rxstat(output, 1024, dfmt, rxdata, rxsize, rxaddr, sid, tstamp, crcqual);
         if (datasize > 0) {
             if (dth->intf->type == INTF_socket) {
-//{
-//struct timespec cur;
-//clock_gettime(CLOCK_REALTIME, &cur);
-//fprintf(stderr, _E_MAG "dterm_publish_rxstat() sid=%u [%zu.%zu]\n" _E_NRM, sid, cur.tv_sec, cur.tv_nsec);
-//}
                 clithread_publish(dth->clithread, sid, (uint8_t*)output, datasize);
             }
             else if (dth->fd.out >= 0) {
@@ -635,7 +630,7 @@ static int sub_rxstat(  char* dst, int dstlimit, DFMT_Type dfmt,
         default: {
             if (cliopt_isverbose()) {
                 bytesout = snprintf(dst, dstlimit,
-                                    _E_YEL"RX.%u: from %llx at %s, %s"_E_NRM"\n",
+                                    _E_GRN"RX.%u: from %llx at %s, %s"_E_NRM"\n",
                                     sid, rxaddr, fmt_time(&tstamp, NULL), fmt_crc(crcqual, NULL));
             }
             else {
@@ -649,6 +644,25 @@ static int sub_rxstat(  char* dst, int dstlimit, DFMT_Type dfmt,
             dstlimit -= bytesout;
             dst      += bytesout;
             if (dstlimit <= 0) break;
+            
+            switch (dfmt) {
+                case DFMT_Binary: {
+                    int a = sub_hexsnstream(dst, dstlimit, rxdata, rxsize);
+                    bytesout += a;
+                    dstlimit -= a;
+                    dst      += a;
+                } break;
+                case DFMT_Text:
+                case DFMT_Native:
+                default:
+                    dstlimit -= rxsize;
+                    if (dstlimit >= 0) {;
+                        memcpy(dst, rxdata, rxsize);
+                        dst      += rxsize;
+                        bytesout += rxsize;
+                    }
+                    break;
+            }
         } break;
     }
     
@@ -656,7 +670,7 @@ static int sub_rxstat(  char* dst, int dstlimit, DFMT_Type dfmt,
         dst[bytesout] = '\n';
         bytesout = max;
     }
-    else {
+    else if (dst[-1] != '\n') {
         *dst = '\n';
         bytesout++;
     }
