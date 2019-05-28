@@ -359,8 +359,12 @@ void* mpipe_writer(void* args) {
             pthread_cond_wait(appdata->tlist_cond, appdata->tlist_cond_mutex);
         }
         
-        while ((txpkt = pktlist_get(appdata->tlist)) != NULL) {
-        
+        while (1) {
+            txpkt = pktlist_get(appdata->tlist);
+            if (txpkt == NULL) {
+                break;
+            }
+
             intf_fd = mpipe_fds_resolve(txpkt->intf);
             if (intf_fd != NULL) {
                 int bytes_left;
@@ -436,15 +440,14 @@ void* mpipe_parser(void* args) {
         int pkt_condition;  // tracks some error conditions
         pkt_t*  rpkt;
     
-        pthread_mutex_unlock(appdata->pktrx_mutex);
+        pthread_mutex_lock(appdata->pktrx_mutex);
         appdata->pktrx_cond_inactive = true;
         while (appdata->pktrx_cond_inactive) {
             pthread_cond_wait(appdata->pktrx_cond, appdata->pktrx_mutex);
         }
+        pthread_mutex_lock(dth->iso_mutex);
+        pthread_mutex_unlock(appdata->pktrx_mutex);
         
-        
-        
-
         /// pktlist_parse will validate the packet with CRC:
         /// - It returns 0 if all is well
         /// - It returns -1 if the list is empty
@@ -521,13 +524,13 @@ void* mpipe_parser(void* args) {
                     uint8_t* lastfront  = payload_front;
                     int subsig;
                     int proc_result;
-                
+
                     /// ALP message:
                     /// proc_result now takes the value from the protocol formatter.
                     /// The formatter will give negative values on framing errors
                     /// and also for protocol errors (i.e. NACKs).
                     proc_result = fmt_fprintalp((uint8_t*)putsbuf, &putsbytes, &payload_front, payload_bytes);
-                    
+
                     /// Successful formatted output gets propagated to any
                     /// subscribers of this ALP ID.
                     subsig = (proc_result >= 0) ? SUBSCR_SIG_OK : SUBSCR_SIG_ERR;
@@ -552,7 +555,6 @@ void* mpipe_parser(void* args) {
         } 
         
         pthread_mutex_unlock(dth->iso_mutex);
-        pthread_mutex_unlock(appdata->pktrx_mutex);
         
         ///@todo Can check for major error in pkt_condition
         ///      Major errors are integers less than -1
