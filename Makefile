@@ -12,6 +12,13 @@ EXT_LIBFLAGS ?=
 EXT_LIBS    ?= 
 VERSION     ?= 1.0.a
 
+# Try to get git HEAD commit value
+ifneq ($(INSTALLER_HEAD),)
+    GITHEAD := $(INSTALLER_HEAD)
+else
+    GITHEAD := $(shell git rev-parse --short HEAD)
+endif
+
 ifeq ($(MAKECMDGOALS),debug)
 	APPDIR      := bin/$(THISMACHINE)
 	BUILDDIR    := build/$(THISMACHINE)_debug
@@ -34,8 +41,6 @@ else
 	LIBBSD :=
 endif
 
-# Try to get git HEAD commit value
-GITHEAD := $(shell git rev-parse --short HEAD)
 
 DEFAULT_DEF := -D__HBUILDER__ -DOTTER_PARAM_GITHEAD=\"$(GITHEAD)\"
 LIBMODULES  := argtable cJSON clithread cmdtab otvar bintex m2def OTEAX libotfs hbuilder-lib $(EXT_LIBS)
