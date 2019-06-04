@@ -875,6 +875,8 @@ int otter_main( ttyspec_t* ttylist,
        default:
        case 22: // Failure in MPipe thread creation
        case 21: // Failure on dterm_open()
+                dterm_close(appdata.dterm_parent);
+       
        case 20: // Failure on mpipe_opentty()
                 DEBUG_PRINTF("Deinitializing MPipe\n");
                 mpipe_deinit(appdata.mpipe);

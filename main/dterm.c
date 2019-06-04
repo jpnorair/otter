@@ -1403,14 +1403,16 @@ void* dterm_prompter(void* args) {
     /// A keystoke is reported either as a single character or as three.
     /// triple-char keystrokes are for special keys like arrows and control
     /// sequences.
-    while ((keychars = read(dth->fd.in, dth->intf->readbuf, READSIZE)) > 0) {
+    while (1) {
+        keychars = read(dth->fd.in, dth->intf->readbuf, READSIZE);
+        if (keychars <= 0) {
+            break;
+        }
         
         // Default: IGNORE
         cmd = ct_ignore;
         
         // If dterm state is off, ignore anything except ESCAPE
-        ///@todo mutex unlocking on dt->state
-        
         if ((dth->intf->state == prompt_off) && (keychars == 1) && (dth->intf->readbuf[0] <= 0x1f)) {
             cmd = npcodes[dth->intf->readbuf[0]];
             
@@ -1501,7 +1503,7 @@ void* dterm_prompter(void* args) {
                 // A printable key is used
                 case ct_key: {
                     sub_putcmd(dth->intf, &c, 1);
-                    //sub_putdt, &c, 1);
+                    //sub_put(dt, &c, 1);
                     sub_putc(&dth->fd, c);
                 } break;
                                     
