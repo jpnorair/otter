@@ -35,6 +35,7 @@
 #include <m2def.h>
 
 // Standard C & POSIX Libraries
+#include <fcntl.h>
 #include <pthread.h>
 #include <signal.h>
 #include <stdarg.h>
@@ -47,6 +48,7 @@
 #include <unistd.h>
 
 #include <sys/socket.h>
+#include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/un.h>
 #include <sys/wait.h>
@@ -274,7 +276,7 @@ static void cjson_std_allocators(void) {
   * ========================================================================<BR>
   */
 
-int dterm_init(dterm_handle_t* dth, void* ext_data, INTF_Type intf) {
+int dterm_init(dterm_handle_t* dth, void* ext_data, const char* logfile, INTF_Type intf) {
     int rc = 0;
 
     ///@todo ext data should be handled as its own module, but we can accept
@@ -285,6 +287,7 @@ int dterm_init(dterm_handle_t* dth, void* ext_data, INTF_Type intf) {
     
     dth->intf = NULL;
     dth->iso_mutex = NULL;
+    dth->logfile_path = logfile;
     
     talloc_disable_null_tracking();
     dth->pctx = talloc_new(NULL);
@@ -502,6 +505,58 @@ void dterm_unsquelch(dterm_handle_t* dth) {
 
 
 
+int dterm_send_log(dterm_handle_t* dth, const char* logmsg, size_t loglen) {
+    struct stat st;
+    int rc = 0;
+    int fd;
+    FILE* fp;
+    char term = 0;
+
+    if (dth == NULL) {
+        rc = -1;
+        goto dterm_send_log_END;
+    }
+    if (dth->logfile_path == NULL) {
+        goto dterm_send_log_END;
+    }
+    if (stat(dth->logfile_path, &st) < 0) {
+        rc = -2;
+        goto dterm_send_log_END;
+    }
+    if (S_ISFIFO(st.st_mode)) {
+        fd = open(dth->logfile_path, O_WRONLY);
+        if (fd < 0) {
+            rc = -4;
+            goto dterm_send_log_END;
+        }
+        write(fd, logmsg, loglen);
+        if (logmsg[loglen-1] != 0) {
+            loglen++;
+            write(fd, &term, 1);
+        }
+        close(fd);
+        rc = (int)loglen;
+    }
+    else if (S_ISREG(st.st_mode)) {
+        fp = fopen(dth->logfile_path, "a");
+        if (fp == NULL) {
+            rc = -4;
+            goto dterm_send_log_END;
+        }
+        fwrite(logmsg, 1, loglen, fp);
+        if (logmsg[loglen-1] != '\n') {
+            loglen++;
+            fwrite(&term, 1, 1, fp);
+        }
+        fclose(fp);
+    }
+    else {
+        rc = -3;
+    }
+    
+    dterm_send_log_END:
+    return rc;
+}
 
 
 int dterm_send_cmdmsg(dterm_handle_t* dth, const char* cmdname, const char* msg) {

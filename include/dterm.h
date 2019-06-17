@@ -127,6 +127,9 @@ typedef struct {
     cmdhist*            ch;
     clithread_handle_t  clithread;
     
+    // Logger File Path
+    const char*         logfile_path;
+    
     // Client Thread I/O parameters.
     // Should be altered per client thread in cloned dterm_handle_t
     dterm_fd_t          fd;
@@ -175,7 +178,7 @@ typedef enum {
 
 ///@todo rework the dterm module into a more normal object.
 /// Presently the handle isn't a real handle, it's a struct.
-int dterm_init(dterm_handle_t* dth, void* ext_data, INTF_Type intf);
+int dterm_init(dterm_handle_t* dth, void* ext_data, const char* logfile, INTF_Type intf);
 void dterm_deinit(dterm_handle_t* handle);
 
 int dterm_cmdfile(dterm_handle_t* dth, const char* filename);
@@ -188,6 +191,8 @@ int dterm_close(dterm_handle_t* dth);
 int dterm_squelch(dterm_handle_t* dt);
 void dterm_unsquelch(dterm_handle_t* dt);
 
+
+int dterm_send_log(dterm_handle_t* dth, const char* logmsg, size_t loglen);
 
 int dterm_send_error(dterm_handle_t* dth, const char* cmdname, int errcode, uint32_t sid, const char* desc);
 

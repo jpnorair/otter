@@ -530,6 +530,11 @@ void* mpipe_parser(void* args) {
                     /// The formatter will give negative values on framing errors
                     /// and also for protocol errors (i.e. NACKs).
                     proc_result = fmt_fprintalp((uint8_t*)putsbuf, &putsbytes, &payload_front, payload_bytes);
+                    
+                    ///@todo this is a temporary additive to log log data
+                    if (proc_result == 4) {
+                        dterm_send_log(dth, putsbuf, putsbytes);
+                    }
 
                     /// Successful formatted output gets propagated to any
                     /// subscribers of this ALP ID.

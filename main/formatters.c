@@ -782,10 +782,10 @@ int fmt_fprintalp(uint8_t* dst, size_t* dst_accum, uint8_t** src, size_t srcsz) 
     else {
         switch (id) {
             // logger
-            case 4: 
+            case 4: {
                 (*src) = scurs;
                 dcurs += sub_printlog(fmt, (uint8_t*)dcurs, dst_accum, src, length, cmd);
-                break;
+            } break;
                 
             // everything else
            default: {
@@ -834,6 +834,8 @@ int fmt_fprintalp(uint8_t* dst, size_t* dst_accum, uint8_t** src, size_t srcsz) 
                 break;
         }
     }
+    
+    
     
     ///@todo probably can take dst_accum out of most internal args.
     if (dst_accum != NULL) {
