@@ -27,8 +27,19 @@
 #include <stdlib.h>
 #include <string.h>
 
-#ifdef __linux__
-#   include <bsd/stdlib.h>
+#ifdef __SHITTY_RANDOM__
+#   include <time.h>
+#   define RANDOM_BUF(PTRU8, LEN) do { \
+            int _len_ = LEN; \
+            uint8_t* _ptr_ = PTRU8; \
+            srand(time(NULL)); \
+            while (_len_-- > 0) { *_ptr_++ = rand() & 255; } \
+        } while(0)
+#else
+#   ifdef __linux__
+#       include <bsd/stdlib.h>
+#   endif
+#   define RANDOM_BUF(PTRU8, LEN) arc4random_buf(PTRU8, LEN)
 #endif
 
 //For test only
@@ -109,7 +120,7 @@ int user_preencrypt(USER_Type usertype, uint32_t* seqnonce, uint8_t* dst, uint8_
     
     if (usertype <= USER_guest) {
         if (hdr24 == NULL) {
-            arc4random_buf(dst, 3);
+            RANDOM_BUF(dst, 3);
         }
         bytes_added = 3;
         

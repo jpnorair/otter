@@ -24,9 +24,18 @@
 
 #include <stdint.h>
 #include <stdlib.h>
-#ifdef __linux__
-#   include <bsd/stdlib.h>
+
+#ifdef __SHITTY_RANDOM__
+#   include <time.h>
+#   define RANDOM_U32(PTRU32) do { srand(time(NULL)); *PTRU32=(uint32_t)rand(); } while(0)
+#else
+#   ifdef __linux__
+#       include <bsd/stdlib.h>
+#   endif
+#   define RANDOM_U32(PTRU32) do { *PTRU32 = arc4random(); } while(0)
 #endif
+
+
 #include <string.h>
 
 
@@ -41,7 +50,8 @@ static uint32_t dlls_nonce;
 
 void crypto_init(void) {
     crypto_deinit();
-    dlls_nonce = arc4random();
+    RANDOM_U32(&dlls_nonce);
+    //dlls_nonce = arc4random();
 }
 
 
