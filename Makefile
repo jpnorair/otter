@@ -1,16 +1,24 @@
-CC=gcc
+CC := gcc
+LD := ld
 
-THISMACHINE := $(shell uname -srm | sed -e 's/ /-/g')
-THISSYSTEM	:= $(shell uname -s)
+THISMACHINE ?= $(shell uname -srm | sed -e 's/ /-/g')
+THISSYSTEM	?= $(shell uname -s)
 
 APP         ?= otter
 PKGDIR      := ../_hbpkg/$(THISMACHINE)
 SYSDIR      := ../_hbsys/$(THISMACHINE)
-EXT_DEF     ?= 
+EXT_DEF     ?= -DOTTER_FEATURE_MODBUS=0
 EXT_INC     ?= 
 EXT_LIBFLAGS ?= 
 EXT_LIBS    ?= 
 VERSION     ?= 1.0.a
+
+# Try to get git HEAD commit value
+ifneq ($(INSTALLER_HEAD),)
+    GITHEAD := $(INSTALLER_HEAD)
+else
+    GITHEAD := $(shell git rev-parse --short HEAD)
+endif
 
 ifeq ($(MAKECMDGOALS),debug)
 	APPDIR      := bin/$(THISMACHINE)
@@ -29,29 +37,31 @@ ifneq ($(findstring $(SYSDIR)/lib,$(LD_LIBRARY_PATH)),)
 endif
 
 ifeq ($(THISSYSTEM),Linux)
-	LIBBSD := -lbsd
+	ifneq (,$(findstring,musl,$(THISMACHINE)))
+		LIBBSD := -lfts
+	else
+		LIBBSD := -lbsd
+	endif
 else
 	LIBBSD :=
 endif
 
-# Try to get git HEAD commit value
-GITHEAD := $(shell git rev-parse --short HEAD)
 
 DEFAULT_DEF := -D__HBUILDER__ -DOTTER_PARAM_GITHEAD=\"$(GITHEAD)\"
-LIBMODULES  := argtable cJSON clithread cmdtab bintex m2def OTEAX libotfs hbuilder-lib $(EXT_LIBS)
+LIBMODULES  := argtable cJSON clithread cmdtab otvar bintex m2def OTEAX libotfs hbuilder-lib $(EXT_LIBS)
 SUBMODULES  := cmds main test
 
 SRCEXT      := c
 DEPEXT      := d
 OBJEXT      := o
 
-CFLAGS_DEBUG:= -std=gnu99 -Og -g -Wall -pthread
-CFLAGS      := -std=gnu99 -O3 -pthread
+CFLAGS_DEBUG?= -std=gnu99 -Og -g -Wall -pthread
+CFLAGS      ?= -std=gnu99 -O3 -pthread
 #INC         := -I. -I./$(PKGDIR)/argtable -I./$(PKGDIR)/bintex -I./$(PKGDIR)/cJSON -I./$(PKGDIR)/cmdtab -I./$(PKGDIR)/hbuilder -I./$(PKGDIR)/liboteax -I./$(PKGDIR)/libotfs -I./$(PKGDIR)/m2def
-INC         := -I. -I./include -I./$(SYSDIR)/include
+INC         := -I. -I./include -I./$(SYSDIR)/include $(EXT_INC)
 INCDEP      := -I.
-LIBINC      := -L./$(SYSDIR)/lib
-LIB         := -largtable -lbintex -lcJSON -lclithread -lcmdtab -lotvar -lsmut -lhbuilder -lotfs -loteax -ltalloc -lm -lc $(LIBBSD)
+LIBINC      := -L./$(SYSDIR)/lib $(EXT_LIB) 
+LIB         := -largtable -lbintex -lcJSON -lclithread -lcmdtab -lotvar -lhbuilder -lotfs -loteax -ltalloc -lm -lc $(LIBBSD)
 
 OTTER_PKG   := $(PKGDIR)
 OTTER_DEF   := $(DEFAULT_DEF) $(EXT_DEF)

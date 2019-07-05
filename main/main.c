@@ -145,6 +145,7 @@ int otter_main( ttyspec_t* ttylist,
                 bool quiet,
                 const char* initfile,
                 const char* xpath,
+                const char* logfile,
                 cJSON* params
                 ); 
 
@@ -158,6 +159,7 @@ void otter_json_loadargs(cJSON* json,
                        bool* quiet_val,
                        char** initfile,
                        char** xpath,
+                       char** logfile_path,
                        bool* verbose_val );
 
 
@@ -249,6 +251,7 @@ int main(int argc, char* argv[]) {
     struct arg_file *socket  = arg_file0("S","socket","path/addr",      "Socket path/address to use for otter daemon");
     struct arg_file *initfile= arg_file0("I","init","path",             "Path to initialization routine to run at startup");
     struct arg_file *xpath   = arg_file0("x", "xpath", "path",          "Path to directory of external data processor programs");
+    struct arg_file *logfile = arg_file0("L", "logfile", "path",        "Path to a file or named-pipe that may be used for log outputs");
     //struct arg_str  *parsers = arg_str1("p", "parsers", "<msg:parser>", "parser call string with comma-separated msg:parser pairs");
     //struct arg_str  *fparse  = arg_str1("P", "parsefile", "<file>",     "file containing comma-separated msg:parser pairs");
     // Generic
@@ -260,7 +263,7 @@ int main(int argc, char* argv[]) {
     struct arg_lit  *version = arg_lit0(NULL,"version",                 "Print version information and exit");
     struct arg_end  *end     = arg_end(20);
     
-    void* argtable[] = { ttyfile, brate, ttyenc, iobus, fmt, intf, socket, initfile, xpath, config, verbose, debug, quiet, help, version, end };
+    void* argtable[] = { ttyfile, brate, ttyenc, iobus, fmt, intf, socket, initfile, xpath, logfile, config, verbose, debug, quiet, help, version, end };
     const char* progname = OTTER_PARAM(NAME);
     int nerrors;
     bool bailout        = true;
@@ -275,6 +278,7 @@ int main(int argc, char* argv[]) {
     FORMAT_Type fmt_val = FORMAT_Default;
     INTF_Type intf_val  = INTF_interactive;
     char* socket_val    = NULL;
+    char* logfile_val   = NULL;
     bool quiet_val      = false;
     bool verbose_val    = false;
 
@@ -388,6 +392,7 @@ int main(int argc, char* argv[]) {
                                 &quiet_val,
                                 &initfile_val,
                                 &xpath_val,
+                                &logfile_val,
                                 &verbose_val
                             );
             io_val   = tmp_io;
@@ -448,6 +453,9 @@ int main(int argc, char* argv[]) {
     if (xpath->count != 0) {
         FILL_STRINGARG(xpath, xpath_val);
     }
+    if (logfile->count != 0) {
+        FILL_STRINGARG(logfile, logfile_val);
+    }
     if (verbose->count != 0) {
         verbose_val = true;
     }
@@ -486,6 +494,7 @@ int main(int argc, char* argv[]) {
                                 quiet_val,
                                 (const char*)initfile_val,
                                 (const char*)xpath_val,
+                                (const char*)logfile_val,
                                 json    );
     }
 
@@ -496,6 +505,7 @@ int main(int argc, char* argv[]) {
 
     free(socket_val);
     free(xpath_val);
+    free(logfile_val);
     free(initfile_val);
     free(buffer);
 
@@ -543,6 +553,7 @@ int otter_main( ttyspec_t* ttylist,
                 bool quiet,
                 const char* initfile,
                 const char* xpath,
+                const char* logfile,
                 cJSON* params) {    
     
     int rc;
@@ -630,7 +641,7 @@ int otter_main( ttyspec_t* ttylist,
     /// Non intrinsic dterm elements (cmdtab, devtab, etc) get attached
     /// following initialization
     DEBUG_PRINTF("Initializing DTerm ...\n");
-    if (dterm_init(&dterm_handle, &appdata, intf) != 0) {
+    if (dterm_init(&dterm_handle, &appdata, logfile, intf) != 0) {
         cli.exitcode = 11;
         goto otter_main_EXIT;
     }
@@ -875,6 +886,8 @@ int otter_main( ttyspec_t* ttylist,
        default:
        case 22: // Failure in MPipe thread creation
        case 21: // Failure on dterm_open()
+                dterm_close(appdata.dterm_parent);
+       
        case 20: // Failure on mpipe_opentty()
                 DEBUG_PRINTF("Deinitializing MPipe\n");
                 mpipe_deinit(appdata.mpipe);
@@ -973,6 +986,7 @@ void otter_json_loadargs(cJSON* json,
                        bool* quiet_val,
                        char** initfile,
                        char** xpath,
+                       char** logfile_path,
                        bool* verbose_val ) {
     
 #   define GET_STRINGENUM_ARG(DST, FUNC, NAME) do { \
@@ -1073,6 +1087,7 @@ void otter_json_loadargs(cJSON* json,
     GET_STRING_ARG(*socket_val, "socket");
     GET_STRING_ARG(*initfile, "init");
     GET_STRING_ARG(*xpath, "xpath");
+    GET_STRING_ARG(*logfile_path, "logfile");
     GET_BOOL_ARG(verbose_val, "verbose");
 }
 

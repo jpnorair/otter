@@ -35,6 +35,7 @@
 #include <m2def.h>
 
 // Standard C & POSIX Libraries
+#include <fcntl.h>
 #include <pthread.h>
 #include <signal.h>
 #include <stdarg.h>
@@ -47,6 +48,7 @@
 #include <unistd.h>
 
 #include <sys/socket.h>
+#include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/un.h>
 #include <sys/wait.h>
@@ -92,7 +94,6 @@ static const char* prompt_str[]     = {
 static int sub_put(dterm_fd_t* fd, char *s, int size);
 static int sub_puts(dterm_fd_t* fd, char *s);
 static int sub_putc(dterm_fd_t* fd, char c);
-static int sub_puts2(dterm_fd_t* fd, char *s);
 static int sub_putcmd(dterm_intf_t *dt, char *s, int size);
 
 // removes count characters from linebuf
@@ -100,9 +101,6 @@ static int sub_remc(dterm_intf_t *dt, int count);
 
 static void sub_remln(dterm_intf_t *dt, dterm_fd_t* fd);
 static void sub_reset(dterm_intf_t *dt);
-
-
-static int sub_putlinec(dterm_intf_t *dt, char c);
 
 
 
@@ -120,19 +118,12 @@ static int sub_putc(dterm_fd_t* fd, char c) {
     return (int)write(fd->out, &c, 1);
 }
 
-static int sub_puts2(dterm_fd_t* fd, char *s) {
-    return (int)write(fd->out, s, strlen(s));
-}
-
-
 static int sub_putsc(dterm_intf_t *dt, char *s) {
     uint8_t* end = (uint8_t*)s - 1;
     while (*(++end) != 0);
     
     return sub_putcmd(dt, s, (int)(end-(uint8_t*)s) );
 }
-
-
 
 static int sub_putcmd(dterm_intf_t *dt, char *s, int size) {
     int i;
@@ -148,37 +139,6 @@ static int sub_putcmd(dterm_intf_t *dt, char *s, int size) {
     }
     
     return size;
-}
-
-
-int sub_putlinec(dterm_intf_t *dt, char c) {
-    int line_delta = 0;
-    
-    if (c == ASCII_BACKSPC) {
-        line_delta = -1;
-    }
-    
-    else if (c == ASCII_DEL) {
-        size_t line_remnant;
-        line_remnant = dt->linelen - 1 - (dt->cline - dt->linebuf);
-        
-        if (line_remnant > 0) {
-            memcpy(dt->cline, dt->cline+1, line_remnant);
-            line_delta = -1;
-        }
-    }
-    
-    else if (dt->linelen > (LINESIZE-1) ) {
-        return 0;
-    }
-    
-    else {
-        *dt->cline++    = c;
-        line_delta      = 1;
-    }
-    
-    dt->linelen += line_delta;
-    return line_delta;
 }
 
 static int sub_remc(dterm_intf_t *dt, int count) {
@@ -316,7 +276,7 @@ static void cjson_std_allocators(void) {
   * ========================================================================<BR>
   */
 
-int dterm_init(dterm_handle_t* dth, void* ext_data, INTF_Type intf) {
+int dterm_init(dterm_handle_t* dth, void* ext_data, const char* logfile, INTF_Type intf) {
     int rc = 0;
 
     ///@todo ext data should be handled as its own module, but we can accept
@@ -327,6 +287,7 @@ int dterm_init(dterm_handle_t* dth, void* ext_data, INTF_Type intf) {
     
     dth->intf = NULL;
     dth->iso_mutex = NULL;
+    dth->logfile_path = logfile;
     
     talloc_disable_null_tracking();
     dth->pctx = talloc_new(NULL);
@@ -544,6 +505,58 @@ void dterm_unsquelch(dterm_handle_t* dth) {
 
 
 
+int dterm_send_log(dterm_handle_t* dth, const char* logmsg, size_t loglen) {
+    struct stat st;
+    int rc = 0;
+    int fd;
+    FILE* fp;
+    char term = 0;
+
+    if (dth == NULL) {
+        rc = -1;
+        goto dterm_send_log_END;
+    }
+    if (dth->logfile_path == NULL) {
+        goto dterm_send_log_END;
+    }
+    if (stat(dth->logfile_path, &st) < 0) {
+        rc = -2;
+        goto dterm_send_log_END;
+    }
+    if (S_ISFIFO(st.st_mode)) {
+        fd = open(dth->logfile_path, O_WRONLY);
+        if (fd < 0) {
+            rc = -4;
+            goto dterm_send_log_END;
+        }
+        write(fd, logmsg, loglen);
+        if (logmsg[loglen-1] != 0) {
+            loglen++;
+            write(fd, &term, 1);
+        }
+        close(fd);
+        rc = (int)loglen;
+    }
+    else if (S_ISREG(st.st_mode)) {
+        fp = fopen(dth->logfile_path, "a");
+        if (fp == NULL) {
+            rc = -4;
+            goto dterm_send_log_END;
+        }
+        fwrite(logmsg, 1, loglen, fp);
+        if (logmsg[loglen-1] != '\n') {
+            loglen++;
+            fwrite(&term, 1, 1, fp);
+        }
+        fclose(fp);
+    }
+    else {
+        rc = -3;
+    }
+    
+    dterm_send_log_END:
+    return rc;
+}
 
 
 int dterm_send_cmdmsg(dterm_handle_t* dth, const char* cmdname, const char* msg) {
@@ -580,11 +593,6 @@ int dterm_publish_rxstat(dterm_handle_t* dth, DFMT_Type dfmt, void* rxdata, size
         datasize = sub_rxstat(output, 1024, dfmt, rxdata, rxsize, rxaddr, sid, tstamp, crcqual);
         if (datasize > 0) {
             if (dth->intf->type == INTF_socket) {
-//{
-//struct timespec cur;
-//clock_gettime(CLOCK_REALTIME, &cur);
-//fprintf(stderr, _E_MAG "dterm_publish_rxstat() sid=%u [%zu.%zu]\n" _E_NRM, sid, cur.tv_sec, cur.tv_nsec);
-//}
                 clithread_publish(dth->clithread, sid, (uint8_t*)output, datasize);
             }
             else if (dth->fd.out >= 0) {
@@ -677,7 +685,7 @@ static int sub_rxstat(  char* dst, int dstlimit, DFMT_Type dfmt,
         default: {
             if (cliopt_isverbose()) {
                 bytesout = snprintf(dst, dstlimit,
-                                    _E_YEL"RX.%u: from %llx at %s, %s"_E_NRM"\n",
+                                    _E_GRN"RX.%u: from %llx at %s, %s"_E_NRM"\n",
                                     sid, rxaddr, fmt_time(&tstamp, NULL), fmt_crc(crcqual, NULL));
             }
             else {
@@ -691,6 +699,25 @@ static int sub_rxstat(  char* dst, int dstlimit, DFMT_Type dfmt,
             dstlimit -= bytesout;
             dst      += bytesout;
             if (dstlimit <= 0) break;
+            
+            switch (dfmt) {
+                case DFMT_Binary: {
+                    int a = sub_hexsnstream(dst, dstlimit, rxdata, rxsize);
+                    bytesout += a;
+                    dstlimit -= a;
+                    dst      += a;
+                } break;
+                case DFMT_Text:
+                case DFMT_Native:
+                default:
+                    dstlimit -= rxsize;
+                    if (dstlimit >= 0) {;
+                        memcpy(dst, rxdata, rxsize);
+                        dst      += rxsize;
+                        bytesout += rxsize;
+                    }
+                    break;
+            }
         } break;
     }
     
@@ -698,7 +725,7 @@ static int sub_rxstat(  char* dst, int dstlimit, DFMT_Type dfmt,
         dst[bytesout] = '\n';
         bytesout = max;
     }
-    else {
+    else if (dst[-1] != '\n') {
         *dst = '\n';
         bytesout++;
     }
@@ -1063,6 +1090,7 @@ static int sub_readline(size_t* bytesread, int fd, char* buf_a, char* buf_b, int
         max--;
         test = *buf_a++;
         if ((test == '\n') || (test == 0)) {
+            *buf_a = 0;
             break;
         }
     }
@@ -1427,14 +1455,16 @@ void* dterm_prompter(void* args) {
     /// A keystoke is reported either as a single character or as three.
     /// triple-char keystrokes are for special keys like arrows and control
     /// sequences.
-    while ((keychars = read(dth->fd.in, dth->intf->readbuf, READSIZE)) > 0) {
+    while (1) {
+        keychars = read(dth->fd.in, dth->intf->readbuf, READSIZE);
+        if (keychars <= 0) {
+            break;
+        }
         
         // Default: IGNORE
         cmd = ct_ignore;
         
         // If dterm state is off, ignore anything except ESCAPE
-        ///@todo mutex unlocking on dt->state
-        
         if ((dth->intf->state == prompt_off) && (keychars == 1) && (dth->intf->readbuf[0] <= 0x1f)) {
             cmd = npcodes[dth->intf->readbuf[0]];
             
@@ -1525,7 +1555,7 @@ void* dterm_prompter(void* args) {
                 // A printable key is used
                 case ct_key: {
                     sub_putcmd(dth->intf, &c, 1);
-                    //sub_putdt, &c, 1);
+                    //sub_put(dt, &c, 1);
                     sub_putc(&dth->fd, c);
                 } break;
                                     

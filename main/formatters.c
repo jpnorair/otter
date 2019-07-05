@@ -564,7 +564,7 @@ static int sub_log_textmsg(FORMAT_Type fmt, uint8_t* dst, size_t* dst_accum, uin
 
     dcurs = (char*)dst;
     msgbreak = sub_findbreak(front, srcsz);
-    
+
     if (msgbreak != NULL) {
         *msgbreak++ = 0;
         length -= (msgbreak - front);
@@ -590,6 +590,7 @@ static int sub_log_textmsg(FORMAT_Type fmt, uint8_t* dst, size_t* dst_accum, uin
                 if (use_delim) {
                     dcurs = stpcpy(dcurs, "\"");
                 }
+
                 break;
                 
             case FORMAT_Bintex:
@@ -625,7 +626,7 @@ static int sub_printlog(FORMAT_Type fmt, uint8_t* dst, size_t* dst_accum, uint8_
             dcurs = stpcpy(dcurs, "\"fmt\":\"hex\", \"dat\":");
         }
     }
-    
+
     switch (cmd) {
         // "Raw" Data.  Print as hex
         case 0: dcurs += sub_printhex(fmt, (uint8_t*)dcurs, dst_accum, src, length, 16);
@@ -781,8 +782,10 @@ int fmt_fprintalp(uint8_t* dst, size_t* dst_accum, uint8_t** src, size_t srcsz) 
     else {
         switch (id) {
             // logger
-            case 4: dcurs += sub_printlog(fmt, (uint8_t*)dcurs, dst_accum, src, length, cmd);
-                break;
+            case 4: {
+                (*src) = scurs;
+                dcurs += sub_printlog(fmt, (uint8_t*)dcurs, dst_accum, src, length, cmd);
+            } break;
                 
             // everything else
            default: {
@@ -831,6 +834,8 @@ int fmt_fprintalp(uint8_t* dst, size_t* dst_accum, uint8_t** src, size_t srcsz) 
                 break;
         }
     }
+    
+    
     
     ///@todo probably can take dst_accum out of most internal args.
     if (dst_accum != NULL) {
