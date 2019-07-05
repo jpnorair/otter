@@ -1107,7 +1107,7 @@ void* dterm_socket_clithread(void* args) {
     dts.tctx    = ct_args->tctx;
 
     clithread_sigup(ct_args->clithread_self);
-    
+
     // Deferred cancellation: will wait until the blocking read() call is in
     // idle before killing the thread.
     pthread_setcanceltype(PTHREAD_CANCEL_DEFERRED, NULL);
@@ -1123,14 +1123,12 @@ void* dterm_socket_clithread(void* args) {
         bzero(databuf, sizeof(databuf));
 
         VERBOSE_PRINTF("Waiting for read on socket:fd=%i\n", dts.fd.out);
-        //loadlen = (int)read(dts.fd.out, loadbuf, LINESIZE);
+
         loadlen = sub_readline(NULL, dts.fd.out, loadbuf, NULL, LINESIZE);
         if (loadlen > 0) {
             sub_str_sanitize(loadbuf, (size_t)loadlen);
-
             pthread_mutex_lock(dts.iso_mutex);
             dts.intf->state = prompt_off;
-
             do {
                 int output_sid;
 
@@ -1149,7 +1147,6 @@ void* dterm_socket_clithread(void* args) {
             } while (loadlen > 0);
 
             pthread_mutex_unlock(dts.iso_mutex);
-            
         }
         else {
             // After servicing the client socket, it is important to close it.
