@@ -76,13 +76,15 @@ void* mpipe_reader(void* args) {
     
     uint8_t rbuf[1024];
     uint8_t* rbuf_cursor;
-    int frame_length;
     int header_length;
     int payload_length;
     int payload_left;
     int errcode;
     int new_bytes;
     uint8_t syncinput;
+#   if defined(__DEBUG__)
+    int frame_length;
+#   endif
     
     if (appdata == NULL) {
         goto mpipe_reader_TERM;
@@ -346,54 +348,67 @@ void* mpipe_writer(void* args) {
 ///
     otter_app_t* appdata = args;
     pkt_t* txpkt;
+    mpipe_handle_t mph;
     mpipe_fd_t* intf_fd;
     
     if (appdata == NULL) {
         goto mpipe_writer_TERM;
     }
-    
+
+    mph = appdata->mpipe;
+
     while (1) {
         pthread_mutex_lock(appdata->tlist_cond_mutex);
         appdata->tlist_cond_inactive = true;
         while (appdata->tlist_cond_inactive) {
             pthread_cond_wait(appdata->tlist_cond, appdata->tlist_cond_mutex);
         }
-        
+
         while (1) {
             txpkt = pktlist_get(appdata->tlist);
             if (txpkt == NULL) {
                 break;
             }
 
-            intf_fd = mpipe_fds_resolve(txpkt->intf);
-            if (intf_fd != NULL) {
-                int bytes_left;
-                int bytes_sent;
-                uint8_t* cursor;
-                
-                time(&txpkt->tstamp);
-                cursor      = txpkt->buffer;
-                bytes_left  = (int)txpkt->size;
-                
-                // Debugging output
-                HEX_DUMP(cursor, bytes_left, "Writing %d bytes to tty\n", bytes_left);
-                
-                while (bytes_left > 0) {
-                    bytes_sent  = (int)write(intf_fd->out, cursor, bytes_left);
-                    cursor     += bytes_sent;
-                    bytes_left -= bytes_sent;
+            if (txpkt->intf == NULL) {
+                int id_i = (int)mpipe_numintf_get(mph);
+                while (id_i >= 0) {
+                    id_i--;
+                    mpipe_writeto_intf(mpipe_intf_get(mph, id_i), txpkt->buffer, (int)txpkt->size);
                 }
             }
+            else {
+                mpipe_writeto_intf(txpkt->intf, txpkt->buffer, (int)txpkt->size);
+            }
+
+//            intf_fd = mpipe_fds_resolve(txpkt->intf);
+//            if (intf_fd != NULL) {
+//                int bytes_left;
+//                int bytes_sent;
+//                uint8_t* cursor;
+//            
+//                time(&txpkt->tstamp);
+//                cursor      = txpkt->buffer;
+//                bytes_left  = (int)txpkt->size;
+//               
+//                // Debugging output
+//                HEX_DUMP(cursor, bytes_left, "Writing %d bytes to tty\n", bytes_left);               
+//                while (bytes_left > 0) {
+//                    bytes_sent  = (int)write(intf_fd->out, cursor, bytes_left);
+//                    cursor     += bytes_sent;
+//                    bytes_left -= bytes_sent;
+//                }
+//            }
             
             // We put a an interval between transmissions in order to 
             // facilitate certain blocking implementations of the target MPipe.
             /// @todo make configurable instead of 10ms
             usleep(10000);
         }
-        
+
         pthread_mutex_unlock(appdata->tlist_cond_mutex);
     }
-    
+
     mpipe_writer_TERM:
     
     /// This code should never occur, given the while(1) loop.

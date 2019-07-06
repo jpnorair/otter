@@ -271,24 +271,24 @@ void* modbus_reader(void* args) {
 
 
 
-///@todo make this mpipe_send_to_intf()
-static void sub_write_on_intf(void* intf, uint8_t* data, int data_bytes) {
-    int sent_bytes;
-    mpipe_fd_t* ifds;
-    
-    if ((intf != NULL) && (data != NULL)) {
-        ifds = mpipe_fds_resolve(intf);
-        if (ifds != NULL) {
-            HEX_DUMP(data, data_bytes, "Writing %d bytes to %s\n", data_bytes, mpipe_file_resolve(intf));
-            
-            while (data_bytes > 0) {
-                sent_bytes  = (int)write(ifds->out, data, data_bytes);
-                data       += sent_bytes;
-                data_bytes -= sent_bytes;
-            }
-        }
-    }
-}
+///@note made into mpipe_writeto_intf()
+//static void sub_write_on_intf(void* intf, uint8_t* data, int data_bytes) {
+//    int sent_bytes;
+//    mpipe_fd_t* ifds;
+//    
+//    if ((intf != NULL) && (data != NULL)) {
+//        ifds = mpipe_fds_resolve(intf);
+//        if (ifds != NULL) {
+//            HEX_DUMP(data, data_bytes, "Writing %d bytes to %s\n", data_bytes, mpipe_file_resolve(intf));
+//            
+//            while (data_bytes > 0) {
+//                sent_bytes  = (int)write(ifds->out, data, data_bytes);
+//                data       += sent_bytes;
+//                data_bytes -= sent_bytes;
+//            }
+//        }
+//    }
+//}
 
 
 
@@ -332,11 +332,11 @@ void* modbus_writer(void* args) {
                 int id_i = (int)mpipe_numintf_get(mph);
                 while (id_i >= 0) {
                     id_i--;
-                    sub_write_on_intf(mpipe_intf_get(mph, id_i), txpkt->buffer, (int)txpkt->size);
+                    mpipe_writeto_intf(mpipe_intf_get(mph, id_i), txpkt->buffer, (int)txpkt->size);
                 }
             }
             else {
-                sub_write_on_intf(txpkt->intf, txpkt->buffer, (int)txpkt->size);
+                mpipe_writeto_intf(txpkt->intf, txpkt->buffer, (int)txpkt->size);
             }
             
             /// Modbus operates in lockstep: TX->RX
