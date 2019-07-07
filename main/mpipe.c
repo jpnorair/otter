@@ -413,7 +413,8 @@ static int sub_opentty(mpipe_intf_t* ttyintf) {
     tio.c_oflag     = CR0 | TAB0 | BS0 | VT0 | FF0;
     tio.c_lflag     = 0;
     tio.c_cc[VMIN]  = 1;        // smallest read is one character... could be changed here
-    tio.c_cc[VTIME] = 0;        // no timeout
+    tio.c_cc[VTIME] = 1;        // worst-case timeout is 100ms
+    //tio.c_cc[VTIME] = 0;      // no timeout, uses poll()
     
     tcflush( ttyintf->fd.in, TCIFLUSH );
     cfsetospeed(&tio, ttyparams->baud);
