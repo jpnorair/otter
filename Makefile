@@ -37,7 +37,7 @@ ifneq ($(findstring $(SYSDIR)/lib,$(LD_LIBRARY_PATH)),)
 endif
 
 ifeq ($(THISSYSTEM),Linux)
-	ifneq (,$(findstring,LEDE,$(THISMACHINE)))
+	ifneq ($(findstring LEDE,$(THISMACHINE)),)
 		LIBBSD := -lfts
 	else
 		LIBBSD := -lbsd
