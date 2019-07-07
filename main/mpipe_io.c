@@ -349,7 +349,6 @@ void* mpipe_writer(void* args) {
     otter_app_t* appdata = args;
     pkt_t* txpkt;
     mpipe_handle_t mph;
-    mpipe_fd_t* intf_fd;
     
     if (appdata == NULL) {
         goto mpipe_writer_TERM;
