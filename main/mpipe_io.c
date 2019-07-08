@@ -82,9 +82,8 @@ void* mpipe_reader(void* args) {
     int errcode;
     int new_bytes;
     uint8_t syncinput;
-#   if defined(__DEBUG__)
     int frame_length;
-#   endif
+    int i = 0;
     
     if (appdata == NULL) {
         goto mpipe_reader_TERM;
@@ -113,18 +112,85 @@ void* mpipe_reader(void* args) {
     while (1) {
         errcode = 0;
         
-        /// Wait until an FF comes
-        TTY_PRINTF("Starting TTY Poll\n");
-        ready_fds = poll(fds, num_fds, polltimeout);
-        
+#       if (OTTER_FEATURE_NOPOLL)
+        {   
+            mpipe_reader_SYNC0:
+            syncinput = 0;
+            new_bytes = (int)read(fds[i].fd, &syncinput, 1);
+            if (new_bytes < 1) {
+                usleep(10 * 1000);
+                goto mpipe_reader_SYNC0;
+            }
+            if (syncinput != 0xFF) {
+                goto mpipe_reader_SYNC0;
+            }
+            
+            mpipe_reader_SYNC1:
+            syncinput = 0;
+            new_bytes = (int)read(fds[i].fd, &syncinput, 1);
+            if (new_bytes < 1) {
+                usleep(10 * 1000);
+                goto mpipe_reader_SYNC1;
+            }
+            if (syncinput == 0xFF) {
+                goto mpipe_reader_SYNC1;
+            }
+            if (syncinput != 0x55) {
+                goto mpipe_reader_SYNC0;
+            }
+            TTY_PRINTF("Sync FF55 Received\n");
+            
+            // At this point, FF55 was detected.  We get the next 6 bytes of the
+            // header, which is the rest of the header.
+            new_bytes       = 0;
+            payload_left    = 6;
+            rbuf_cursor     = rbuf;
+            while (payload_left > 0) {
+                new_bytes = (int)read(fds[i].fd, rbuf_cursor, payload_left);
+                if (new_bytes < 1) {
+                    errcode = 4;        // timeout
+                    goto mpipe_reader_ERR;
+                }
+                TTY_PRINTF("header new_bytes = %d\n", new_bytes);
+                HEX_DUMP(rbuf_cursor, new_bytes, "read(): ");
+                rbuf_cursor    += new_bytes;
+                payload_left   -= new_bytes;
+            }
+            
+            payload_length  = rbuf[2] * 256;
+            payload_length += rbuf[3];
+            header_length   = 6 + 0;
+            
+            if ((payload_length == 0) || (payload_length > (1024-header_length))) {
+                errcode = 2;
+                goto mpipe_reader_ERR;
+            }
+            
+            // Receive the remaining payload bytes
+            payload_left    = payload_length;
+            rbuf_cursor     = &rbuf[6];
+            while (payload_left > 0) {
+                new_bytes = (int)read(fds[i].fd, rbuf_cursor, payload_left);
+                if (new_bytes < 1) {
+                    errcode = 4;        // timeout
+                    goto mpipe_reader_ERR;
+                }
+                TTY_PRINTF("payload new_bytes = %d\n", new_bytes);
+                HEX_DUMP(rbuf_cursor, new_bytes, "read(): ");
+                rbuf_cursor    += new_bytes;
+                payload_left   -= new_bytes;
+            }
+
+#       else // NORMAL MODE
         // Handle timeout (return 0).
         // Timeouts only occur when there is a job to reconnect to some lost
         // connections.
+        ready_fds = poll(fds, num_fds, polltimeout);
         if (ready_fds == 0) {
             int num_dc = 0;
             int connfail;
             
-            for (int i=0; i<num_fds; i++) {
+            for (i=0; i<num_fds; i++) {
                 if (fds[i].fd < 0) {
                     VERBOSE_PRINTF("Attempting to reconnect on %s\n", mpipe_file_get(mph, i));
                     connfail = (mpipe_reopen(mph, i) != 0);
@@ -153,7 +219,7 @@ void* mpipe_reader(void* args) {
             goto mpipe_reader_TERM;
         }
         
-        for (int i=0; i<num_fds; i++) {
+        for (i=0; i<num_fds; i++) {
             // Handle Errors
             ///@todo change 100ms fixed wait on hangup to a configurable amount
             if (fds[i].revents & (POLLNVAL|POLLHUP)) {
@@ -168,84 +234,6 @@ void* mpipe_reader(void* args) {
                 continue;
             }
 
-            mpipe_reader_SYNC0:
-            new_bytes = (int)read(fds[i].fd, &syncinput, 1);
-            if (new_bytes < 1) {
-                errcode = 1;        // flushable
-                goto mpipe_reader_ERR;
-            }
-            if (syncinput != 0xFF) {
-                goto mpipe_reader_SYNC0;
-            }
-            TTY_PRINTF("Sync FF Received\n");
-            
-            // Now wait for a 55, ignoring FFs
-            mpipe_reader_SYNC1:
-            new_bytes = (int)read(fds[i].fd, &syncinput, 1);
-            if (new_bytes < 1) {
-                errcode = 1;        // flushable
-                goto mpipe_reader_ERR;
-            }
-            if (syncinput == 0xFF) {
-                goto mpipe_reader_SYNC1;
-            }
-            if (syncinput != 0x55) {
-                goto mpipe_reader_SYNC0;
-            }
-            TTY_PRINTF("Sync 55 Received\n");
-            
-            // At this point, FF55 was detected.  We get the next 6 bytes of the
-            // header, which is the rest of the header.
-            new_bytes       = 0;
-            payload_left    = 6;
-            rbuf_cursor     = rbuf;
-            while (payload_left > 0) {
-                new_bytes = (int)read(fds[i].fd, rbuf_cursor, payload_left);
-                if (new_bytes < 1) {
-                    errcode = 4;        // timeout
-                    goto mpipe_reader_ERR;
-                }
-                TTY_PRINTF("header new_bytes = %d\n", new_bytes);
-                HEX_DUMP(rbuf_cursor, new_bytes, "read(): ");
-                rbuf_cursor    += new_bytes;
-                payload_left   -= new_bytes;
-            }
-            
-            // Bytes 0:1 are the CRC16 checksum.  The controlling app can decide what
-            // to do about those.  They are in the buffer.
-            // Bytes 2:3 are the Length of the Payload, in big endian.  It can be up
-            // to 65535 bytes, but CRC16 won't be great help for more than 250 bytes.
-            payload_length  = rbuf[2] * 256;
-            payload_length += rbuf[3];
-            
-            // Byte 4 is a sequence number, which the controlling app can decide what
-            // to do with.  Byte 5 is RFU, but in the future it can be used to
-            // expand the header.  That logic would go below (currently trivial).
-            header_length = 6 + 0;
-            
-            // Now do some checks to prevent malformed packets.
-            if (((unsigned int)payload_length == 0) \
-            || ((unsigned int)payload_length > (1024-header_length))) {
-                errcode = 2;
-                goto mpipe_reader_ERR;
-            }
-            
-            // Receive the remaining payload bytes
-            payload_left    = payload_length;
-            rbuf_cursor     = &rbuf[6];
-            while (payload_left > 0) {
-                new_bytes = (int)read(fds[i].fd, rbuf_cursor, payload_left);
-                if (new_bytes < 1) {
-                    errcode = 4;        // timeout
-                    goto mpipe_reader_ERR;
-                }
-                TTY_PRINTF("payload new_bytes = %d\n", new_bytes);
-                HEX_DUMP(rbuf_cursor, new_bytes, "read(): ");
-                rbuf_cursor    += new_bytes;
-                payload_left   -= new_bytes;
-            }
-
-/*            
             // Find FF, the first sync byte
             mpipe_reader_SYNC0:
             new_bytes = (int)read(fds[i].fd, &syncinput, 1);
@@ -269,7 +257,6 @@ void* mpipe_reader(void* args) {
                 errcode = 5;        // flushable
                 goto mpipe_reader_ERR;
             }
-            
             new_bytes = (int)read(fds[i].fd, &syncinput, 1);
             if (new_bytes < 1) {
                 errcode = 1;        // flushable
@@ -290,7 +277,7 @@ void* mpipe_reader(void* args) {
             new_bytes       = 0;
             payload_left    = 6;
             rbuf_cursor     = rbuf;
-            do {
+            while (payload_left > 0) {
                 pollcode = poll(fds, 1, 50);
                 if (pollcode <= 0) {
                     errcode = 4;
@@ -305,12 +292,8 @@ void* mpipe_reader(void* args) {
                 rbuf_cursor    += new_bytes;
                 payload_left   -= new_bytes;
                 TTY_PRINTF("header new_bytes = %d\n", new_bytes);
-            } while (payload_left > 0);
-            
-            if (payload_left != 0) {
-                continue;
             }
-            
+
             // Bytes 0:1 are the CRC16 checksum.  The controlling app can decide what
             // to do about those.  They are in the buffer.
             // Bytes 2:3 are the Length of the Payload, in big endian.  It can be up
@@ -329,7 +312,7 @@ void* mpipe_reader(void* args) {
                 errcode = 2;
                 goto mpipe_reader_ERR;
             }
-            
+
             // Receive the remaining payload bytes
             payload_left    = payload_length;
             rbuf_cursor     = &rbuf[6];
@@ -352,7 +335,9 @@ void* mpipe_reader(void* args) {
                 rbuf_cursor    += new_bytes;
                 payload_left   -= new_bytes;
             }
-*/
+
+#           endif
+
             // Debugging output
             HEX_DUMP(&rbuf[6], payload_length, "pkt   : ");
 
