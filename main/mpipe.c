@@ -415,13 +415,13 @@ static int sub_opentty(mpipe_intf_t* ttyintf) {
     
     // VMIN = 0, VTIME = 1: Works for systems where poll() is too slow (some Linuxes)
     // VMIN = 1, VTIME = 0: Works for systems where poll() actually works (any BSD, some Linuxes)
-//#   if (OTTER_FEATURE_NOPOLL)
-//        tio.c_cc[VMIN]  = 0;       // Don't wait for any bytes
-//        tio.c_cc[VTIME] = 1;      // worst-case timeout is 100ms
-//#   else
-        tio.c_cc[VMIN]  = 1;        // smallest read is one character... could be changed here
-        tio.c_cc[VTIME] = 0;        // worst-case timeout is 100ms
-//#   endif
+#   if (OTTER_FEATURE_NOPOLL)
+        tio.c_cc[VMIN]  = 1;        // smallest read is one character
+        tio.c_cc[VTIME] = 0;        // Inter-character timeout (after VMIN) is 0.1sec
+#   else
+        tio.c_cc[VMIN]  = 1;        // smallest read is one character
+        tio.c_cc[VTIME] = 0;        // There is no inter-character timeout
+#   endif
     
     tcflush( ttyintf->fd.in, TCIFLUSH );
     cfsetospeed(&tio, ttyparams->baud);

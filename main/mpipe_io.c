@@ -46,20 +46,15 @@
 
 
 
-static struct timespec diff_timespec(struct timespec start, struct timespec end) {
-    struct timespec result;
- 
-    if (end.tv_nsec < start.tv_nsec) {
-        result.tv_nsec = 1000000000 + end.tv_nsec - start.tv_nsec;
-        result.tv_sec = end.tv_sec - 1 - start.tv_sec;
-    }
-    else {
-        result.tv_nsec = end.tv_nsec - start.tv_nsec;
-        result.tv_sec = end.tv_sec - start.tv_sec;
-    }
+static int64_t timespec_diffms(struct timespec start, struct timespec end) {
+    int64_t result;
+
+    result  = (int64_t)((end.tv_sec * 1000) + (end.tv_nsec / 1000000)) \
+            - (int64_t)((start.tv_sec * 1000) + (start.tv_nsec / 1000000));
  
     return result;
 }
+
 
 
 
@@ -129,92 +124,83 @@ void* mpipe_reader(void* args) {
     while (1) {
         errcode = 0;
         
-#       if 0 //(OTTER_FEATURE_NOPOLL)
+#       if (OTTER_FEATURE_NOPOLL)
         {   int unused_bytes;
             struct timespec ref;
             struct timespec test;
-            ref.tv_sec   = 0;
-            ref.tv_nsec  = 0;
-    
+            
+            mpipe_reader_INIT:
             rbuf_cursor     = rbuf;
-            payload_left    = 1;
             unused_bytes    = 0;
+            payload_left    = 1;
             
             while (1) {
                 /// Check size of bytes in the hopper, and compare with payload_left (requested bytes)
                 /// Only do read() if we need more bytes
                 
-                if (unused_bytes > 0) {
-                    payload_left   -= unused_bytes;
-                    rbuf_cursor    += (errcode <= 1);
+                // Read from interface, and time how long it takes to return
+                if (clock_gettime(CLOCK_MONOTONIC, &ref) != 0) {
+                    errcode = -1;
+                    goto mpipe_reader_ERR;
                 }
-                if (payload_left > 0) {
-                    // Read from interface, and time how long it takes to return
-                    if (clock_gettime(CLOCK_MONOTONIC, &ref) != 0) {
-                        errcode = -1;
-                        goto mpipe_reader_ERR;
+                new_bytes = (int)read(fds[0].fd, rbuf_cursor, payload_left);
+                if (new_bytes <= 0) {
+                    errcode = 5 - (new_bytes == 0);
+                    goto mpipe_reader_ERR;
+                }
+                if (clock_gettime(CLOCK_MONOTONIC, &test) != 0) {
+                    errcode = -1;
+                    goto mpipe_reader_ERR;
+                }
+                
+                // If read took longer than 50ms (should be configurable ms),
+                // we need to restart the reception state machine.
+                if (timespec_diffms(ref, test) > 50) {
+                    errcode = 0;
+                    for (; (new_bytes>0)&&(*rbuf_cursor!=0xFF); new_bytes--, rbuf_cursor++);
+                    if (new_bytes == 0) {
+                        goto mpipe_reader_INIT;
                     }
+                    unused_bytes = new_bytes-1;
+                    new_bytes = 1;
+                }
+                else {
                     unused_bytes = 0;
-                    new_bytes = (int)read(fds[0].fd, rbuf_cursor, payload_left);
-                    if (new_bytes <= 0) {
-                        errcode = 5 - (new_bytes == 0);
-                        goto mpipe_reader_ERR;
-                    }
-                    if (clock_gettime(CLOCK_MONOTONIC, &test) != 0) {
-                        errcode = -1;
-                        goto mpipe_reader_ERR;
-                    }
-                    
-                    // If read took longer than 50ms (should be configurable ms),
-                    // we need to restart the reception state machine.
-                    test = diff_timespec(ref, test);
-                    if (((test.tv_sec * 1000) + (test.tv_nsec / 1000000)) > 50) {
-                        errcode = 0;
-                        for (; (new_bytes>0)&&(*rbuf_cursor!=0xFF); new_bytes--, rbuf_cursor++);
-                        if (new_bytes <= 0) {
-                            rbuf_cursor     = rbuf;
-                            payload_left    = 1;
-                            unused_bytes    = 0;
-                            continue;
-                        }
-                        unused_bytes = new_bytes-1;
-                    }
-                    
-                    // blah
-                    // blah
                 }
+                
+                mpipe_reader_STATEHANDLER:
+                syncinput       = *rbuf_cursor;
+                rbuf_cursor    += new_bytes;
+                unused_bytes   -= new_bytes;
+                payload_left   -= new_bytes;
                 
                 switch (errcode) {
-                case 0: if (*rbuf_cursor == 0xFF) {
-                            errcode = 1;
-                            payload_left = 1;
+                case 0: payload_left = 1;
+                        if (syncinput != 0xFF) {
+                            break;
                         }
-                        unused_bytes--;
+                        errcode = 1;
                         break;
                 
-                case 1: if (*rbuf_cursor == 0xFF) {
-                            payload_left = 1;
+                case 1: payload_left = 1;
+                        if (syncinput == 0xFF) {
                             break;
                         }
-                        if (*rbuf_cursor != 0x55) {
+                        if (syncinput != 0x55) {
                             errcode = 0;
-                            payload_left = 1;
                             break;
                         }
-                        if (rbuf != rbuf_cursor) {
-                            
-                            for (int j=0; j<unused_bytes; j++) {
-                                rbuf[j] = rbuf_cursor[j+1];
-                            }
+                        // Sync-Found: realign rbuf if necessary
+                        for (int j=0; j<unused_bytes; j++) {
+                            rbuf[j] = rbuf_cursor[j];
                         }
+                        rbuf_cursor = rbuf;
                         errcode = 2;
                         payload_left = 6;
                         break;
                 
                 // Header (6 bytes)
-                case 2: payload_left   -= new_bytes;
-                        rbuf_cursor    += new_bytes;
-                        if (payload_left > 0) {
+                case 2: if (payload_left > 0) {
                             break;
                         }
                         errcode = 3;
@@ -229,9 +215,7 @@ void* mpipe_reader(void* args) {
                         break;
                 
                 // Payload (N bytes)
-                case 3: payload_left   -= new_bytes;
-                        rbuf_cursor    += new_bytes;
-                        if (payload_left <= 0) {
+                case 3: if (payload_left <= 0) {
                             goto mpipe_reader_READDONE;
                         }
                         break;
@@ -239,76 +223,14 @@ void* mpipe_reader(void* args) {
                default: rbuf_cursor = rbuf;
                         payload_left = 1;
                         errcode = 0;
+                        unused_bytes = 0;
                         break;
                 }
-            }
-#       elif 0
-        {   
-            mpipe_reader_SYNC0:
-            syncinput = 0;
-            new_bytes = (int)read(fds[i].fd, &syncinput, 1);
-            if (new_bytes < 1) {
-                usleep(10 * 1000);
-                goto mpipe_reader_SYNC0;
-            }
-            if (syncinput != 0xFF) {
-                goto mpipe_reader_SYNC0;
-            }
-            
-            mpipe_reader_SYNC1:
-            syncinput = 0;
-            new_bytes = (int)read(fds[i].fd, &syncinput, 1);
-            if (new_bytes < 1) {
-                usleep(10 * 1000);
-                goto mpipe_reader_SYNC1;
-            }
-            if (syncinput == 0xFF) {
-                goto mpipe_reader_SYNC1;
-            }
-            if (syncinput != 0x55) {
-                goto mpipe_reader_SYNC0;
-            }
-            TTY_PRINTF("Sync FF55 Received\n");
-            
-            // At this point, FF55 was detected.  We get the next 6 bytes of the
-            // header, which is the rest of the header.
-            new_bytes       = 0;
-            payload_left    = 6;
-            rbuf_cursor     = rbuf;
-            while (payload_left > 0) {
-                new_bytes = (int)read(fds[i].fd, rbuf_cursor, payload_left);
-                if (new_bytes < 1) {
-                    errcode = 4;        // timeout
-                    goto mpipe_reader_ERR;
+                
+                if (unused_bytes > 0) {
+                    new_bytes = (payload_left < unused_bytes) ? payload_left : unused_bytes;
+                    goto mpipe_reader_STATEHANDLER;
                 }
-                TTY_PRINTF("header new_bytes = %d\n", new_bytes);
-                HEX_DUMP(rbuf_cursor, new_bytes, "read(): ");
-                rbuf_cursor    += new_bytes;
-                payload_left   -= new_bytes;
-            }
-            
-            payload_length  = rbuf[2] * 256;
-            payload_length += rbuf[3];
-            header_length   = 6 + 0;
-            
-            if ((payload_length == 0) || (payload_length > (1024-header_length))) {
-                errcode = 2;
-                goto mpipe_reader_ERR;
-            }
-            
-            // Receive the remaining payload bytes
-            payload_left    = payload_length;
-            rbuf_cursor     = &rbuf[6];
-            while (payload_left > 0) {
-                new_bytes = (int)read(fds[i].fd, rbuf_cursor, payload_left);
-                if (new_bytes < 1) {
-                    errcode = 4;        // timeout
-                    goto mpipe_reader_ERR;
-                }
-                TTY_PRINTF("payload new_bytes = %d\n", new_bytes);
-                HEX_DUMP(rbuf_cursor, new_bytes, "read(): ");
-                rbuf_cursor    += new_bytes;
-                payload_left   -= new_bytes;
             }
 
 #       else // NORMAL MODE
@@ -765,4 +687,76 @@ void* mpipe_parser(void* args) {
     raise(SIGINT);
     return NULL;
 }
+
+
+/*
+#       elif 0
+        {
+            mpipe_reader_SYNC0:
+            syncinput = 0;
+            new_bytes = (int)read(fds[i].fd, &syncinput, 1);
+            if (new_bytes < 1) {
+                usleep(10 * 1000);
+                goto mpipe_reader_SYNC0;
+            }
+            if (syncinput != 0xFF) {
+                goto mpipe_reader_SYNC0;
+            }
+ 
+            mpipe_reader_SYNC1:
+            syncinput = 0;
+            new_bytes = (int)read(fds[i].fd, &syncinput, 1);
+            if (new_bytes < 1) {
+                usleep(10 * 1000);
+                goto mpipe_reader_SYNC1;
+            }
+            if (syncinput == 0xFF) {
+                goto mpipe_reader_SYNC1;
+            }
+            if (syncinput != 0x55) {
+                goto mpipe_reader_SYNC0;
+            }
+            TTY_PRINTF("Sync FF55 Received\n");
+ 
+            // At this point, FF55 was detected.  We get the next 6 bytes of the
+            // header, which is the rest of the header.
+            new_bytes       = 0;
+            payload_left    = 6;
+            rbuf_cursor     = rbuf;
+            while (payload_left > 0) {
+                new_bytes = (int)read(fds[i].fd, rbuf_cursor, payload_left);
+                if (new_bytes < 1) {
+                    errcode = 4;        // timeout
+                    goto mpipe_reader_ERR;
+                }
+                TTY_PRINTF("header new_bytes = %d\n", new_bytes);
+                HEX_DUMP(rbuf_cursor, new_bytes, "read(): ");
+                rbuf_cursor    += new_bytes;
+                payload_left   -= new_bytes;
+            }
+ 
+            payload_length  = rbuf[2] * 256;
+            payload_length += rbuf[3];
+            header_length   = 6 + 0;
+ 
+            if ((payload_length == 0) || (payload_length > (1024-header_length))) {
+                errcode = 2;
+                goto mpipe_reader_ERR;
+            }
+ 
+            // Receive the remaining payload bytes
+            payload_left    = payload_length;
+            rbuf_cursor     = &rbuf[6];
+            while (payload_left > 0) {
+                new_bytes = (int)read(fds[i].fd, rbuf_cursor, payload_left);
+                if (new_bytes < 1) {
+                    errcode = 4;        // timeout
+                    goto mpipe_reader_ERR;
+                }
+                TTY_PRINTF("payload new_bytes = %d\n", new_bytes);
+                HEX_DUMP(rbuf_cursor, new_bytes, "read(): ");
+                rbuf_cursor    += new_bytes;
+                payload_left   -= new_bytes;
+            }
+*/
 
