@@ -500,7 +500,9 @@ void* mpipe_writer(void* args) {
             
             ///@todo this deletion should be replaced with punt & sequence 
             ///      delete, but that is not always working properly.
+#           ifndef _PUNT_AND_PURGE
             pktlist_del(txpkt);
+#           endif
             
             // We put a an interval between transmissions in order to 
             // facilitate certain blocking implementations of the target MPipe.
@@ -593,10 +595,12 @@ void* mpipe_parser(void* args) {
                 
                 ///@todo this packet punting model isn't yet functioning for
                 ///      mpipe.  Currently, TX packet is simply deleted after
-                ///      it is sent.  
-                //if (appdata->tlist->front != appdata->tlist->cursor) {
-                //    pktlist_punt(appdata->tlist->front);
-                //}
+                ///      it is sent. 
+#               ifdef _PUNT_AND_PURGE
+                if (appdata->tlist->front != appdata->tlist->cursor) {
+                    pktlist_punt(appdata->tlist->front);
+                }
+#               endif
                 break;
             }
 
@@ -604,7 +608,10 @@ void* mpipe_parser(void* args) {
             ///      properly yet.
             /// Response Packets should match to a sequence number of the last Request.
             /// If there is no match, then nothing in tlist is deleted.
-            //pktlist_del_sequence(appdata->tlist, rpkt->sequence);
+            ///      it is sent. 
+#           ifdef _PUNT_AND_PURGE
+            pktlist_del_sequence(appdata->tlist, rpkt->sequence);
+#           endif
             
             /// For Mpipe, the address is implicit based on the interface vid
             rxaddr = devtab_get_uid(appdata->endpoint.devtab, rpkt->intf);
