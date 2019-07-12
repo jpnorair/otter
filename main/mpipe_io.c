@@ -144,6 +144,7 @@ void* mpipe_reader(void* args) {
                     goto mpipe_reader_ERR;
                 }
                 new_bytes = (int)read(fds[0].fd, rbuf_cursor, payload_left);
+                HEX_DUMP(rbuf_cursor, new_bytes, "read(): ");
                 if (new_bytes <= 0) {
                     errcode = 5 - (new_bytes == 0);
                     goto mpipe_reader_ERR;
@@ -216,6 +217,7 @@ void* mpipe_reader(void* args) {
                 
                 // Payload (N bytes)
                 case 3: if (payload_left <= 0) {
+                            errcode = 0;
                             goto mpipe_reader_READDONE;
                         }
                         break;

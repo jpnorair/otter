@@ -36,7 +36,7 @@
 } while (0)
 
 
-#if defined(__DEBUG__)
+#if 1 //defined(__DEBUG__)
 #   define DEBUG_RUN(CODE)      do { CODE } while(0)
 #   define DEBUG_PRINTF(...)    do { if (cliopt_isdebug()) {fprintf(stderr, _E_YEL"DEBUG: " __VA_ARGS__); fprintf(stderr, _E_NRM);}} while(0)
 #   define TTY_PRINTF(...)      do { if (cliopt_isdebug()) {fprintf(stderr, _E_YEL"TTY: " __VA_ARGS__); fprintf(stderr, _E_NRM);}} while(0)
