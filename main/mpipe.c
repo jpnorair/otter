@@ -374,6 +374,29 @@ void mpipe_writeto_intf(void* intf, uint8_t* data, int data_bytes) {
 }
 
 
+void mpipe_write_blocktx(void* intf) {
+    mpipe_fd_t* ifds;
+    
+    if (intf != NULL) {
+        ifds = mpipe_fds_resolve(intf);
+        if (ifds != NULL) {
+            tcflow(ifds->out, TCOOFF);
+        }
+    }
+}
+
+
+void mpipe_write_unblocktx(void* intf) {
+    mpipe_fd_t* ifds;
+    
+    if (intf != NULL) {
+        ifds = mpipe_fds_resolve(intf);
+        if (ifds != NULL) {
+            tcflow(ifds->out, TCOON);
+        }
+    }
+}
+
 
 
 /** MPipe Control Functions
@@ -642,7 +665,9 @@ void mpipe_flush(mpipe_handle_t handle, int id, size_t est_rembytes, int queue_s
 #       else
             if (table->intf[i].type == MPINTF_tty) {
                 if (queue_selector & TCOFLUSH)  tcdrain(table->intf[i].fd.out);
+#               if (OTTER_FEATURE_NOPOLL == DISABLED)
                 if (queue_selector & TCIFLUSH)  tcflush(table->intf[i].fd.in, TCIFLUSH);
+#               endif
             }
 #       endif
         }

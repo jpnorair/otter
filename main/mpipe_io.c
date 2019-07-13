@@ -144,7 +144,7 @@ void* mpipe_reader(void* args) {
                     goto mpipe_reader_ERR;
                 }
                 new_bytes = (int)read(fds[0].fd, rbuf_cursor, payload_left);
-                HEX_DUMP(rbuf_cursor, new_bytes, "read(): ");
+                //HEX_DUMP(rbuf_cursor, new_bytes, "read(): ");
                 if (new_bytes <= 0) {
                     errcode = 5 - (new_bytes == 0);
                     goto mpipe_reader_ERR;
@@ -405,6 +405,7 @@ void* mpipe_reader(void* args) {
             // Error Handler: wait a few milliseconds, then handle the error.
             /// @todo supply estimated bytes remaining into mpipe_flush()
             mpipe_reader_ERR:
+
             switch (errcode) {
             case 0: TTY_RX_PRINTF("Packet Received Successfully (%d bytes).\n", frame_length);
                     if (pthread_mutex_trylock(appdata->pktrx_mutex) == 0) {
@@ -445,7 +446,7 @@ void* mpipe_reader(void* args) {
     }
     
     mpipe_reader_TERM:
-    mpipe_flush(mph, -1, 0, TCIFLUSH);
+    mpipe_flush(mph, -1, 0, TCIOFLUSH);
     
     if (fds != NULL) {
         free(fds);
@@ -499,17 +500,20 @@ void* mpipe_writer(void* args) {
             else {
                 mpipe_writeto_intf(txpkt->intf, txpkt->buffer, (int)txpkt->size);
             }
-            
+
+            // This will block until all the bytes are out the door.
+            mpipe_flush(mph, -1, (int)txpkt->size, TCOFLUSH);
+
+            // We put a an interval between transmissions in order to 
+            // facilitate certain blocking implementations of the target MPipe.
+            /// @todo make configurable instead of 10ms
+            //usleep(10000);
+
             ///@todo this deletion should be replaced with punt & sequence 
             ///      delete, but that is not always working properly.
 #           ifndef _PUNT_AND_PURGE
             pktlist_del(txpkt);
 #           endif
-            
-            // We put a an interval between transmissions in order to 
-            // facilitate certain blocking implementations of the target MPipe.
-            /// @todo make configurable instead of 10ms
-            usleep(10000);
         }
 
         pthread_mutex_unlock(appdata->tlist_cond_mutex);

@@ -132,6 +132,9 @@ int mpipe_reopen( mpipe_handle_t handle, int id);
 void mpipe_flush(mpipe_handle_t handle, int id, size_t est_rembytes, int queue_selector);
 
 
+void mpipe_write_blocktx(void* intf);
+void mpipe_write_unblocktx(void* intf);
+
 
 // Thread Functions
 ///@todo move into mpipe_io section
