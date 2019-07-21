@@ -577,6 +577,10 @@ int dterm_send_error(dterm_handle_t* dth, const char* cmdname, int errcode, uint
     return -1;
 }
 
+int dterm_send_txstat(dterm_handle_t* dth, DFMT_Type dfmt, void* txdata, size_t txsize, uint64_t txaddr, uint32_t sid, time_t tstamp) {
+    return 0;
+}
+
 int dterm_send_rxstat(dterm_handle_t* dth, DFMT_Type dfmt, void* rxdata, size_t rxsize, uint64_t rxaddr, uint32_t sid, time_t tstamp, int crcqual) {
     return dterm_publish_rxstat(dth, dfmt, rxdata, rxsize, rxaddr, sid, tstamp, crcqual);
 }

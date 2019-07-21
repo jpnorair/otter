@@ -495,10 +495,12 @@ void* mpipe_writer(void* args) {
                 while (id_i >= 0) {
                     id_i--;
                     mpipe_writeto_intf(mpipe_intf_get(mph, id_i), txpkt->buffer, (int)txpkt->size);
+                    //dterm_publish_txstat(dth, DFMT_Native, txpkt->buffer, txpkt->size, 0, txpkt->sequence, txpkt->tstamp);
                 }
             }
             else {
                 mpipe_writeto_intf(txpkt->intf, txpkt->buffer, (int)txpkt->size);
+                //dterm_publish_txstat(dth, DFMT_Native, txpkt->buffer, txpkt->size, 0, txpkt->sequence, txpkt->tstamp);
             }
 
             // This will block until all the bytes are out the door.
@@ -620,6 +622,7 @@ void* mpipe_parser(void* args) {
 #           endif
             
             /// For Mpipe, the address is implicit based on the interface vid
+            ///@todo make sure this works properly.
             rxaddr = devtab_get_uid(appdata->endpoint.devtab, rpkt->intf);
             
             // Get Payload Bytes, found in buffer[2:3]
