@@ -451,8 +451,8 @@ static int sub_opentty(mpipe_intf_t* ttyintf) {
         tio.c_cc[VTIME] = 0;        // There is no inter-character timeout
 #   endif
     
-    tcflush( ttyintf->fd.in, TCIFLUSH );
-    tcflush( ttyintf->fd.out, TCOFLUSH );
+    tcflush( ttyintf->fd.in, TCIOFLUSH );
+    
     cfsetospeed(&tio, ttyparams->baud);
     cfsetispeed(&tio, ttyparams->baud);
     
@@ -656,31 +656,29 @@ void mpipe_flush(mpipe_handle_t handle, int id, size_t est_rembytes, int queue_s
         j   = (id < 0) ? (int)table->size : id+1;
         
         for ( ; (i<j) && (i<table->size); i++) {
-#       ifdef _MANUAL_DRAIN
-            float       a;
-            useconds_t  micros;
-
-            // estimated bits remaining in packet
-            a = (float)(est_rembytes * sub_intf_bitsperbyte(&table->intf[i]));
-            // estimated seconds remaining in packet
-            a /= (float)sub_intf_baudrate(&table->intf[i]);
-            // est microseconds
-            micros = (useconds_t)(a * 1000000.f);
-            usleep(micros);
             if (table->intf[i].type == MPINTF_tty) {
-                tcflush(table->intf[i].fd.out, TCOFLUSH);
-                tcflush(table->intf[i].fd.in, TCIFLUSH);
-            }
-#       else
-            if (table->intf[i].type == MPINTF_tty) {
-                if (queue_selector & TCOFLUSH)  tcdrain(table->intf[i].fd.out);
-#               if (OTTER_FEATURE_NOFLUSH == DISABLED)
-                if (queue_selector & TCIFLUSH)  tcflush(table->intf[i].fd.in, TCIFLUSH);
+                if (queue_selector & TCOFLUSH) {
+#               if (OTTER_FEATURE_MANDRAIN == ENABLED)
+                    float a;
+                    useconds_t  micros;
+                    // estimated bits remaining in packet
+                    a = (float)(est_rembytes * sub_intf_bitsperbyte(&table->intf[i]));
+                    // estimated seconds remaining in packet
+                    a /= (float)sub_intf_baudrate(&table->intf[i]);
+                    // est microseconds
+                    micros = (useconds_t)(a * 1000000.f);
+                    usleep(micros);
+#               else
+                    tcdrain(table->intf[i].fd.out);
+#               endif
+                }
+#               if (OTTER_FEATURE_NOFLUSH != ENABLED)
+                if (queue_selector & TCIFLUSH)  {
+                    tcflush(table->intf[i].fd.in, TCIFLUSH);
+                }
 #               endif
             }
-#       endif
         }
-
     }
 }
 

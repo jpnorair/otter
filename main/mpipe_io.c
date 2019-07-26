@@ -124,7 +124,7 @@ void* mpipe_reader(void* args) {
     while (1) {
         errcode = 0;
         
-#       if (OTTER_FEATURE_NOPOLL)
+#       if (OTTER_FEATURE_NOPOLL == ENABLED)
         {   int unused_bytes;
             struct timespec ref;
             struct timespec test;
@@ -470,6 +470,7 @@ void* mpipe_writer(void* args) {
     otter_app_t* appdata = args;
     pkt_t* txpkt;
     mpipe_handle_t mph;
+    int id_i;
     
     if (appdata == NULL) {
         goto mpipe_writer_TERM;
@@ -491,25 +492,21 @@ void* mpipe_writer(void* args) {
             }
 
             if (txpkt->intf == NULL) {
-                int id_i = (int)mpipe_numintf_get(mph);
+                id_i = (int)mpipe_numintf_get(mph);
                 while (id_i >= 0) {
                     id_i--;
                     mpipe_writeto_intf(mpipe_intf_get(mph, id_i), txpkt->buffer, (int)txpkt->size);
-                    //dterm_publish_txstat(dth, DFMT_Native, txpkt->buffer, txpkt->size, 0, txpkt->sequence, txpkt->tstamp);
                 }
             }
             else {
+                id_i = mpipe_id_resolve(mph, txpkt->intf);
                 mpipe_writeto_intf(txpkt->intf, txpkt->buffer, (int)txpkt->size);
-                //dterm_publish_txstat(dth, DFMT_Native, txpkt->buffer, txpkt->size, 0, txpkt->sequence, txpkt->tstamp);
             }
 
-            // This will block until all the bytes are out the door.
-            mpipe_flush(mph, -1, (int)txpkt->size, TCOFLUSH);
+            //dterm_publish_txstat(dth, DFMT_Native, txpkt->buffer, txpkt->size, 0, txpkt->sequence, txpkt->tstamp);
 
-            // We put a an interval between transmissions in order to 
-            // facilitate certain blocking implementations of the target MPipe.
-            /// @todo make configurable instead of 10ms
-            //usleep(10000);
+            // This will block until all the bytes are out the door.
+            mpipe_flush(mph, id_i, (int)txpkt->size, TCOFLUSH);
 
             ///@todo this deletion should be replaced with punt & sequence 
             ///      delete, but that is not always working properly.
