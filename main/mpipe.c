@@ -665,7 +665,7 @@ void mpipe_flush(mpipe_handle_t handle, int id, size_t est_rembytes, int queue_s
 #       else
             if (table->intf[i].type == MPINTF_tty) {
                 if (queue_selector & TCOFLUSH)  tcdrain(table->intf[i].fd.out);
-#               if (OTTER_FEATURE_NOPOLL == DISABLED)
+#               if (OTTER_FEATURE_NOFLUSH == DISABLED)
                 if (queue_selector & TCIFLUSH)  tcflush(table->intf[i].fd.in, TCIFLUSH);
 #               endif
             }

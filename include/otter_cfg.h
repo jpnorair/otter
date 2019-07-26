@@ -82,6 +82,9 @@
 #ifndef OTTER_FEATURE_NOPOLL
 #   define OTTER_FEATURE_NOPOLL     DISABLED
 #endif
+#ifndef OTTER_FEATURE_NOFLUSH
+#   define OTTER_FEATURE_NOFLUSH    DISABLED
+#endif
 #ifndef OTTER_FEATURE_HBUILDER
 #   ifdef __HBUILDER__
 #   define OTTER_FEATURE_HBUILDER   ENABLED
@@ -92,9 +95,7 @@
 #ifndef OTTER_FEATURE_SECURITY
 #   define OTTER_FEATURE_SECURITY   (DISABLED || OTTER_FEATURE_HBUILDER)
 #endif
-#ifndef OTTER_FEATURE_OTDB
-#   define OTTER_FEATURE_OTDB       DISABLED
-#endif
+
 
 /// Parameter configuration defaults
 ///@todo some of these should be otter environment variables, namely timeouts and addresses
