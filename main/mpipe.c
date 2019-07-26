@@ -451,7 +451,7 @@ static int sub_opentty(mpipe_intf_t* ttyintf) {
         tio.c_cc[VTIME] = 0;        // There is no inter-character timeout
 #   endif
     
-    tcflush( ttyintf->fd.in, TCIOFLUSH );
+    tcflush( ttyintf->fd.in, MPIOFLUSH );
     
     cfsetospeed(&tio, ttyparams->baud);
     cfsetispeed(&tio, ttyparams->baud);
@@ -657,23 +657,35 @@ void mpipe_flush(mpipe_handle_t handle, int id, size_t est_rembytes, int queue_s
         
         for ( ; (i<j) && (i<table->size); i++) {
             if (table->intf[i].type == MPINTF_tty) {
-                if (queue_selector & TCOFLUSH) {
+#               if (OTTER_FEATURE_NOFLUSH != ENABLED)
+                if (queue_selector & MPOFLUSH) {
+                    tcflush(table->intf[i].fd.out, TCOFLUSH);
+                }
+                else
+#               endif
+                if (queue_selector & MPODRAIN) {
 #               if (OTTER_FEATURE_MANDRAIN == ENABLED)
+                    // - estimate bits remaining in packet
+                    // - estimate microseconds remaining in packet
+                    // - usleep for this amount of microseconds
                     float a;
                     useconds_t  micros;
-                    // estimated bits remaining in packet
-                    a = (float)(est_rembytes * sub_intf_bitsperbyte(&table->intf[i]));
-                    // estimated seconds remaining in packet
-                    a /= (float)sub_intf_baudrate(&table->intf[i]);
-                    // est microseconds
-                    micros = (useconds_t)(a * 1000000.f);
+                    a       = (float)(est_rembytes * sub_intf_bitsperbyte(&table->intf[i]));
+                    a      /= (float)sub_intf_baudrate(&table->intf[i]);
+                    micros  = (useconds_t)(a * 1000000.f);
                     usleep(micros);
 #               else
+                    ///@note tcdrain() will block until all bytes are put into
+                    /// the tty device buffer.  In rare cases, you will want to
+                    /// wait until all bytes are actually transmitted.  That is
+                    /// a special-purpose implementation.  You can simulate by
+                    /// by putting a usleep() call after tcdrain, with some
+                    /// amount of milliseconds (1000s of useconds)
                     tcdrain(table->intf[i].fd.out);
 #               endif
                 }
 #               if (OTTER_FEATURE_NOFLUSH != ENABLED)
-                if (queue_selector & TCIFLUSH)  {
+                if (queue_selector & MPIFLUSH)  {
                     tcflush(table->intf[i].fd.in, TCIFLUSH);
                 }
 #               endif
@@ -681,19 +693,5 @@ void mpipe_flush(mpipe_handle_t handle, int id, size_t est_rembytes, int queue_s
         }
     }
 }
-
-
-//void mpipe_flush(mpipe_ctl_t* mpctl, size_t est_rembytes, int queue_selector) {
-//    float       a;
-//    useconds_t  micros;
-//
-//    a       = (float)(est_rembytes * 10);   // estimated bits remaining in packet
-//    a      /= (float)mpctl->baudrate;       // estimated seconds remaining in packet
-//    micros  = (useconds_t)(a * 1000000.f);  // est microseconds
-//
-//    usleep(micros);
-//    tcflush(mpctl->tty_fd, queue_selector);
-//}
-
 
 

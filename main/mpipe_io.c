@@ -118,7 +118,7 @@ void* mpipe_reader(void* args) {
     // all devices are reconnected
     polltimeout = -1;
     
-    mpipe_flush(mph, -1, 0, TCIFLUSH);
+    mpipe_flush(mph, -1, 0, MPIFLUSH);
     
     /// Beginning of read loop
     while (1) {
@@ -284,7 +284,7 @@ void* mpipe_reader(void* args) {
         
             // Verify that POLLIN is high.  This should be implicit, but we check explicitly here
             if ((fds[i].revents & POLLIN) == 0) {
-                mpipe_flush(mph, i, 0, TCIFLUSH);
+                mpipe_flush(mph, i, 0, MPIFLUSH);
                 continue;
             }
 
@@ -426,11 +426,11 @@ void* mpipe_reader(void* args) {
             
             case 4: TTY_RX_PRINTF("Mpipe Packet RX timed-out\n");
             mpipe_reader_ERRFLUSH:
-                    mpipe_flush(mph, i, 0, TCIFLUSH);
+                    mpipe_flush(mph, i, 0, MPIFLUSH);
                     break;
                 
             case 5: if (mpipe_reopen(mph, i) == 0) {
-                        mpipe_flush(mph, i, 0, TCIFLUSH);
+                        mpipe_flush(mph, i, 0, MPIFLUSH);
                     }
                     else {
                         VERBOSE_PRINTF("Connection dropped on %s: queuing for reconnect\n", mpipe_file_get(mph, i));
@@ -446,7 +446,7 @@ void* mpipe_reader(void* args) {
     }
     
     mpipe_reader_TERM:
-    mpipe_flush(mph, -1, 0, TCIOFLUSH);
+    mpipe_flush(mph, -1, 0, MPIOFLUSH);
     
     if (fds != NULL) {
         free(fds);
@@ -505,8 +505,11 @@ void* mpipe_writer(void* args) {
 
             //dterm_publish_txstat(dth, DFMT_Native, txpkt->buffer, txpkt->size, 0, txpkt->sequence, txpkt->tstamp);
 
-            // This will block until all the bytes are out the door.
-            mpipe_flush(mph, id_i, (int)txpkt->size, TCOFLUSH);
+            ///@note This call to mpipe_flush will block until all the bytes
+            /// are transmitted.  In the special case of txpkt->intf == NULL,
+            /// it will block until all bytes on all interfaces are transmitted
+            /// as long as all interfaces have same baud rate
+            mpipe_flush(mph, id_i, (int)txpkt->size, MPODRAIN);
 
             ///@todo this deletion should be replaced with punt & sequence 
             ///      delete, but that is not always working properly.

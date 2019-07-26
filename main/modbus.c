@@ -159,7 +159,7 @@ void* modbus_reader(void* args) {
             if (fds[i].revents & (POLLNVAL|POLLHUP)) {
                 usleep(100 * 1000);
                 if (mpipe_reopen(mph, i) == 0) {
-                    mpipe_flush(mph, i, 0, TCIFLUSH);
+                    mpipe_flush(mph, i, 0, MPIFLUSH);
                     continue;
                 }
                 else {
@@ -174,7 +174,7 @@ void* modbus_reader(void* args) {
             // Verify that POLLIN is high.
             // Generally this should be implicit, but we check explicitly for safety reasons.
             if ((fds[i].revents & POLLIN) == 0) {
-                mpipe_flush(mph, i, 0, TCIFLUSH);
+                mpipe_flush(mph, i, 0, MPIFLUSH);
                 continue;
             }
             
@@ -259,7 +259,7 @@ void* modbus_reader(void* args) {
     /// Code below this line occurs during fatal errors
     
     modbus_reader_TERM:
-    mpipe_flush(mph, -1, 0, TCIFLUSH);
+    mpipe_flush(mph, -1, 0, MPIFLUSH);
     
     if (fds != NULL) {
         free(fds);

@@ -32,6 +32,13 @@
 #include <time.h>
 #include <poll.h>
 
+// Queue Selectors for mpipe_flush()
+#define MPIFLUSH    1
+#define MPOFLUSH    2
+#define MPIOFLUSH   3
+#define MPODRAIN    4
+
+
 
 // MPipe Data Type(s)
 typedef void* mpipe_handle_t;
@@ -71,6 +78,8 @@ typedef struct {
     mpipe_intf_t*   intf;
     size_t          size;
 } mpipe_tab_t;
+
+
 
 
 
