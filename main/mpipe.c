@@ -416,13 +416,18 @@ static int sub_opentty(mpipe_intf_t* ttyintf) {
         goto sub_opentty_EXIT;
     }
     
+    if ( !isatty(ttyintf->fd.in) ) {
+        rc = -2;
+        goto sub_opentty_ERR;
+    }
+    
     // TTY device has output and input on the same file descriptor
     ttyintf->fd.out = ttyintf->fd.in;
     
     // then reset O_NDELAY
     if ( fcntl(ttyintf->fd.in, F_SETFL, O_RDWR) )  {
-        rc = -2;
-        goto sub_opentty_EXIT;
+        rc = -3;
+        goto sub_opentty_ERR;
     }
     
     // clear the datastruct just in case
@@ -453,8 +458,8 @@ static int sub_opentty(mpipe_intf_t* ttyintf) {
     
     // Using TCSANOW will do [something]
     if (tcsetattr(ttyintf->fd.in, TCSANOW, &tio) != 0)  {
-        rc = -3;
-        goto sub_opentty_EXIT;
+        rc = -4;
+        goto sub_opentty_ERR;
     }
     
     // RTS/CTS are not available at this moment (may never be)
@@ -468,6 +473,10 @@ static int sub_opentty(mpipe_intf_t* ttyintf) {
     //else        tiocmbic(table->intf[id].fd.in,TIOCM_DTR);
     
     sub_opentty_EXIT:
+    return rc;
+    
+    sub_opentty_ERR:
+    close(ttyintf->fd.in);
     return rc;
 }
 
