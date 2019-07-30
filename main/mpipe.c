@@ -410,7 +410,7 @@ static int sub_opentty(mpipe_intf_t* ttyintf) {
     int rc = 0;
 
     // first open with O_NDELAY
-    ttyintf->fd.in = open(ttyparams->path, O_RDWR | O_NDELAY | O_EXCL);
+    ttyintf->fd.in = open(ttyparams->path, O_RDWR | /*O_NDELAY*/ O_NONBLOCK | O_EXCL);
     if (ttyintf->fd.in < 0 ) {
         rc = -1;
         goto sub_opentty_EXIT;

@@ -49,17 +49,22 @@
 static int64_t timespec_diffms(struct timespec start, struct timespec end) {
     struct timespec diff;
     int64_t result;
-    
+
     diff.tv_sec = end.tv_sec - start.tv_sec;
     diff.tv_nsec = end.tv_nsec - start.tv_nsec;
-    
     if (diff.tv_nsec < 0) {
         diff.tv_sec--;
         diff.tv_nsec = 1000000000 + diff.tv_nsec;
     }
 
-    result  = (int64_t)diff.tv_sec * 1000 + (int64_t)diff.tv_nsec / 1000000;
+//fprintf(stderr,"end   = %lli.%lli\n", end.tv_sec, end.tv_nsec);
+//fprintf(stderr,"start = %lli.%lli\n", start.tv_sec, start.tv_nsec);
+//fprintf(stderr,"diff  = %lli.%lli\n", diff.tv_sec, diff.tv_nsec);
+
+    result = (((int64_t)diff.tv_sec) * 1000) + (((int64_t)diff.tv_nsec) / 1000000);
  
+///fprintf(stderr,"diffms = %lli\n", result);
+
     return result;
 }
 
@@ -79,6 +84,7 @@ static int64_t timespec_diffms(struct timespec start, struct timespec end) {
   *          and tlist.  Depends on mpipe_reader(), mpipe_writer(), and also
   *          dterm_parser(). </LI>
   */
+#define _PKTPOLL_MS  50
 
 void* mpipe_reader(void* args) {
 /// Thread that:
@@ -141,38 +147,37 @@ void* mpipe_reader(void* args) {
             rbuf_cursor     = rbuf;
             unused_bytes    = 0;
             payload_left    = 1;
-            clock_set
+            
+            if (clock_gettime(CLOCK_MONOTONIC_RAW, &ref) != 0) {
+                fprintf(stderr, "System Error: clock_gettime() failed.\n");
+                goto mpipe_reader_TERM;
+            }
+            ref.tv_sec += 10*365*86400;
             
             while (1) {
                 /// Check size of bytes in the hopper, and compare with payload_left (requested bytes)
                 /// Only do read() if we need more bytes
-                
-                // Read from interface, and time how long it takes to return
-                if (clock_gettime(CLOCK_MONOTONIC, &ref) != 0) {
-                    errcode = -1;
-                    goto mpipe_reader_ERR;
-                }
                 new_bytes = (int)read(fds[0].fd, rbuf_cursor, payload_left);
-                //HEX_DUMP(rbuf_cursor, new_bytes, "read(): ");
+                //HEX_DUMP(rbuf_cursor, new_bytes, "read(%02i): ", new_bytes);
                 if (new_bytes <= 0) {
                     errcode = 5 - (new_bytes == 0);
                     goto mpipe_reader_ERR;
                 }
-                if (clock_gettime(CLOCK_MONOTONIC, &test) != 0) {
-                    errcode = -1;
-                    goto mpipe_reader_ERR;
-                }
+                clock_gettime(CLOCK_MONOTONIC_RAW, &test);
                 
                 // If read took longer than 50ms (should be configurable ms),
                 // we need to restart the reception state machine.
-                if (timespec_diffms(ref, test) > 50) {
+                if (timespec_diffms(ref, test) > 150) {
+//fprintf(stderr,"search for sync (state=%i)\n", errcode);
                     errcode = 0;
                     for (; (new_bytes>0)&&(*rbuf_cursor!=0xFF); new_bytes--, rbuf_cursor++);
                     if (new_bytes == 0) {
+//fprintf(stderr,"sync not found\n");
                         goto mpipe_reader_INIT;
                     }
                     unused_bytes = new_bytes-1;
                     new_bytes = 1;
+//fprintf(stderr,"sync found: unused=%i, new=%i\n", unused_bytes, new_bytes);
                 }
                 else {
                     unused_bytes = 0;
@@ -242,6 +247,9 @@ void* mpipe_reader(void* args) {
                     new_bytes = (payload_left < unused_bytes) ? payload_left : unused_bytes;
                     goto mpipe_reader_STATEHANDLER;
                 }
+
+                // Read from interface, and time how long it takes to return
+                clock_gettime(CLOCK_MONOTONIC_RAW, &ref);
             }
 
 #       else // NORMAL MODE
@@ -311,7 +319,7 @@ void* mpipe_reader(void* args) {
             
             // Now wait for a 55, ignoring FFs
             mpipe_reader_SYNC1:
-            pollcode = poll(&fds[i], 1, 50);
+            pollcode = poll(&fds[i], 1, _PKTPOLL_MS);
             if (pollcode <= 0) {
                 errcode = 4;        // flushable
                 goto mpipe_reader_ERR;
@@ -341,7 +349,7 @@ void* mpipe_reader(void* args) {
             payload_left    = 6;
             rbuf_cursor     = rbuf;
             while (payload_left > 0) {
-                pollcode = poll(&fds[i], 1, 50);
+                pollcode = poll(&fds[i], 1, _PKTPOLL_MS);
                 if (pollcode <= 0) {
                     errcode = 4;
                     goto mpipe_reader_ERR;
@@ -380,7 +388,7 @@ void* mpipe_reader(void* args) {
             payload_left    = payload_length;
             rbuf_cursor     = &rbuf[6];
             while (payload_left > 0) {
-                pollcode = poll(&fds[i], 1, 50);
+                pollcode = poll(&fds[i], 1, _PKTPOLL_MS);
                 if (pollcode <= 0) {
                     errcode = 4;
                     goto mpipe_reader_ERR;
@@ -389,7 +397,6 @@ void* mpipe_reader(void* args) {
                     errcode = 5;
                     goto mpipe_reader_ERR;
                 }
-            
                 new_bytes       = (int)read(fds[i].fd, rbuf_cursor, payload_left);
                 // Debugging output
                 TTY_PRINTF("payload new_bytes = %d\n", new_bytes);
@@ -404,7 +411,7 @@ void* mpipe_reader(void* args) {
             mpipe_reader_READDONE:
 
             // Debugging output
-            HEX_DUMP(&rbuf[6], payload_length, "pkt   : ");
+            //HEX_DUMP(&rbuf[6], payload_length, "pkt   : ");
 
             // Copy the packet to the rlist and signal mpipe_parser()
             if (pktlist_add_rx(&appdata->endpoint, mpipe_intf_get(mph, i), appdata->rlist, rbuf, (size_t)(header_length + payload_length)) == NULL) {
@@ -438,7 +445,8 @@ void* mpipe_reader(void* args) {
                     mpipe_flush(mph, i, 0, MPIFLUSH);
                     break;
                 
-            case 5: if (mpipe_reopen(mph, i) == 0) {
+            case 5: TTY_RX_PRINTF("Mpipe TTY lost connection: reopening\n");
+                    if (mpipe_reopen(mph, i) == 0) {
                         mpipe_flush(mph, i, 0, MPIFLUSH);
                     }
                     else {
@@ -512,6 +520,8 @@ void* mpipe_writer(void* args) {
             }
 
             //dterm_publish_txstat(dth, DFMT_Native, txpkt->buffer, txpkt->size, 0, txpkt->sequence, txpkt->tstamp);
+            ///@todo It would be nice to remove this, but it seems necessary for some platforms.
+            usleep(10000);
 
             ///@note This call to mpipe_flush will block until all the bytes
             /// are transmitted.  In the special case of txpkt->intf == NULL,
