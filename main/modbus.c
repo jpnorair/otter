@@ -330,8 +330,8 @@ void* modbus_writer(void* args) {
             
             if (txpkt->intf == NULL) {
                 int id_i = (int)mpipe_numintf_get(mph);
-                while (id_i >= 0) {
-                    id_i--;
+                while (--id_i >= 0) {
+                    //id_i--;
                     mpipe_writeto_intf(mpipe_intf_get(mph, id_i), txpkt->buffer, (int)txpkt->size);
                 }
             }

@@ -47,10 +47,18 @@
 
 
 static int64_t timespec_diffms(struct timespec start, struct timespec end) {
+    struct timespec diff;
     int64_t result;
+    
+    diff.tv_sec = end.tv_sec - start.tv_sec;
+    diff.tv_nsec = end.tv_nsec - start.tv_nsec;
+    
+    if (diff.tv_nsec < 0) {
+        diff.tv_sec--;
+        diff.tv_nsec = 1000000000 + diff.tv_nsec;
+    }
 
-    result  = (int64_t)((end.tv_sec * 1000) + (end.tv_nsec / 1000000)) \
-            - (int64_t)((start.tv_sec * 1000) + (start.tv_nsec / 1000000));
+    result  = (int64_t)diff.tv_sec * 1000 + (int64_t)diff.tv_nsec / 1000000;
  
     return result;
 }
@@ -133,6 +141,7 @@ void* mpipe_reader(void* args) {
             rbuf_cursor     = rbuf;
             unused_bytes    = 0;
             payload_left    = 1;
+            clock_set
             
             while (1) {
                 /// Check size of bytes in the hopper, and compare with payload_left (requested bytes)
@@ -493,8 +502,7 @@ void* mpipe_writer(void* args) {
 
             if (txpkt->intf == NULL) {
                 id_i = (int)mpipe_numintf_get(mph);
-                while (id_i >= 0) {
-                    id_i--;
+                while (--id_i >= 0) {
                     mpipe_writeto_intf(mpipe_intf_get(mph, id_i), txpkt->buffer, (int)txpkt->size);
                 }
             }
