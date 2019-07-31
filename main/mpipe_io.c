@@ -608,7 +608,7 @@ void* mpipe_parser(void* args) {
             if (pkt_condition < 0) {
                 break;
             }
-            
+
             /// If packet has an error of some kind -- delete it and move-on.
             /// Else, print-out the packet.  This can get rich depending on the
             /// internal protocol, and it can result in responses being queued.
@@ -640,8 +640,9 @@ void* mpipe_parser(void* args) {
 #           endif
             
             /// For Mpipe, the address is implicit based on the interface vid
-            ///@todo make sure this works properly.
-            rxaddr = devtab_get_uid(appdata->endpoint.devtab, rpkt->intf);
+            ///@todo devtab_get_uid seems to access errant memory when used on NULL intf
+            //rxaddr = devtab_get_uid(appdata->endpoint.devtab, rpkt->intf);
+            rxaddr = 0;
             
             // Get Payload Bytes, found in buffer[2:3]
             // Then print-out the payload.
@@ -650,32 +651,33 @@ void* mpipe_parser(void* args) {
             payload_bytes  += rpkt->buffer[3];
             
             // Inspect header to see if M2DEF
-            if ((rpkt->buffer[5] & (1<<7)) == 0) {
+            if ((rpkt->crcqual == 0) && ((rpkt->buffer[5] & (1<<7)) == 0)) {
                 rpkt_is_valid = true;
 
                 ///@todo consider any need to deal with fragmentation.  Maybe
                 /// via subscriber module, but a secondary buffer required.
             }
             
-            // -----------------------------------------------------------
-            ///@todo Here is where decryption might go, if not handled in pktlist
-            /// there should be an encryption header at this offset (6),
-            /// followed by the payload, and then the real data payload.
-            /// The real data payload is followed by a 4 byte Message
-            /// Authentication Check (Crypto-MAC) value.  AES128 EAX is the
-            /// cryptography and cipher used.
-            if (rpkt->buffer[5] & (3<<5)) {
-                // Case with encryption
-                payload_front = &rpkt->buffer[6];
-            }
-            else {
-                payload_front = &rpkt->buffer[6];
-            }
-            // -----------------------------------------------------------
-            
             /// - If packet is valid and framing correct, process packet.
             /// - Else, dump the hex
-            if ((rpkt_is_valid) && (payload_bytes <= rpkt->size)) {
+            if (rpkt_is_valid && (payload_bytes <= rpkt->size)) {
+            
+                // -----------------------------------------------------------
+                ///@todo Here is where decryption might go, if not handled in pktlist
+                /// there should be an encryption header at this offset (6),
+                /// followed by the payload, and then the real data payload.
+                /// The real data payload is followed by a 4 byte Message
+                /// Authentication Check (Crypto-MAC) value.  AES128 EAX is the
+                /// cryptography and cipher used.
+                if (rpkt->buffer[5] & (3<<5)) {
+                    // Case with encryption
+                    payload_front = &rpkt->buffer[6];
+                }
+                else {
+                    payload_front = &rpkt->buffer[6];
+                }
+                // -----------------------------------------------------------
+            
                 while (payload_bytes > 0) {
                     size_t putsbytes    = 0;
                     uint8_t* lastfront  = payload_front;
@@ -707,6 +709,7 @@ void* mpipe_parser(void* args) {
             }
             else {
                 size_t putsbytes = 0;
+                payload_front = rpkt->buffer;
                 ///@todo better way to send an error via dterm_publish_rxstat()
                 fmt_printhex((uint8_t*)putsbuf, &putsbytes, &payload_front, rpkt->size, 16);
                 dterm_publish_rxstat(dth, DFMT_Text, putsbuf, putsbytes, rxaddr, rpkt->sequence, rpkt->tstamp, rpkt->crcqual);
