@@ -612,7 +612,7 @@ pkt_t* pktlist_parse(int* errcode, pktlist_t* plist) {
                 pkt->sequence   = pkt->buffer[4];
                 crc_val         = (pkt->buffer[0] << 8) + pkt->buffer[1];
                 crc_comp        = crc_calc_block(&pkt->buffer[2], pkt->size-2);
-                pkt->crcqual    = (crc_comp - crc_val);
+                pkt->crcqual    = (crc_comp ^ crc_val);
             }
             else if (intf == IO_modbus) {
                 // do nothing
