@@ -387,6 +387,8 @@ static int sub_printtext(FORMAT_Type fmt, uint8_t* dst, size_t* dst_accum, uint8
         
         case FORMAT_Default:
         default:
+              ///@todo include hard-wrap environment variable here or in caller
+              cols = 0;
 //            if (cliopt_getintf() == INTF_interactive) {
 //                memcpy(dst, (char*)*src, srcsz);
 //                *src += srcsz;
