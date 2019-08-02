@@ -510,7 +510,7 @@ int dterm_send_log(dterm_handle_t* dth, const char* logmsg, size_t loglen) {
     int rc = 0;
     int fd;
     FILE* fp;
-    char term = 0;
+    char term;
 
     if (dth == NULL) {
         rc = -1;
@@ -524,13 +524,14 @@ int dterm_send_log(dterm_handle_t* dth, const char* logmsg, size_t loglen) {
         goto dterm_send_log_END;
     }
     if (S_ISFIFO(st.st_mode)) {
+        term = 0;
         fd = open(dth->logfile_path, O_WRONLY);
         if (fd < 0) {
             rc = -4;
             goto dterm_send_log_END;
         }
         write(fd, logmsg, loglen);
-        if (logmsg[loglen-1] != 0) {
+        if (logmsg[loglen-1] != term) {
             loglen++;
             write(fd, &term, 1);
         }
@@ -538,13 +539,14 @@ int dterm_send_log(dterm_handle_t* dth, const char* logmsg, size_t loglen) {
         rc = (int)loglen;
     }
     else if (S_ISREG(st.st_mode)) {
+        term = '\n';
         fp = fopen(dth->logfile_path, "a");
         if (fp == NULL) {
             rc = -4;
             goto dterm_send_log_END;
         }
         fwrite(logmsg, 1, loglen, fp);
-        if (logmsg[loglen-1] != '\n') {
+        if (logmsg[loglen-1] != term) {
             loglen++;
             fwrite(&term, 1, 1, fp);
         }
