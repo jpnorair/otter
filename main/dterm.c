@@ -1221,8 +1221,18 @@ void* dterm_socketer(void* args) {
         }
         else {
             size_t poolsize     = cliopt_getpoolsize();
-            size_t est_poolobj  = 4;
-            clithread_add(dth->clithread, NULL, est_poolobj, poolsize, &dterm_socket_clithread, (void*)&clithread);
+            size_t est_obj  = 4;
+            
+            ///@todo with new clithread impl, might be fine to skip this and
+            /// let clithread do this internally on the NULL context
+            clithread.tctx = talloc_pooled_object(dth->pctx, void*, (unsigned int)est_obj, poolsize);
+            
+            ///@todo there are some problems with clithread that appear to be
+            /// related to talloc's lack of support for concurrency.  For the
+            /// time being, we're adding a guard.
+            clithread.guard = dth->iso_mutex;
+            
+            clithread_add(dth->clithread, NULL, est_obj, poolsize, &dterm_socket_clithread, (void*)&clithread);
         }
     }
     
