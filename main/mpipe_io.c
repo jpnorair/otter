@@ -157,7 +157,8 @@ void* mpipe_reader(void* args) {
             while (1) {
                 /// Check size of bytes in the hopper, and compare with payload_left (requested bytes)
                 /// Only do read() if we need more bytes
-                new_bytes = (int)read(fds[0].fd, rbuf_cursor, payload_left);
+                int rbytes  = 1; //payload_left;
+                new_bytes   = (int)read(fds[0].fd, rbuf_cursor, rbytes);
                 //HEX_DUMP(rbuf_cursor, new_bytes, "read(%02i): ", new_bytes);
                 if (new_bytes <= 0) {
                     errcode = 5 - (new_bytes == 0);
@@ -168,16 +169,16 @@ void* mpipe_reader(void* args) {
                 // If read took longer than 50ms (should be configurable ms),
                 // we need to restart the reception state machine.
                 if (timespec_diffms(ref, test) > 150) {
-//fprintf(stderr,"search for sync (state=%i)\n", errcode);
+                    //fprintf(stderr,"search for sync (state=%i)\n", errcode);
                     errcode = 0;
                     for (; (new_bytes>0)&&(*rbuf_cursor!=0xFF); new_bytes--, rbuf_cursor++);
                     if (new_bytes == 0) {
-//fprintf(stderr,"sync not found\n");
+                        //fprintf(stderr,"sync not found\n");
                         goto mpipe_reader_INIT;
                     }
                     unused_bytes = new_bytes-1;
                     new_bytes = 1;
-//fprintf(stderr,"sync found: unused=%i, new=%i\n", unused_bytes, new_bytes);
+                    //fprintf(stderr,"sync found: unused=%i, new=%i\n", unused_bytes, new_bytes);
                 }
                 else {
                     unused_bytes = 0;
@@ -689,7 +690,11 @@ void* mpipe_parser(void* args) {
                     /// The formatter will give negative values on framing errors
                     /// and also for protocol errors (i.e. NACKs).
                     proc_result = fmt_fprintalp((uint8_t*)putsbuf, &putsbytes, &payload_front, payload_bytes);
-                    
+                  
+                    /// If processing is bad, we can't rely on framing for this packet
+                    if (proc_result < 0) {
+                        break;
+                    }
                     ///@todo this is a temporary additive to log log data
                     if (proc_result == 4) {
                         dterm_send_log(dth, putsbuf, putsbytes);
@@ -699,11 +704,16 @@ void* mpipe_parser(void* args) {
                     /// subscribers of this ALP ID.
                     subsig = (proc_result >= 0) ? SUBSCR_SIG_OK : SUBSCR_SIG_ERR;
                     subscriber_post(appdata->subscribers, proc_result, subsig, NULL, 0);
-                    
+                   
                     // Send RXstat message back to control interface.
                     dterm_publish_rxstat(dth, DFMT_Native, putsbuf, putsbytes, rxaddr, rpkt->sequence, rpkt->tstamp, rpkt->crcqual);
                     
                     // Recalculate message size following the treatment of the last segment
+                    ///@note payload_front should be always greater than lastfront, but it might 
+                    ///be mangled if fmt_fprintalp() is buggy
+                    if (payload_front < lastfront) {
+                        break;
+                    }
                     payload_bytes -= (payload_front - lastfront);
                 }
             }
@@ -734,76 +744,4 @@ void* mpipe_parser(void* args) {
     raise(SIGINT);
     return NULL;
 }
-
-
-/*
-#       elif 0
-        {
-            mpipe_reader_SYNC0:
-            syncinput = 0;
-            new_bytes = (int)read(fds[i].fd, &syncinput, 1);
-            if (new_bytes < 1) {
-                usleep(10 * 1000);
-                goto mpipe_reader_SYNC0;
-            }
-            if (syncinput != 0xFF) {
-                goto mpipe_reader_SYNC0;
-            }
- 
-            mpipe_reader_SYNC1:
-            syncinput = 0;
-            new_bytes = (int)read(fds[i].fd, &syncinput, 1);
-            if (new_bytes < 1) {
-                usleep(10 * 1000);
-                goto mpipe_reader_SYNC1;
-            }
-            if (syncinput == 0xFF) {
-                goto mpipe_reader_SYNC1;
-            }
-            if (syncinput != 0x55) {
-                goto mpipe_reader_SYNC0;
-            }
-            TTY_PRINTF("Sync FF55 Received\n");
- 
-            // At this point, FF55 was detected.  We get the next 6 bytes of the
-            // header, which is the rest of the header.
-            new_bytes       = 0;
-            payload_left    = 6;
-            rbuf_cursor     = rbuf;
-            while (payload_left > 0) {
-                new_bytes = (int)read(fds[i].fd, rbuf_cursor, payload_left);
-                if (new_bytes < 1) {
-                    errcode = 4;        // timeout
-                    goto mpipe_reader_ERR;
-                }
-                TTY_PRINTF("header new_bytes = %d\n", new_bytes);
-                HEX_DUMP(rbuf_cursor, new_bytes, "read(): ");
-                rbuf_cursor    += new_bytes;
-                payload_left   -= new_bytes;
-            }
- 
-            payload_length  = rbuf[2] * 256;
-            payload_length += rbuf[3];
-            header_length   = 6 + 0;
- 
-            if ((payload_length == 0) || (payload_length > (1024-header_length))) {
-                errcode = 2;
-                goto mpipe_reader_ERR;
-            }
- 
-            // Receive the remaining payload bytes
-            payload_left    = payload_length;
-            rbuf_cursor     = &rbuf[6];
-            while (payload_left > 0) {
-                new_bytes = (int)read(fds[i].fd, rbuf_cursor, payload_left);
-                if (new_bytes < 1) {
-                    errcode = 4;        // timeout
-                    goto mpipe_reader_ERR;
-                }
-                TTY_PRINTF("payload new_bytes = %d\n", new_bytes);
-                HEX_DUMP(rbuf_cursor, new_bytes, "read(): ");
-                rbuf_cursor    += new_bytes;
-                payload_left   -= new_bytes;
-            }
-*/
 

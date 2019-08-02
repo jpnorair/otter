@@ -441,17 +441,12 @@ static int sub_opentty(mpipe_intf_t* ttyintf) {
     tio.c_oflag     = CR0 | TAB0 | BS0 | VT0 | FF0;
     tio.c_lflag     = 0;
     
-    // VMIN = 0, VTIME = 1: Works for systems where poll() is too slow (some Linuxes)
-    // VMIN = 1, VTIME = 0: Works for systems where poll() actually works (any BSD, some Linuxes)
-#   if (OTTER_FEATURE_NOPOLL)
-        tio.c_cc[VMIN]  = 1;        // smallest read is one character
-        tio.c_cc[VTIME] = 0;        // Inter-character timeout (after VMIN) is 0.1sec
-#   else
-        tio.c_cc[VMIN]  = 1;        // smallest read is one character
-        tio.c_cc[VTIME] = 0;        // There is no inter-character timeout
-#   endif
+    tio.c_cc[VMIN]  = 1;        // smallest read is one character
+    tio.c_cc[VTIME] = 0;        // Inter-character timeout (after VMIN) is 0.1sec
     
-    tcflush( ttyintf->fd.in, MPIOFLUSH );
+#   if (OTTER_FEATURE_NOFLUSH != ENABLED)
+    tcflush( ttyintf->fd.in, TCIOFLUSH );
+#   endif
     
     cfsetospeed(&tio, ttyparams->baud);
     cfsetispeed(&tio, ttyparams->baud);
@@ -649,6 +644,7 @@ int mpipe_close(mpipe_handle_t handle, int id) {
 
 void mpipe_flush(mpipe_handle_t handle, int id, size_t est_rembytes, int queue_selector) {
     int i, j;
+    int test;
 
     if (handle != NULL) {
         mpipe_tab_t* table = (mpipe_tab_t*)handle;
@@ -659,7 +655,10 @@ void mpipe_flush(mpipe_handle_t handle, int id, size_t est_rembytes, int queue_s
             if (table->intf[i].type == MPINTF_tty) {
 #               if (OTTER_FEATURE_NOFLUSH != ENABLED)
                 if (queue_selector & MPOFLUSH) {
-                    tcflush(table->intf[i].fd.out, TCOFLUSH);
+                    test = tcflush(table->intf[i].fd.out, TCOFLUSH);
+                    if (test != 0) {
+                        perror("");
+                    }
                 }
                 else
 #               endif
@@ -681,12 +680,18 @@ void mpipe_flush(mpipe_handle_t handle, int id, size_t est_rembytes, int queue_s
                     /// a special-purpose implementation.  You can simulate by
                     /// by putting a usleep() call after tcdrain, with some
                     /// amount of milliseconds (1000s of useconds)
-                    tcdrain(table->intf[i].fd.out);
+                    test = tcdrain(table->intf[i].fd.out);
+                    if (test != 0) {
+                        perror("");
+                    }
 #               endif
                 }
 #               if (OTTER_FEATURE_NOFLUSH != ENABLED)
                 if (queue_selector & MPIFLUSH)  {
-                    tcflush(table->intf[i].fd.in, TCIFLUSH);
+                    test = tcflush(table->intf[i].fd.in, TCIFLUSH);
+                    if (test != 0) {
+                        perror("");
+                    }
                 }
 #               endif
             }
