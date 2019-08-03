@@ -423,6 +423,29 @@ static int sub_printtext(FORMAT_Type fmt, uint8_t* dst, size_t* dst_accum, uint8
 }
 
 
+static int sub_printjson(FORMAT_Type fmt, uint8_t* dst, size_t* dst_accum, uint8_t** src, size_t srcsz, size_t cols) {
+    char* dcurs;
+    char* scurs;
+    
+    if (fmt != FORMAT_Json) {
+        return sub_printtext(fmt, dst, dst_accum, src, srcsz, cols);
+    }
+    
+    dcurs = (char*)dst;
+    scurs = (char*)*src;
+    *src += srcsz;
+    dcurs = stpncpy(dcurs, scurs, srcsz);
+    *src += srcsz;
+    
+    if (dst_accum != NULL) {
+        *dst_accum += srcsz;
+    }
+    return (int)srcsz;
+}
+
+
+
+
 static int sub_log_binmsg(FORMAT_Type fmt, uint8_t* dst, size_t* dst_accum, uint8_t** src, size_t srcsz) {
 ///@note subroutine, so inputs are expected to be valid -- no checks
     char* msgbreak;
@@ -644,7 +667,7 @@ static int sub_printlog(FORMAT_Type fmt, uint8_t* dst, size_t* dst_accum, uint8_
         // JSON UTF-8 
         ///@note Using "FORMAT_Default" forces printing of the input as-is
         ///@todo do a check to make sure it's valid JSON coming in.
-        case 2: dcurs += sub_printtext(FORMAT_Default, (uint8_t*)dcurs, dst_accum, src, length, 0);
+        case 2: dcurs += sub_printjson(fmt, (uint8_t*)dcurs, dst_accum, src, length, 0);
             break;
         
         // UTF-8 Hex-encoded data
