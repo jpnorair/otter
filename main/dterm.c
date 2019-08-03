@@ -510,8 +510,11 @@ int dterm_send_log(dterm_handle_t* dth, const char* logmsg, size_t loglen) {
     int rc = 0;
     int fd;
     FILE* fp;
-    char term;
-
+    char init[4] = {0,0,0,0};
+    char term[4] = {0,0,0,0};
+    int initlen = 0;
+    int termlen = 0;
+    
     if (dth == NULL) {
         rc = -1;
         goto dterm_send_log_END;
@@ -523,34 +526,50 @@ int dterm_send_log(dterm_handle_t* dth, const char* logmsg, size_t loglen) {
         rc = -2;
         goto dterm_send_log_END;
     }
+    
+    ///@note JSON formated logs require additional wrapping.  The log input
+    /// format is as an embeddable object, i.e. no opening/closing braces.
+    if (cliopt_getformat() == FORMAT_Json) {
+        init[0] = '{';
+        term[0] = '}';
+        initlen = 1;
+        termlen = 1;
+    }
+    
     if (S_ISFIFO(st.st_mode)) {
-        term = 0;
         fd = open(dth->logfile_path, O_WRONLY);
         if (fd < 0) {
             rc = -4;
             goto dterm_send_log_END;
         }
+        if (logmsg[loglen-1] != 0) {
+            termlen++;
+        }
+        if (initlen > 0) {
+            write(fd, init, initlen);
+        }
         write(fd, logmsg, loglen);
-        if (logmsg[loglen-1] != term) {
-            loglen++;
-            write(fd, &term, 1);
+        if (termlen > 0) {
+            write(fd, term, termlen);
         }
         close(fd);
-        rc = (int)loglen;
+        rc = initlen + (int)loglen + termlen;
     }
     else if (S_ISREG(st.st_mode)) {
-        term = '\n';
         fp = fopen(dth->logfile_path, "a");
         if (fp == NULL) {
             rc = -4;
             goto dterm_send_log_END;
         }
-        fwrite(logmsg, 1, loglen, fp);
-        if (logmsg[loglen-1] != term) {
-            loglen++;
-            fwrite(&term, 1, 1, fp);
+        if (logmsg[loglen-1] != '\n') {
+            term[termlen] = '\n';
+            termlen++;
         }
+        fwrite(init, 1, initlen, fp);
+        fwrite(logmsg, 1, loglen, fp);
+        fwrite(term, 1, termlen, fp);
         fclose(fp);
+        rc = initlen + (int)loglen + termlen;
     }
     else {
         rc = -3;

@@ -444,9 +444,9 @@ static int sub_opentty(mpipe_intf_t* ttyintf) {
     tio.c_cc[VMIN]  = 1;        // smallest read is one character
     tio.c_cc[VTIME] = 0;        // Inter-character timeout (after VMIN) is 0.1sec
     
-#   if (OTTER_FEATURE_NOFLUSH != ENABLED)
+//#   if (OTTER_FEATURE_NOFLUSH != ENABLED)
     tcflush( ttyintf->fd.in, TCIOFLUSH );
-#   endif
+//#   endif
     
     cfsetospeed(&tio, ttyparams->baud);
     cfsetispeed(&tio, ttyparams->baud);

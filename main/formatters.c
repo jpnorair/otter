@@ -638,9 +638,10 @@ static int sub_printlog(FORMAT_Type fmt, uint8_t* dst, size_t* dst_accum, uint8_
         case 1: dcurs += sub_printtext(fmt, (uint8_t*)dcurs, dst_accum, src, length, 80);
             break;
             
-        // Unicode (UTF-16) unstructured Data
-        // (UTF-16 Not presently supported, treated as binary)
-        case 2: dcurs += sub_printhex(fmt, (uint8_t*)dcurs, dst_accum, src, length, 16);
+        // JSON UTF-8 
+        ///@note Using "FORMAT_Default" forces printing of the input as-is
+        ///@todo do a check to make sure it's valid JSON coming in.
+        case 2: dcurs += sub_printtext(FORMAT_Default, (uint8_t*)dcurs, dst_accum, src, length, 0);
             break;
         
         // UTF-8 Hex-encoded data
@@ -655,8 +656,8 @@ static int sub_printlog(FORMAT_Type fmt, uint8_t* dst, size_t* dst_accum, uint8_
         case 5: dcurs += sub_log_textmsg(fmt, (uint8_t*)dcurs, dst_accum, src, length);
             break;
         
-        // Message with Unicode (UTF-16) data
-        // (UTF-16 Not presently supported, treated as binary)
+        // Message with JSON UTF-8
+        ///@todo not supported yet
         case 6: dcurs += sub_log_binmsg(fmt, (uint8_t*)dcurs, dst_accum, src, length);
             break;
             
