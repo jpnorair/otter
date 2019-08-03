@@ -620,12 +620,15 @@ static int sub_log_textmsg(FORMAT_Type fmt, uint8_t* dst, size_t* dst_accum, uin
 static int sub_printlog(FORMAT_Type fmt, uint8_t* dst, size_t* dst_accum, uint8_t** src, size_t length, uint8_t cmd) {
     char* dcurs = (char*)dst;
     
+    //only valid cmds are 0-7
+    cmd &= 7;
+    
     if (fmt == FORMAT_Json) {
-        if ((cmd == 1) || (cmd == 4) || (cmd == 5) || (cmd == 7)) {
-            dcurs = stpcpy(dcurs, "\"fmt\":\"text\", \"dat\":");
+        if ((cmd == 0) || (cmd == 3) || (cmd == 4)) {
+            dcurs = stpcpy(dcurs, "\"fmt\":\"hex\", \"dat\":");
         }
         else {
-            dcurs = stpcpy(dcurs, "\"fmt\":\"hex\", \"dat\":");
+            dcurs = stpcpy(dcurs, "\"fmt\":\"text\", \"dat\":");
         }
     }
 
@@ -657,8 +660,8 @@ static int sub_printlog(FORMAT_Type fmt, uint8_t* dst, size_t* dst_accum, uint8_
             break;
         
         // Message with JSON UTF-8
-        ///@todo not supported yet
-        case 6: dcurs += sub_log_binmsg(fmt, (uint8_t*)dcurs, dst_accum, src, length);
+        ///@todo not really supported yet
+        case 6: dcurs += sub_log_textmsg(fmt, (uint8_t*)dcurs, dst_accum, src, length);
             break;
             
         // Message with UTF-8 encoded Hex data
