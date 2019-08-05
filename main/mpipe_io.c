@@ -616,7 +616,7 @@ void* mpipe_parser(void* args) {
             if (pkt_condition > 0) {
                 ///@todo some sort of error code
                 ERR_PRINTF("A malformed packet was sent for parsing\n");
-                dterm_publish_rxstat(dth, DFMT_Binary, rpkt->buffer, rpkt->size, 0, rpkt->sequence, rpkt->tstamp, rpkt->crcqual);
+                dterm_publish_rxstat(dth, DFMT_Binary, rpkt->buffer, rpkt->size, true, 0, rpkt->sequence, rpkt->tstamp, rpkt->crcqual);
                 
                 pktlist_del(rpkt);
                 
@@ -684,6 +684,7 @@ void* mpipe_parser(void* args) {
                     uint8_t* lastfront  = payload_front;
                     int subsig;
                     int proc_result;
+                    bool broadcast;
 
                     /// ALP message:
                     /// proc_result now takes the value from the protocol formatter.
@@ -695,10 +696,11 @@ void* mpipe_parser(void* args) {
                     if (proc_result < 0) {
                         break;
                     }
-                    ///@todo this is a temporary additive to log log data
-                    if (proc_result == 4) {
-                        dterm_send_log(dth, putsbuf, putsbytes);
-                    }
+                    
+                    /// Log data is broadcasted. 
+                    ///@todo there should be a better output from fmt_printalp()
+                    /// to say if the ALP is broadcast-worthy or not.
+                    broadcast = (proc_result == 4);
 
                     /// Successful formatted output gets propagated to any
                     /// subscribers of this ALP ID.
@@ -706,7 +708,7 @@ void* mpipe_parser(void* args) {
                     subscriber_post(appdata->subscribers, proc_result, subsig, NULL, 0);
                    
                     // Send RXstat message back to control interface.
-                    dterm_publish_rxstat(dth, DFMT_Native, putsbuf, putsbytes, rxaddr, rpkt->sequence, rpkt->tstamp, rpkt->crcqual);
+                    dterm_publish_rxstat(dth, DFMT_Native, putsbuf, putsbytes, broadcast, rxaddr, rpkt->sequence, rpkt->tstamp, rpkt->crcqual);
                     
                     // Recalculate message size following the treatment of the last segment
                     ///@note payload_front should be always greater than lastfront, but it might 
@@ -722,7 +724,7 @@ void* mpipe_parser(void* args) {
                 payload_front = rpkt->buffer;
                 ///@todo better way to send an error via dterm_publish_rxstat()
                 fmt_printhex((uint8_t*)putsbuf, &putsbytes, &payload_front, rpkt->size, 16);
-                dterm_publish_rxstat(dth, DFMT_Text, putsbuf, putsbytes, rxaddr, rpkt->sequence, rpkt->tstamp, rpkt->crcqual);
+                dterm_publish_rxstat(dth, DFMT_Text, putsbuf, putsbytes, false, rxaddr, rpkt->sequence, rpkt->tstamp, rpkt->crcqual);
             }
             
             // Clear the rpkt

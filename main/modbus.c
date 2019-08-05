@@ -452,7 +452,7 @@ void* modbus_parser(void* args) {
             /// CRC is good, so send packet to Modbus processor.
             if (rpkt->crcqual != 0) {
                 ///@todo add rx address of input packet (set to 0)
-                dterm_publish_rxstat(dth, DFMT_Binary, rpkt->buffer, rpkt->size, 0, rpkt->sequence, rpkt->tstamp, rpkt->crcqual);
+                dterm_publish_rxstat(dth, DFMT_Binary, rpkt->buffer, rpkt->size, true, 0, rpkt->sequence, rpkt->tstamp, rpkt->crcqual);
             }
             else {
                 proc_result     = smut_resp_proc(putsbuf, rpkt->buffer, &smut_outbytes, rpkt->size, true);
@@ -486,7 +486,7 @@ void* modbus_parser(void* args) {
                         rxstat_fmt  = DFMT_Text;
                     }
 
-                    dterm_publish_rxstat(dth, rxstat_fmt, putsbuf, putsbytes, rxaddr, rpkt->sequence, rpkt->tstamp, rpkt->crcqual);
+                    dterm_publish_rxstat(dth, rxstat_fmt, putsbuf, putsbytes, false, rxaddr, rpkt->sequence, rpkt->tstamp, rpkt->crcqual);
 
                     // Recalculate message size following the treatment of the last segment
                     msgbytes -= (msg - lastmsg);

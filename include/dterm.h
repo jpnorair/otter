@@ -209,7 +209,8 @@ int dterm_force_cmdmsg(int fd_out, const char* cmdname, const char* msg);
 //int dterm_force_rxstat(int fd_out, DFMT_Type dfmt, void* rxdata, size_t rxsize, uint64_t rxaddr, uint32_t sid, time_t tstamp, int crcqual);
 
 int dterm_publish_rxstat(   dterm_handle_t* dth, DFMT_Type dfmt,
-                            void* rxdata, size_t rxsize, uint64_t rxaddr,
+                            void* rxdata, size_t rxsize, 
+                            bool broadcast, uint64_t rxaddr,
                             uint32_t sid, time_t tstamp, int crcqual);
 
 

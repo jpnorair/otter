@@ -603,14 +603,14 @@ int dterm_send_txstat(dterm_handle_t* dth, DFMT_Type dfmt, void* txdata, size_t 
 }
 
 int dterm_send_rxstat(dterm_handle_t* dth, DFMT_Type dfmt, void* rxdata, size_t rxsize, uint64_t rxaddr, uint32_t sid, time_t tstamp, int crcqual) {
-    return dterm_publish_rxstat(dth, dfmt, rxdata, rxsize, rxaddr, sid, tstamp, crcqual);
+    return dterm_publish_rxstat(dth, dfmt, rxdata, rxsize, false, rxaddr, sid, tstamp, crcqual);
 }
 
 
 ///@todo clithread_publish is not safe when the file descriptor is lost before
 ///      the response arrives.  Need to implement a way to indicate when a
 ///      client drops in order to skip write and update clithread-table
-int dterm_publish_rxstat(dterm_handle_t* dth, DFMT_Type dfmt, void* rxdata, size_t rxsize, uint64_t rxaddr, uint32_t sid, time_t tstamp, int crcqual) {
+int dterm_publish_rxstat(dterm_handle_t* dth, DFMT_Type dfmt, void* rxdata, size_t rxsize, bool broadcast, uint64_t rxaddr, uint32_t sid, time_t tstamp, int crcqual) {
     char output[1024];
     int datasize = 0;
 
@@ -618,7 +618,7 @@ int dterm_publish_rxstat(dterm_handle_t* dth, DFMT_Type dfmt, void* rxdata, size
         datasize = sub_rxstat(output, 1024, dfmt, rxdata, rxsize, rxaddr, sid, tstamp, crcqual);
         if (datasize > 0) {
             if (dth->intf->type == INTF_socket) {
-                clithread_publish(dth->clithread, sid, (uint8_t*)output, datasize);
+                clithread_publish(dth->clithread, broadcast, sid, (uint8_t*)output, datasize);
             }
             else if (dth->fd.out >= 0) {
                 write(dth->fd.out, output, datasize);
