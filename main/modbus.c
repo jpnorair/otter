@@ -265,7 +265,7 @@ void* modbus_reader(void* args) {
         free(fds);
     }
     
-    raise(SIGINT);
+    raise(SIGTERM);
     return NULL;
 }
 
@@ -355,7 +355,7 @@ void* modbus_writer(void* args) {
     /// This code should never occur, given the while(1) loop.
     /// If it does (possibly a stack fuck-up), we print this "chaotic error."
     ERR_PRINTF("\n--> Chaotic error: modbus_writer() thread broke loop.\n");
-    raise(SIGINT);
+    raise(SIGTERM);
     return NULL;
 }
 
@@ -508,7 +508,7 @@ void* modbus_parser(void* args) {
     /// This code should never occur, given the while(1) loop.
     /// If it does (possibly a stack fuck-up), we print this "chaotic error."
     ERR_PRINTF("\n--> Chaotic error: modbus_parser() thread broke loop.\n");
-    raise(SIGINT);
+    raise(SIGTERM);
     return NULL;
 }
 

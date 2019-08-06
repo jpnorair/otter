@@ -1558,7 +1558,7 @@ void* dterm_prompter(void* args) {
                                     break;
                                     
                 case ct_sigint:     killstring  = str_ct_sigint;
-                                    sigcode     = SIGINT; 
+                                    sigcode     = SIGTERM; 
                                     break;
                                     
                 case ct_sigquit:    killstring  = str_ct_sigquit;

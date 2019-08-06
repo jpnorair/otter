@@ -45,6 +45,6 @@ int cmd_quit(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, size
     ///@todo move this into a dterm API function, or bind it to SIGINT handler
     dth->thread_active = false;
     
-    raise(SIGINT);
+    raise(SIGTERM);
     return 0;
 }

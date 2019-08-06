@@ -472,7 +472,7 @@ void* mpipe_reader(void* args) {
     
     /// This occurs on uncorrected errors, such as case 4 from above, or other 
     /// unknown errors.
-    raise(SIGINT);
+    raise(SIGTERM);
     return NULL;
 }
 
@@ -545,7 +545,7 @@ void* mpipe_writer(void* args) {
     /// This code should never occur, given the while(1) loop.
     /// If it does (possibly a stack fuck-up), we print this "chaotic error."
     fprintf(stderr, "\n--> Chaotic error: mpipe_writer() thread broke loop.\n");
-    raise(SIGINT);
+    raise(SIGTERM);
     return NULL;
 }
 
@@ -743,7 +743,7 @@ void* mpipe_parser(void* args) {
     /// This code should never occur, given the while(1) loop.
     /// If it does (possibly a stack fuck-up), we print this "chaotic error."
     fprintf(stderr, "\n--> Chaotic error: mpipe_parser() thread broke loop.\n");
-    raise(SIGINT);
+    raise(SIGTERM);
     return NULL;
 }
 

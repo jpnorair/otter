@@ -112,20 +112,26 @@ cli_struct cli;
   * 
   */
 
-void _assign_signal(int sigcode, void (*sighandler)(int)) {
+static void sub_assign_signal(int sigcode, void (*sighandler)(int), bool is_critical) {
     if (signal(sigcode, sighandler) != 0) {
-        fprintf(stderr, "--> Error assigning signal (%d), exiting\n", sigcode);
-        exit(EXIT_FAILURE);
+        perror("");
+        if (is_critical) {
+            fprintf(stderr, "--> Error assigning signal (%d): Fatal, exiting\n", sigcode);
+            exit(EXIT_FAILURE);
+        }
+        else {
+            fprintf(stderr, "--> Error assigning signal (%d): Ignoring\n", sigcode);
+        }
     }
 }
 
-void sigint_handler(int sigcode) {
+static void sigint_handler(int sigcode) {
     cli.exitcode = 0;
     cli.kill_cond_inactive = false;
     pthread_cond_signal(&cli.kill_cond);
 }
 
-void sigquit_handler(int sigcode) {
+static void sigquit_handler(int sigcode) {
     cli.exitcode = -1;
     cli.kill_cond_inactive = false;
     pthread_cond_signal(&cli.kill_cond);
@@ -839,8 +845,8 @@ int otter_main( ttyspec_t* ttylist,
     /// typical in POSIX apps.  When activated, the threads are halted and
     /// Otter is shutdown.
     DEBUG_PRINTF("Assign Kill Signals\n");
-    _assign_signal(SIGINT, &sigint_handler);
-    //_assign_signal(SIGQUIT, &sigquit_handler);
+    sub_assign_signal(SIGTERM, &sigint_handler, true);
+    sub_assign_signal(SIGINT, &sigint_handler, false);
     DEBUG_PRINTF("--> done\n");
     
     DEBUG_PRINTF("Creating Dterm theads\n");
