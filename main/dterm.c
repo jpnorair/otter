@@ -1635,7 +1635,7 @@ void* dterm_prompter(void* args) {
                     // Run command(s) from line input
                     sub_proc_lineinput( dth, NULL,
                                         (char*)dth->intf->linebuf,
-                                        (int)sub_str_mark((char*)dth->intf->linebuf, 1024),
+                                        (int)sub_str_mark((char*)dth->intf->linebuf, 1024)
                                     );
 
                     // Free temporary memory pool context
