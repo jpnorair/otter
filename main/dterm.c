@@ -330,6 +330,12 @@ int dterm_init(dterm_handle_t* dth, void* ext_data, const char* logfile, INTF_Ty
         goto dterm_init_TERM;
     }
     
+    /// If sockets are being used, SIGPIPE can cause trouble that we don't
+    /// want, and it is safe to ignore.
+    if (dth->intf->type == INTF_socket) {
+        signal(SIGPIPE, SIG_IGN);
+    }
+    
     return 0;
     
     dterm_init_TERM:
@@ -1041,8 +1047,7 @@ static int sub_proc_lineinput(dterm_handle_t* dth, int* cmdrc, char* loadbuf, in
         int bytesin = linelen;
         
         // Null terminate the cursor: errors may report a string.
-        *cursor = 0;
-
+        *cursor  = 0;
         bytesout = cmd_run(cmdptr, dth, cursor, &bytesin, (uint8_t*)(loadbuf+cmdlen), bufmax);
 
         if (cmdrc != NULL) {
@@ -1265,14 +1270,15 @@ void* dterm_piper(void* args) {
 /// <LI> Listens to stdin via read() pipe </LI>
 /// <LI> Processes each LINE and takes action accordingly. </LI>
     dterm_handle_t* dth     = (dterm_handle_t*)args;
-    int             loadlen = 0;
     char*           loadbuf = dth->intf->linebuf;
-    
-    // Initial state = off
-    dth->intf->state = prompt_off;
+    int             loadlen = 0;
+    //int             pipe_stat = 0;
     
     talloc_disable_null_tracking();
     
+    // Initial state = off
+    dth->intf->state = prompt_off;
+ 
     /// Get each line from the pipe.
     while (dth->thread_active) {
         int linelen;
@@ -1306,10 +1312,9 @@ void* dterm_piper(void* args) {
         loadbuf += (linelen + 1);
     }
     
-    /// This code should never occur, given the while(1) loop.
-    /// If it does (possibly a stack fuck-up), we print this "chaotic error."
-    //fprintf(stderr, "\n--> Chaotic error: dterm_piper() thread broke loop.\n");
-    //raise(SIGINT);
+    /// This code will run only if the pipe goes down
+    ERR_PRINTF("dterm_piper() closing due to unexpected closure of client pipe\n");
+    raise(SIGTERM);
     return NULL;
 }
 
@@ -1342,7 +1347,6 @@ int dterm_cmdfile(dterm_handle_t* dth, const char* filename) {
     filebuf_sz = (int)ftell(fp);
     rewind(fp);
     filebuf = talloc_zero_size(dth->pctx, filebuf_sz+1);
-    
     if (filebuf == NULL) {
         rc = -2;
         goto dterm_cmdfile_END;
@@ -1391,7 +1395,7 @@ int dterm_cmdfile(dterm_handle_t* dth, const char* filename) {
         // Echo input line to dterm
         dprintf(dth->fd.out, _E_MAG"%s"_E_NRM"%s\n", prompt_root, filecursor);
         
-        // Process the line-input command
+        // Process the line-input command.  Exit on proc error
         sub_proc_lineinput(dth, &cmdrc, filecursor, linelen);
         
         // Free temporary memory pool context
@@ -1631,7 +1635,7 @@ void* dterm_prompter(void* args) {
                     // Run command(s) from line input
                     sub_proc_lineinput( dth, NULL,
                                         (char*)dth->intf->linebuf,
-                                        (int)sub_str_mark((char*)dth->intf->linebuf, 1024)
+                                        (int)sub_str_mark((char*)dth->intf->linebuf, 1024),
                                     );
 
                     // Free temporary memory pool context
