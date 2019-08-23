@@ -409,7 +409,7 @@ static int sub_opentty(mpipe_intf_t* ttyintf) {
     int i_par;
     int rc = 0;
 
-    // first open with O_NDELAY
+    // first open with O_NONBLOCK
     ttyintf->fd.in = open(ttyparams->path, O_RDWR | /*O_NDELAY*/ O_NONBLOCK | O_EXCL);
     if (ttyintf->fd.in < 0 ) {
         rc = -1;
@@ -444,9 +444,7 @@ static int sub_opentty(mpipe_intf_t* ttyintf) {
     tio.c_cc[VMIN]  = 1;        // smallest read is one character
     tio.c_cc[VTIME] = 0;        // Inter-character timeout (after VMIN) is 0.1sec
     
-//#   if (OTTER_FEATURE_NOFLUSH != ENABLED)
     tcflush( ttyintf->fd.in, TCIOFLUSH );
-//#   endif
     
     cfsetospeed(&tio, ttyparams->baud);
     cfsetispeed(&tio, ttyparams->baud);
