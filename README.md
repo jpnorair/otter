@@ -8,8 +8,9 @@ Otter is presently in Beta.
 
 ### External Dependencies
 
-The only external dependecies are:
+The only external dependecies are listed below.  talloc and libbsd are easy to download via most package managers.  musl libfts is harder to get, but it's only needed for some very specific platforms.
 
+* [talloc](https://talloc.samba.org/talloc/doc/html/index.html)
 * [libbsd](https://libbsd.freedesktop.org/wiki/) (obviously not needed if your platform is a BSD)
 * **musl libfts** ([source](https://github.com/void-linux/musl-fts), [openwrt pkg](https://openwrt.org/packages/pkgdata/musl-fts)), which is only needed on linuxes using the musl libraries.
 
