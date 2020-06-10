@@ -22,9 +22,6 @@
 // HB libraries
 #include <cmdtab.h>
 #include <bintex.h>
-#if OTTER_FEATURE(HBUILDER)
-#   include <hbuilder.h>
-#endif
 
 // Standard libs
 #include <string.h>
@@ -56,6 +53,7 @@ static const cmd_t otter_commands[] = {
     { "chnode",     &cmd_chnode },
     { "chuser",     &cmd_chuser },
     { "cmdls",      &cmd_cmdlist },
+    { "file",       &cmd_fdp },
     { "lsnode",     &cmd_lsnode },
     { "mknode",     &cmd_mknode },
     { "null",       &app_null },
@@ -70,19 +68,11 @@ static const cmd_t otter_commands[] = {
     { "xnode",      &cmd_xnode },
 };
 
-///@todo hbuilder, and Judy handles (envdict) should get wrapped
-///      into a cmd handle that is stored in dterm object.
-#if OTTER_FEATURE(HBUILDER)
-static void* hbuilder_handle;
-#endif
 
 
 
 typedef enum {
     EXTCMD_null     = 0,
-#   if OTTER_FEATURE(HBUILDER)
-    EXTCMD_hbuilder,
-#   endif
     EXTCMD_path,
     EXTCMD_MAX
 } otter_extcmd_t;
@@ -143,13 +133,7 @@ int cmd_init(cmdtab_t** init_table, const char* xpath) {
         }
     }
 
-    /// Second, if HBuilder is enabled, pass this table into the hbuilder 
-    /// initializer.
-#   if OTTER_FEATURE(HBUILDER)
-        hbuilder_handle = hbuilder_init(*init_table, (void*)EXTCMD_hbuilder);
-#   endif
-
-    /// Last, Add Otter commands to the cmdtab.
+    /// Last, add native otter commands to the cmdtab.
     for (int i=0; i<(sizeof(otter_commands)/sizeof(cmd_t)); i++) {
         int rc;
 
@@ -174,11 +158,13 @@ int cmd_free(cmdtab_t* init_table) {
     }
     /// First, free commands on xpath (should require nothing)
     
-    /// Second, free hbuilder
-#   if OTTER_FEATURE(HBUILDER)
-        hbuilder_free(hbuilder_handle);
-#   endif
-    /// third, free cmdtab
+    /// Run command with dt=NULL to free the command
+    ///@note This is specific to otter, it's not a requirement of cmdtab
+    for (int i=0; i<(sizeof(otter_commands)/sizeof(cmd_t)); i++) {
+        otter_commands[i].action(NULL, NULL, NULL, NULL, 0);
+    }
+
+    /// next, free cmdtab
     cmdtab_free(init_table);
 
     /// fourth, free the object itself
@@ -202,13 +188,6 @@ int cmd_run(const cmdtab_item_t* cmd, dterm_handle_t* dth, uint8_t* dst, int* in
             //fprintf(stderr, "EXTCMD_null: inbytes=%d, src=%s\n", *inbytes, (char*)src);
             output = ((cmdaction_t)cmd->action)(dth, dst, inbytes, src, dstmax);
             break;
-            
-#       if OTTER_FEATURE(HBUILDER)
-        case EXTCMD_hbuilder:
-            //fprintf(stderr, "EXTCMD_hbuilder: inbytes=%d, src=%s\n", *inbytes, (char*)src);
-            output = cmdext_hbuilder(hbuilder_handle, (void*)cmd->action, dth, dst, inbytes, src, dstmax);
-            break;
-#       endif
 
         case EXTCMD_path: {
             char xpath[512];

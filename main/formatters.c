@@ -15,14 +15,6 @@
 #include <time.h>
 
 
-// HBuilder is part of Haystack HDO and it is not open source as of 08.2017.
-// HBuilder provides a library of DASH7/OpenTag communication API functions 
-// that are easy to use.
-#if OTTER_FEATURE(HBUILDER)
-#   include <hbuilder.h>
-#endif
-
-
 typedef struct {
     uint8_t     id;
     size_t      size;
@@ -806,10 +798,29 @@ int fmt_fprintalp(uint8_t* dst, size_t* dst_accum, uint8_t** src, size_t srcsz) 
     
     /// Locally handled ALP types
     /// id=0: Null Protocol -- Handled by length=0/id=0 exception above
+    /// id=1: File Protocol
     /// id=4: Logger
     /// ...
     else {
         switch (id) {
+            // file
+            case 1: {
+                
+            
+//            static const HBFMT_Type hbfmt_convert[FORMAT_MAX] = {
+//                HBFMT_Default,  //FORMAT_Default
+//                HBFMT_Json,     //FORMAT_Json
+//                HBFMT_Hex,      //FORMAT_JsonHex
+//                HBFMT_Bintex,   //FORMAT_Bintex
+//                HBFMT_Hex,      //FORMAT_Hex
+//            };
+//            rc = hbuilder_snfmtalp((uint8_t*)dcurs, dst_accum, 2048, hbfmt_convert[fmt], id, cmd, scurs, length);
+//            if (rc >= 0) {
+//                dcurs += rc;
+//                *src += length;
+//            }
+            } break;
+        
             // logger
             case 4: {
                 (*src) = scurs;
@@ -818,23 +829,8 @@ int fmt_fprintalp(uint8_t* dst, size_t* dst_accum, uint8_t** src, size_t srcsz) 
                 
             // everything else
            default: {
-#           if OTTER_FEATURE(HBUILDER)
-                static const HBFMT_Type hbfmt_convert[FORMAT_MAX] = {
-                    HBFMT_Default,  //FORMAT_Default
-                    HBFMT_Json,     //FORMAT_Json
-                    HBFMT_Hex,      //FORMAT_JsonHex
-                    HBFMT_Bintex,   //FORMAT_Bintex
-                    HBFMT_Hex,      //FORMAT_Hex
-                };
-                //rc = hbuilder_fmtalp(puts_fn, (HBFMT_Type)cliopt_getformat(), id, cmd, scurs, length);
-                rc = hbuilder_snfmtalp((uint8_t*)dcurs, dst_accum, 2048, hbfmt_convert[fmt], id, cmd, scurs, length);
-                if (rc >= 0) {
-                    dcurs += rc;
-                    *src += length;
-                }
-#           else
                 rc = -1;
-#           endif
+
                 /// Anything that falls through the cracks gets crapped-out as hex
                 if (rc < 0) {
                     size_t output_bytes = (size_t)length;

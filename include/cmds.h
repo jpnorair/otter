@@ -20,6 +20,9 @@
 // Local Headers
 #include "dterm.h"
 
+// External 
+#include <hbutils.h>
+
 // POSIX & Standard C Libraries
 #include <stdint.h>
 #include <stdio.h>
@@ -72,15 +75,12 @@ int cmd_sendhex(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, s
 /// xnode command:
 int cmd_xnode(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax);
 
-
-// Raw Protocol Entry: 
+/// Raw Protocol Entry: 
 int cmd_raw(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax);
 
-// External command call to HBuilder
-int cmdext_hbuilder(void* hb_handle, void* cmd_handle, dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax);
-
-
-
+/// File Protocol command and associated response formatter.
+int cmd_fdp(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax);
+int cmd_fdp_formatter(char* dst, size_t* dst_accum, size_t dst_limit, HBFMT_Type fmt, uint8_t cmd, uint8_t** src, size_t srcsz);
 
 
 /// Application protocol commands sent over the MPipe

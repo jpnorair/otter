@@ -32,8 +32,6 @@
 #include <string.h>
 #include <ctype.h>
 
-#include <hbuilder.h>
-
 
 
 int cmdext_hbuilder(void* hb_handle, void* cmd_handle, dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
