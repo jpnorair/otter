@@ -805,7 +805,7 @@ int fmt_fprintalp(uint8_t* dst, size_t* dst_accum, uint8_t** src, size_t srcsz) 
         switch (id) {
             // file data protocol
             case 1: 
-                rc = fmt_fdp((uint8_t*)dcurs, dst_accum, 2048, fmt, id, cmd, scurs, length);
+                rc = fmt_fdp((uint8_t*)dcurs, dst_accum, 2048, fmt, cmd, scurs, length);
                 break;
         
             // logger protocol
