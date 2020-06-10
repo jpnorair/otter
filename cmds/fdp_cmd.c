@@ -97,11 +97,12 @@ int fdp_generate(   void* handle,
 
 
 
-
-
 /// Top Level Command
 
 int cmd_fdp(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax) {
+    bool is_eos     = false;
+    size_t bytesout = 0;
+    int rc;
     
     /// dt == NULL is the init / deinit case.
     if (dth == NULL) {
@@ -113,9 +114,24 @@ int cmd_fdp(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, size_
         return 0;
     }
     
-    INPUT_SANITIZE();
+    INPUT_SANITIZE_FLAG_EOS(is_eos);
+    
+    rc = fdp_generate(fdp_handle, dst, &bytesout, dstmax, src, inbytes);
+    if (rc <= 0) {
+        if (rc == -2) {
+            sprintf((char*)dst, "input error on character %zu", bytesout);
+        }
+        return rc;
+    }
 
-    return 0;
+    if (cliopt_isverbose()) {
+        char printbuf[80];
+        sprintf(printbuf, "packetized %zu bytes", bytesout);
+        dterm_send_cmdmsg(dth, "hbuilder", printbuf);
+    }
+
+    // This is the data to be sent over the I/O interface
+    return (int)bytesout;
 }
 
 
@@ -156,7 +172,6 @@ void fdp_writeperms(void* out, void* in, size_t bytes_in);
 
 static const hbcmd_item_t fdp_commands[] = {
     { "del",      (void*)&fdp_delete,       {10,  1}},
-    
     { "new",      (void*)&fdp_create,       {11,  6}},  // Requires extra data
     { "r",        (void*)&fdp_read,         {4,   5}},  
     { "r*",       (void*)&fdp_readall,      {12,  5}},  
