@@ -803,31 +803,18 @@ int fmt_fprintalp(uint8_t* dst, size_t* dst_accum, uint8_t** src, size_t srcsz) 
     /// ...
     else {
         switch (id) {
-            // file
-            case 1: {
-                
-            
-//            static const HBFMT_Type hbfmt_convert[FORMAT_MAX] = {
-//                HBFMT_Default,  //FORMAT_Default
-//                HBFMT_Json,     //FORMAT_Json
-//                HBFMT_Hex,      //FORMAT_JsonHex
-//                HBFMT_Bintex,   //FORMAT_Bintex
-//                HBFMT_Hex,      //FORMAT_Hex
-//            };
-//            rc = hbuilder_snfmtalp((uint8_t*)dcurs, dst_accum, 2048, hbfmt_convert[fmt], id, cmd, scurs, length);
-//            if (rc >= 0) {
-//                dcurs += rc;
-//                *src += length;
-//            }
-            } break;
+            // file data protocol
+            case 1: 
+                rc = fmt_fdp((uint8_t*)dcurs, dst_accum, 2048, fmt, id, cmd, scurs, length);
+                break;
         
-            // logger
-            case 4: {
+            // logger protocol
+            case 4: 
                 (*src) = scurs;
                 dcurs += sub_printlog(fmt, (uint8_t*)dcurs, dst_accum, src, length, cmd);
-            } break;
+                break;
                 
-            // everything else
+            // unsupported/generic protocol, so use hex formatting
            default: {
                 rc = -1;
 

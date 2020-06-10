@@ -20,9 +20,6 @@
 // Local Headers
 #include "dterm.h"
 
-// External 
-#include <hbutils.h>
-
 // POSIX & Standard C Libraries
 #include <stdint.h>
 #include <stdio.h>
@@ -80,8 +77,6 @@ int cmd_raw(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, size_
 
 /// File Protocol command and associated response formatter.
 int cmd_fdp(dterm_handle_t* dth, uint8_t* dst, int* inbytes, uint8_t* src, size_t dstmax);
-int cmd_fdp_formatter(char* dst, size_t* dst_accum, size_t dst_limit, HBFMT_Type fmt, uint8_t cmd, uint8_t** src, size_t srcsz);
-
 
 /// Application protocol commands sent over the MPipe
 ///@todo These could probably be moved into m2def or something else.

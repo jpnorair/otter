@@ -33,6 +33,9 @@
 #include "dterm.h"
 #include "otter_cfg.h"
 
+// For protocol formatter
+#include "formatters.h"
+
 // External Dependencies
 #include <bintex.h>
 #include <argtable3.h>
@@ -1106,8 +1109,7 @@ static int stdout_puts(char* s) {
 
 
 // Callable processing function
-int fdp_formatter(char* dst, size_t* dst_accum, size_t dst_limit,
-                    HBFMT_Type fmt, uint8_t cmd, uint8_t** src, size_t srcsz) {
+int fmt_fdp(char* dst, size_t* dst_accum, size_t dst_limit, FORMAT_Type fmt, uint8_t cmd, uint8_t** src, size_t srcsz) {
     int rc;
     int cnt;
     int limit;
@@ -1134,11 +1136,13 @@ int fdp_formatter(char* dst, size_t* dst_accum, size_t dst_limit,
     limit   = (int)dst_limit;
     
     // determine output response
-    if (fmt == HBFMT_Hex) {
+    // For FDP, Hex and JsonHex modes return just a hex field
+    if ((fmt == FORMAT_Hex) || (fmt == FORMAT_JsonHex)) {
         cnt = sub_dumphex(dst, limit, (const char**)src, srcsz);
         RELIMIT(cnt, fdp_formatter_END);
     }
     
+    // Json mode returns a Json object (utf-8, with Json syntax)
     else if (fmt == HBFMT_Json) {
         switch (cmd & 15) {
         // See default format handling for better comments
@@ -1160,6 +1164,7 @@ int fdp_formatter(char* dst, size_t* dst_accum, size_t dst_limit,
         }
     }
     
+    // If not Hex or Json, we return a human-readable (interactive) text output
     else {
         switch (cmd & 15) {
         
