@@ -63,7 +63,7 @@ endif
 
 
 DEFAULT_DEF := -D__HBUILDER__ -DOTTER_PARAM_GITHEAD=\"$(GITHEAD)\"
-LIBMODULES  := argtable cJSON clithread cmdtab otvar bintex OTEAX libotfs hbuilder-lib $(EXT_LIBS)
+LIBMODULES  := argtable cJSON clithread cmdtab otvar bintex OTEAX libotfs $(EXT_LIBS)
 SUBMODULES  := cmds main test
 
 SRCEXT      := c
