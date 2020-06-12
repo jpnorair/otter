@@ -34,7 +34,6 @@ If you want to build otter outside of the hbgw_middleware repository framework, 
 * cmdtab
 * otvar
 * bintex
-* m2def
 * OTEAX
 * libotfs
 * hbuilder-lib

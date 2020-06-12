@@ -63,7 +63,7 @@ endif
 
 
 DEFAULT_DEF := -D__HBUILDER__ -DOTTER_PARAM_GITHEAD=\"$(GITHEAD)\"
-LIBMODULES  := argtable cJSON clithread cmdtab otvar bintex m2def OTEAX libotfs hbuilder-lib $(EXT_LIBS)
+LIBMODULES  := argtable cJSON clithread cmdtab otvar bintex OTEAX libotfs hbuilder-lib $(EXT_LIBS)
 SUBMODULES  := cmds main test
 
 SRCEXT      := c
@@ -72,7 +72,7 @@ OBJEXT      := o
 
 CFLAGS_DEBUG?= -std=gnu99 -Og -g -Wall -pthread
 CFLAGS      ?= -std=gnu99 -O3 -pthread
-#INC         := -I. -I./$(PKGDIR)/argtable -I./$(PKGDIR)/bintex -I./$(PKGDIR)/cJSON -I./$(PKGDIR)/cmdtab -I./$(PKGDIR)/hbuilder -I./$(PKGDIR)/liboteax -I./$(PKGDIR)/libotfs -I./$(PKGDIR)/m2def
+#INC         := -I. -I./$(PKGDIR)/argtable -I./$(PKGDIR)/bintex -I./$(PKGDIR)/cJSON -I./$(PKGDIR)/cmdtab -I./$(PKGDIR)/hbuilder -I./$(PKGDIR)/liboteax -I./$(PKGDIR)/libotfs 
 INC         := -I. -I./include -I./$(SYSDIR)/include $(EXT_INC)
 INCDEP      := -I.
 LIBINC      := -L./$(SYSDIR)/lib $(EXT_LIB) 

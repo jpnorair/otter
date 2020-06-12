@@ -21,7 +21,7 @@
 
 // Local Libraries/Includes
 #include <bintex.h>
-#include <m2def.h>
+//#include <m2def.h>
 
 // Standard C & POSIX libraries
 #include <fcntl.h>

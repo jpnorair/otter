@@ -32,7 +32,7 @@
 #include <cJSON.h>
 #include <clithread.h>
 #include <cmdtab.h>
-#include <m2def.h>
+//#include <m2def.h>
 
 // Standard C & POSIX Libraries
 #include <fcntl.h>

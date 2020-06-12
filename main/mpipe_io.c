@@ -25,7 +25,7 @@
 #include <dterm.h>
 #include <cJSON.h>
 #include <bintex.h>
-#include <m2def.h>
+//#include <m2def.h>
 
 // Standard C & POSIX libraries
 #include <fcntl.h>
