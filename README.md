@@ -14,30 +14,29 @@ The only external dependecies are listed below.  talloc and libbsd are easy to d
 * [libbsd](https://libbsd.freedesktop.org/wiki/) (obviously not needed if your platform is a BSD)
 * **musl libfts** ([source](https://github.com/void-linux/musl-fts), [openwrt pkg](https://openwrt.org/packages/pkgdata/musl-fts)), which is only needed on linuxes using the musl libraries.
 
-### HBuilder Dependencies
+### HB Dependencies
 
-wfedd is part of the HBuilder Middleware group, so the easiest way to build it is via the `hbgw_middleware` repository.  
+otter is part of the [HB Distribution](https://github.com/jpnorair/hbdist), so the easiest way to build it is via this distribution.  
 
 1. Install external dependencies.
-2. Clone/Download hbgw_middleware repository, and `cd` into it.
+2. Clone/Download hbdist repository, and `cd` into it.
 3. Do the normal: `make all; sudo make install` 
 4. Everything will be installed into a `/opt/` directory tree.  Make sure your `$PATH` has `/opt/bin` in it.
 
-### Building without hbgw_middleware
+### Building without HB
 
-If you want to build otter outside of the hbgw_middleware repository framework, you'll need to clone/download the following HBuilder repositories.  You should have all these repo directories stored flat inside a root directory.
+If you want to build otter outside of the [HB Distribution](https://github.com/jpnorair/hbdist), you'll need to clone/download the following repositories.  You should have all these repo directories stored flat inside a root directory.
 
 * _hbsys
 * argtable
+* bintex
 * cJSON
 * clithread
 * cmdtab
-* otvar
-* bintex
-* OTEAX
+* hbutils
 * libotfs
-* hbuilder-lib
-
+* otvar
+* OTEAX
 
 From this point:
 
